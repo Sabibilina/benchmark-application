@@ -1,5 +1,7 @@
 # System Architecture
 
+The following dataset will be used for this benchmark application: https://www.kaggle.com/datasets/rohiteng/spotify-music-analytics-dataset-20152025/data.
+
 ## 1. System Overview
 
 The application is a cloud-native music streaming system designed for benchmarking. It consists of a fixed set of microservices, each with clearly defined responsibilities, along with the shared architectural principles that govern how the system is built and operated. 
