@@ -174,8 +174,6 @@ Use this pattern every time:
 Services are built **one at a time** in the order below. Each service goes through three prompts:
 **Plan → Generate → Validate/Fix**. Do not move to the next service until the current one starts cleanly and passes its acceptance criteria.
 
----
-
 ## Phase 0 — Shared Deployment Environment
 
 > Repo skeleton, `docker-compose.yml`, named network, and infrastructure scaffolding.
@@ -372,7 +370,46 @@ Services are built **one at a time** in the order below. Each service goes throu
 
 ---
 
-## Phase 9 — Monitoring, Load Generator & Integration
+## Phase 9 — Frontend (React + TypeScript SPA)
+
+> Stack: **React + TypeScript**, Zustand or Redux Toolkit for global state, React Query or SWR for server state
+
+### Prompts
+- [ ] **Prompt 1 — Plan**: File tree for `frontend/`, routing strategy, global state shape (session, playback, queue), API client design (JWT injection, retry, error normalization), view inventory, env vars, build/containerization approach, validation steps
+- [ ] **Prompt 2 — Generate**: All source files, Dockerfile, `package.json`, `.env.example`, Vite/CRA config, README section covering build, run, and how to point it at the backend
+- [ ] **Prompt 3 — Validate/Fix**: Review against acceptance criteria; fix and return only changed files
+
+### Views to Implement
+- [ ] **Home / Discovery** — Daily Mix cards, "Because you listened to…" rails, trending tracks from Analytics global charts
+- [ ] **Search** — Full-text search bar with real-time autocomplete; results filterable by genre, BPM range, and release year; song results with optional artist/album/playlist sections
+- [ ] **Catalog Browse** — Paginated song grid/list with sort controls (title, artist, BPM); clicking an artist name navigates to artist detail showing top tracks
+- [ ] **Now Playing / Player Bar** — Persistent bottom bar with track title, artist, album art placeholder, play/pause/skip/previous controls, progress scrubber, and volume control; visible across all views
+- [ ] **Playlists** — Sidebar list of user's playlists including "Liked Songs"; playlist detail with drag-and-drop reordering, track removal, add-from-search/catalog; playlist creation and deletion
+- [ ] **Listening History** — Chronological log of play events from Analytics Service, grouped by date
+- [ ] **Notifications** — Bell icon in nav opens inbox panel listing in-app notifications from Notification Service
+
+### Acceptance Criteria
+- [ ] Registration and login flows work end-to-end against the Auth Service; JWT stored in memory (not `localStorage`)
+- [ ] JWT is attached via `Authorization: Bearer` header on all protected API requests
+- [ ] Silent refresh handles token expiry; redirects to login only when refresh fails
+- [ ] All 7 views are present and navigable via client-side routing (no full-page reload between views)
+- [ ] Now Playing bar persists across all route changes
+- [ ] Player calls `GET /stream/:songId` to initiate a stream session; playback state machine transitions correctly (`idle → loading → playing → paused → ended/skipped`)
+- [ ] Skip and completion actions explicitly trigger the appropriate state transitions and backend event payloads
+- [ ] API client handles JWT injection, exponential backoff retry, and error normalization centrally
+- [ ] Search returns results and filters (genre, BPM range, year) work in combination
+- [ ] Playlist drag-and-drop reorder calls `PATCH /playlists/:id/tracks/reorder`
+- [ ] "Liked Songs" playlist is visible but the delete control is hidden or disabled
+- [ ] Notifications panel polls or fetches from the Notification Service and marks items read
+- [ ] Frontend exposes a `/health` route or static response for uptime checks
+- [ ] Key client-side metrics tracked: page load time, API error rates, playback failure counts
+- [ ] Dockerfile builds and container starts without errors; frontend is added to `docker-compose.yml`
+- [ ] `.env.example` documents all `VITE_` / `REACT_APP_` variables (API base URLs, etc.)
+- [ ] No requirements from the brief are missing; no extra requirements added
+
+---
+
+## Phase 10 — Monitoring, Load Generator & Integration
 
 ### Monitoring
 - [ ] Prometheus configured to scrape all 8 services
@@ -396,14 +433,14 @@ Services are built **one at a time** in the order below. Each service goes throu
 
 ### Architecture
 - [ ] At least 3 distinct language/framework stacks used across 8 services (M-26)
-- [ ] Database-per-service pattern enforced, no shared databases (M-27)
+- [ ] Database-per-service pattern enforced — no shared databases (M-27)
 - [ ] All protected endpoints require JWT; only `/auth/register` and `/auth/login` are public (M-25)
 
 ### Artifacts
-- [ ] `docker-compose.yml` starts all 8 services + full infrastructure in one command
-- [ ] Source code complete and runnable for all 8 services (no pseudocode or placeholders)
-- [ ] Dockerfiles present and building for all 8 services
-- [ ] `.env.example` present and complete for all 8 services
+- [ ] `docker-compose.yml` starts all 8 services + frontend + full infrastructure in one command
+- [ ] Source code complete and runnable for all 8 services and the frontend (no pseudocode or placeholders)
+- [ ] Dockerfiles present and building for all 8 services and the frontend
+- [ ] `.env.example` present and complete for all 8 services and the frontend
 - [ ] Database schemas / migrations present for all services with persistence
 - [ ] Catalog CSV seed script included and runs automatically at startup
 - [ ] MinIO bucket initialization runs automatically at startup
@@ -420,9 +457,8 @@ Services are built **one at a time** in the order below. Each service goes throu
 
 ### Minimum Completion Criteria
 - [ ] All 8 services start successfully in the local deployment environment
+- [ ] Frontend starts and is reachable in the browser via `docker-compose up`
 - [ ] All required endpoints are implemented and reachable
 - [ ] Protected endpoints enforce JWT authentication
 - [ ] Metrics are exposed and collected through the monitoring stack
 - [ ] Load generator can execute the main application flows end-to-end
-
-
