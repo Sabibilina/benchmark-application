@@ -396,7 +396,7 @@ Services are built **one at a time** in the order below. Each service goes throu
 
 ### Architecture
 - [ ] At least 3 distinct language/framework stacks used across 8 services (M-26)
-- [ ] Database-per-service pattern enforced — no shared databases (M-27)
+- [ ] Database-per-service pattern enforced, no shared databases (M-27)
 - [ ] All protected endpoints require JWT; only `/auth/register` and `/auth/login` are public (M-25)
 
 ### Artifacts
