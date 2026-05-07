@@ -1,57 +1,11 @@
-# System Architecture Overview
+# System Architecture
 
-## What this system is
+## 1. System Overview
 
-This benchmark application is cloud-native music streaming system. It represents a fixed set of microservices, their responsibilities, and the shared architectural principles that govern how the system is built and operated. The architecture is meant to remain stable over time and should not change based on runtime behavior or implementation details.
+The application is a cloud-native music streaming system designed for benchmarking. It consists of a fixed set of microservices, each with clearly defined responsibilities, along with the shared architectural principles that govern how the system is built and operated. 
+This architecture is intended to remain stable over time and should not vary based on runtime behavior, deployment conditions, or implementation details.
 
-## Static architectural view
-
-The system is composed of eight independent microservices. Each service owns its own responsibilities and, when it stores state, its own dedicated persistence layer. The architecture is designed for comparison, observability, and experimental research rather than for evolving feature shape.
-
-### Core services
-
-1. **Auth Service**
-   - Provides user authentication, registration, and JWT token issuance.
-   - Issues tokens that other services can validate locally using shared verification settings.
-
-2. **Catalog Service**
-   - Stores and serves song metadata.
-   - Supports browsing and retrieving songs with catalog-specific metadata.
-
-3. **Streaming Service**
-   - Simulates streaming behavior and emits playback interaction events.
-   - Provides a stream descriptor without using real audio files.
-
-4. **Playlist Service**
-   - Manages user playlists, track operations, and the special "Liked Songs" playlist.
-   - Supports CRUD and playlist track reordering.
-
-5. **Search Service**
-   - Provides text search and filtering over the song catalog.
-   - Supports search queries scoped by genre, BPM, and year.
-
-6. **Analytics Service**
-   - Stores listening history and aggregates playback events into analytics data.
-   - Exposes history and metrics-oriented analytics.
-
-7. **Recommendation Service**
-   - Generates personalized and song-based recommendations.
-   - Returns recommendation results such as daily mixes and similar songs.
-
-8. **Notification Service**
-   - Consumes internal application events and stores in-app notifications.
-   - Focuses on internal notifications only, without email or push message delivery.
-
-## Shared architectural principles
-
-- **Service isolation**: Each service may choose its own implementation technology, but it must preserve service boundaries and data ownership.
-- **Database-per-service**: Stateful services must use dedicated persistence layers and never directly access another service’s database.
-- **Polyglot architecture**: The system should use at least three different language/framework stacks across the eight services.
-- **Event-driven integration**: Services may communicate through events using a message broker when needed.
-- **Observability**: Monitoring should be implemented with Prometheus, and Grafana is recommended for dashboards.
-- **Stable contracts**: Service APIs are defined as fixed contracts, and the architecture focuses on those contracts rather than internal implementation details.
-
-## What this document is for
+## 2. Purpose of this document
 
 `ARCHITECTURE.md` is a shared, high-level description of the system’s static structure. It explains:
 
@@ -62,6 +16,206 @@ The system is composed of eight independent microservices. Each service owns its
 
 It is not a runtime log, implementation guide, or evolving design note. It is a stable reference that describes the system shape independent of code or deployments.
 
+## 3. Microservices Specifications
+The system is composed of eight independent microservices. Each service owns its own responsibilities and, when it stores state, its own dedicated persistence layer. The architecture is designed for comparison, observability, and experimental research.
+
+### 1. Auth Service
+
+* Purpose: handles user registration, login, and JWT issuance for authenticated access across the system.  
+* Required endpoints:  
+  * `POST /auth/register`  
+  * `POST /auth/login`  
+* Required behavior:  
+  * Creates user accounts and authenticates users.  
+  * Issues JWT access tokens for protected endpoints.  
+  * Signs JWTs so that the other services can validate them locally without making a per-request validation call to Auth Service.  
+* Security requirements:  
+  * JWT verification must use a shared verification configuration.  
+  * JWTs must use asymmetric signing so other services verify them using a public key.  
+* Persistence:  
+  * Must persist authentication-related state in its own dedicated persistence layer.  
+* Allowed implementation:  
+  * Stack must be selected from the Approved Service-Stack Options section.
+
+### 2. Catalog Service
+
+* Purpose: manages the song catalog and exposes song metadata for browsing and retrieval.  
+* Required endpoints:  
+  * `GET /catalog/songs`  
+  * `GET /catalog/songs/:id`  
+* Required behavior:  
+  * Supports paginated browsing of songs.  
+  * Returns detailed metadata for a single song.  
+  * Automatically ingests the song dataset at startup without manual import steps.  
+* Dataset requirements:  
+  * Song records must contain the metadata fields required by the application and recommendation/search flows.  
+* Persistence:  
+  * Must store catalog data in its own dedicated persistence layer.  
+* Optional behavior:  
+  * `GET /catalog/artists/:id/top-tracks` may be implemented as a should-have feature.
+
+### 3. Streaming Service
+
+* Purpose: simulates song streaming behavior and emits playback-related interaction events.  
+* Required endpoint:  
+  * `GET /stream/:songId`  
+* Required behavior:  
+  * Returns a simulated HLS manifest or equivalent stream descriptor.  
+  * Does not use real audio files.  
+  * Generates configurable dummy segment payloads to simulate network load.  
+  * Emits at least play.started, play.ended, and play.skipped interaction events with user, song, and timestamp data.  
+* Security:  
+  * Protected streaming access must require a valid JWT.  
+* Persistence:  
+  * If the service persists state, it must use its own dedicated persistence layer.
+
+### 4. Playlist Service
+
+* Purpose: manages user playlists and playlist track operations.  
+* Required endpoints:  
+  * `GET /playlists`  
+  * `POST /playlists` 
+  * `GET /playlists/:id`  
+  * `PATCH /playlists/:id`  
+  * `DELETE /playlists/:id`  
+  * `POST /playlists/:id/tracks`  
+  * `DELETE /playlists/:id/tracks/:songId`  
+  * `PATCH /playlists/:id/tracks/reorder`  
+* Required behavior:  
+  * Supports playlist CRUD operations.  
+  * Supports adding, removing, and reordering tracks in playlists.  
+  * Implements a per-user special playlist named Liked Songs.  
+* Persistence:  
+  * Must store playlist and liked-song data in its own dedicated persistence layer.  
+* Optional behavior:  
+  * Mood-based smart playlists, version history with undo, collaborative editing, and queue management may be implemented as optional features.
+
+### 5. Search Service
+
+* Purpose: provides filtered text search over the song catalog.  
+* Required endpoint:  
+  * `GET /search?q=\&genre=\&bpm\_min=\&bpm\_max=\&year=`  
+* Required behavior:  
+  * Supports text search over songs.  
+  * Supports filtering by genre, BPM, and year.  
+* Persistence and indexing:  
+  * If the service stores search indexes or cached search data, it must use its own dedicated persistence layer.  
+* Optional behavior:  
+  * Expanded search across artists, albums, and playlists may be implemented.  
+  * Autocomplete suggestions may be implemented.  
+  * Elasticsearch or another search backend may be used, but it is not mandatory.
+
+### 6. Analytics Service
+
+* Purpose: stores listening history and aggregates playback data into chart-oriented analytics.  
+* Required endpoint:  
+  * `GET /analytics/me/history`  
+* Required behavior:  
+  * Persists user listen history across sessions.  
+  * Aggregates playback events into chart data.  
+  * Computes at least global play-count-based rankings from ingested and/or emitted playback data.  
+* Observability:  
+  * Must expose metrics suitable for Prometheus scraping.  
+* Persistence:  
+  * Must store analytics data in its own dedicated persistence layer.  
+* Optional behavior:  
+  * `GET /analytics/charts/global` may be implemented as a should-have endpoint.  
+  * Personal charts and listening statistics may be implemented as an optional extension.
+
+### 7. Recommendation Service
+
+* Purpose: generates personalised and song-based recommendations from observed listening behavior.  
+* Required endpoints:  
+  * `GET /recommend/daily-mix`  
+  * `GET /recommend/similar/:songId`  
+* Required behavior:  
+  * Consumes playback-related interaction data.  
+  * Returns non-empty recommendation responses for valid requests.  
+* Persistence:  
+  * If the service persists recommendation data, models, or caches, it must use its own dedicated persistence layer.  
+* Implementation note:  
+  * Recommendation quality may be simple in the first version as long as the endpoints and behavior are functional.
+
+### 8. Notification Service
+
+* Purpose: stores internal in-app notifications generated from application events.  
+* Exposure:  
+  * Internal service only; no public client-facing API is required in the minimum version.  
+* Required behavior:  
+  * Consumes internal events.  
+  * Stores in-app notifications retrievable from its own storage.  
+  * Must consume at least playlist update events or new release events and persist resulting in-app notifications.  
+* Out of scope:  
+  * Email and push notifications must not be implemented.  
+* Persistence:  
+  * Must use its own dedicated persistence layer.
+
+## 4. Technology Stack
+
+To preserve comparability while still allowing a polyglot architecture, each service must choose its technology stack from the following approved options. The choice must be documented.
+
+### 4.1. Options
+
+#### Auth Service
+
+* Node.js \+ Express  
+* Go \+ Gin
+
+#### Catalog Service
+
+* Python \+ FastAPI  
+* Java \+ Spring Boot
+
+#### Streaming Service
+
+* Go \+ Gin  
+* Node.js \+ Express
+
+#### Playlist Service
+
+* Node.js \+ Express  
+* Python \+ FastAPI
+
+#### Search Service
+
+* Python \+ FastAPI  
+* Node.js \+ Express
+
+#### Analytics Service
+
+* Python \+ FastAPI  
+* Go \+ Gin
+
+#### Recommendation Service
+
+* Python \+ FastAPI preferred  
+* Python \+ Flask acceptable if kept lightweight and clearly documented
+
+#### Notification Service
+
+* Node.js \+ Express  
+* Python \+ FastAPI  
+* Go \+ Gin
+
+### 4.2. Shared persistence and infrastructure guidance
+
+* The system may use polyglot persistence. Each service may choose the persistence technology that best fits its data model, query patterns, and consistency requirements, provided that service data isolation is preserved.  
+* Each service that persists state must use its own dedicated persistence layer. Services must not directly access another service’s persistence layer.  
+* Acceptable persistence categories include relational, document, key-value/cache, search-oriented, graph, and object storage where appropriate to the service responsibilities.  
+* Search may use PostgreSQL full-text search, Elasticsearch, or another documented search-oriented backend that satisfies the requirements.  
+* Event-driven communication may use Kafka or another documented message broker that satisfies the requirements.  
+* Monitoring should use Prometheus, with Grafana recommended for the admin dashboard.  
+* Object storage for simulated streaming payloads may use MinIO or an equivalent documented local object store if needed by the implementation.
+
+### 4.3. Selection constraints
+
+* Each service must use exactly one approved application stack.  
+* The final system must include at least three distinct language/framework stacks across the 8 services.  
+* Persistence technology may vary across services, but the database-per-service pattern and service data isolation must be preserved.  
+* Stack choices and persistence choices must be documented in the final README or implementation notes.  
+* If an approved alternative is selected instead of the preferred one, the choice must be briefly justified in the generated documentation.
+
+## 5. Requirements
 
 | ID | Priority | Type | Requirement | Notes |
 | ----- | ----- | ----- | ----- | ----- |
