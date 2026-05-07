@@ -42,29 +42,29 @@
 
 ## The generated project must include all artifacts required to build, run, validate, and inspect the application locally. At minimum, the delivery must contain the complete source code, deployment configuration, service containerization artifacts, supporting configuration, and usage documentation needed to reproduce the system.
 
-* ## docker-compose.yml for the full application and supporting infrastructure.
+- [ ] docker-compose.yml for the full application and supporting infrastructure.
 
-* ## Source code and containerization artifacts for the Auth Service.
+- [ ] Source code and containerization artifacts for the Auth Service.
 
-* ## Source code, dataset-ingestion logic, and containerization artifacts for the Catalog Service.
+- [ ] Source code, dataset-ingestion logic, and containerization artifacts for the Catalog Service.
 
-* ## Source code and containerization artifacts for the Streaming Service.
+- [ ] Source code and containerization artifacts for the Streaming Service.
 
-* ## Source code and containerization artifacts for the Playlist Service.
+- [ ] Source code and containerization artifacts for the Playlist Service.
 
-* ## Source code and containerization artifacts for the Search Service.
+- [ ] Source code and containerization artifacts for the Search Service.
 
-* ## Source code and containerization artifacts for the Analytics Service.
+- [ ] Source code and containerization artifacts for the Analytics Service.
 
-* ## Source code and containerization artifacts for the Recommendation Service.
+- [ ] Source code and containerization artifacts for the Recommendation Service.
 
-* ## Source code and containerization artifacts for the Notification Service.
+- [ ] Source code and containerization artifacts for the Notification Service.
 
-* ## Configuration for metrics collection and monitoring support.
+- [ ] Configuration for metrics collection and monitoring support.
 
-* ## Load-generator script and workload definition.
+- [ ] Load-generator script and workload definition.
 
-* ## README with setup, run, validation, and testing instructions.
+- [ ] README with setup, run, validation, and testing instructions.
 
 ## **Expected documentation**
 
