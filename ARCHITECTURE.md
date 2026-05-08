@@ -151,53 +151,7 @@ The system is composed of eight independent microservices. Each service owns its
   * Email and push notifications must not be implemented.  
 * Persistence:  
   * Must use its own dedicated persistence layer.
-
-## 4. Technology Stack
-
-To preserve comparability while still allowing a polyglot architecture, each service must choose its technology stack from the following approved options. The choice must be documented.
-
-### 4.1. Options
-
-#### Auth Service
-
-* Node.js \+ Express  
-* Go \+ Gin
-
-#### Catalog Service
-
-* Python \+ FastAPI  
-* Java \+ Spring Boot
-
-#### Streaming Service
-
-* Go \+ Gin  
-* Node.js \+ Express
-
-#### Playlist Service
-
-* Node.js \+ Express  
-* Python \+ FastAPI
-
-#### Search Service
-
-* Python \+ FastAPI  
-* Node.js \+ Express
-
-#### Analytics Service
-
-* Python \+ FastAPI  
-* Go \+ Gin
-
-#### Recommendation Service
-
-* Python \+ FastAPI preferred  
-* Python \+ Flask acceptable if kept lightweight and clearly documented
-
-#### Notification Service
-
-* Node.js \+ Express  
-* Python \+ FastAPI  
-* Go \+ Gin
+-------------------------------------------
 
 ### 4.2. Shared persistence and infrastructure guidance
 
