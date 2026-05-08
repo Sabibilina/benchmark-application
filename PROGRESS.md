@@ -40,42 +40,6 @@ Generation should begin with the shared deployment environment, including the in
 
 * Integration behavior should be checked incrementally rather than postponed until the entire system has been generated.
 
-### Delivery Checklist
-
-The generated project must include all artifacts required to build, run, validate, and inspect the application locally. At minimum, the delivery must contain the complete source code, deployment configuration, service containerization artifacts, supporting configuration, and usage documentation needed to reproduce the system.
-
-- [ ] docker-compose.yml for the full application and supporting infrastructure.
-
-- [ ] Source code and containerization artifacts for the Auth Service.
-
-- [ ] Source code, dataset-ingestion logic, and containerization artifacts for the Catalog Service.
-
-- [ ] Source code and containerization artifacts for the Streaming Service.
-
-- [ ] Source code and containerization artifacts for the Playlist Service.
-
-- [ ] Source code and containerization artifacts for the Search Service.
-
-- [ ] Source code and containerization artifacts for the Analytics Service.
-
-- [ ] Source code and containerization artifacts for the Recommendation Service.
-
-- [ ] Source code and containerization artifacts for the Notification Service.
-
-- [ ] Configuration for metrics collection and monitoring support.
-
-- [ ] Load-generator script and workload definition.
-
-- [ ] README with setup, run, validation, and testing instructions.
-
-### Expected documentation
-
-* Description of the selected technology stack per service.
-
-* Instructions for starting the system, validating the services, and running the load generator.
-
-* Description and justification of the selected persistence technology per service.
-
 ### Minimum completion criteria
 
 * All required services start successfully in the local deployment environment.
@@ -88,86 +52,7 @@ The generated project must include all artifacts required to build, run, validat
 
 * The load generator can execute the main application flows
 
-
-### First prompt set
-
-#### Prompt 1
-
-Use the attached document as the single source of truth for this project. For this step, do not generate service business logic yet. Create an implementation plan only for the shared deployment environment and repository skeleton. Include:
-
-* proposed repository structure,
-* docker-compose.yml structure,
-* named Docker network,
-* supporting infrastructure needed by the current baseline,
-* service directory layout,
-* config/env file strategy,
-* validation steps for this phase.
-
-Do not generate code yet. State assumptions explicitly and do not invent requirements beyond the document.
-
-#### Prompt 2
-
-Now generate the repository skeleton and shared deployment environment according to the approved plan and the attached source-of-truth document. Generate:
-
-* top-level folder structure,
-* docker-compose.yml,
-* shared config files,
-* service folders,
-* placeholder Dockerfiles only where needed for the current phase,
-* README with startup instructions for this phase.
-
-Do not implement full service business logic yet. All output must be runnable and consistent with the document.
-
-#### Prompt 3
-
-Now review the generated repository skeleton and deployment environment against the attached document. Validate that:
-
-* the compose file reflects the required architecture,
-* the shared network is defined,
-* services and infrastructure are organized correctly,
-* the setup supports the later module-by-module workflow,
-* no requirements were added that are not in the document.
-
-Fix any issues and output only the changed files.
-
-### Second Prompt Set
-
-Work in iterative prompts: plan → generate → validate/fix.
-
-* **Session 1:** repo skeleton \\+ docker-compose.yml
-* **Session 2:** Auth Service
-* **Session 3:** Catalog Service \\+ seed logic
-* **Session 4:** Playlist Service
-* **Session 5:** Streaming Service
-* **Session 6:** Search Service
-* **Session 7:** Analytics Service
-* **Session 8:** Recommendation Service
-* **Session 9:** Notification Service
-* **Session 10:** monitoring \\+ load generator \\+ integration fixes
-
-### Prompt pattern
-
-Use this pattern every time:
-
-#### **Prompt 1 — Plan**
-
-“Use `ARCHITECTURE.md` as the source of truth. For this step, create an implementation plan only for the Auth Service. Include file tree, chosen stack, dependencies, endpoints, env vars, and validation steps. Do not generate code yet.”
-
-#### **Prompt 2 — Generate**
-
-“Now generate the complete runnable implementation for the Auth Service exactly according to the approved plan and the generation brief. Include source code, Dockerfile, dependency manifest, config, and a short README. No pseudocode, no placeholders.”
-
-#### **Prompt 3 — Validate/Fix**
-
-“Review the generated Auth Service against these acceptance criteria. Fix missing or incorrect parts and output only the changed files.”
-
-* Use the attached generation brief as the only source of truth.
-* Do not invent requirements not present in the brief.
-* Do not modify unrelated files.
-* State assumptions explicitly.
-* Prefer regeneration over patching if the architecture is wrong.
-
-## **Checklist**
+## **More Detailed Checklist**
 
 Services are built **one at a time** in the order below. Each service goes through three prompts:
 **Plan → Generate → Validate/Fix**. Do not move to the next service until the current one starts cleanly and passes its acceptance criteria.
@@ -191,9 +76,9 @@ Services are built **one at a time** in the order below. Each service goes throu
 > Stack: **Node.js + Express** or **Go + Gin**
 
 ### Prompts
-- [ ] **Prompt 1 — Plan**: File tree, stack choice + justification, DB schema (users, refresh_tokens), endpoints, JWT RS256 strategy, env vars, dependencies, validation steps
-- [ ] **Prompt 2 — Generate**: All source files, Dockerfile, dependency manifest, `.env.example`, `init.sql`, README section
-- [ ] **Prompt 3 — Validate/Fix**: Review against acceptance criteria; fix and return only changed files
+- [ ] **Step 1 — Plan**: File tree, stack choice + justification, DB schema (users, refresh_tokens), endpoints, JWT RS256 strategy, env vars, dependencies, validation steps
+- [ ] **Step 2 — Generate**: All source files, Dockerfile, dependency manifest, `.env.example`, `init.sql`, README section
+- [ ] **Step 3 — Validate/Fix**: Review against acceptance criteria; fix and return only changed files
 
 ### Acceptance Criteria
 - [ ] `POST /auth/register` accepts `{username, email, password}`, hashes password, persists user, returns `201`
@@ -212,9 +97,9 @@ Services are built **one at a time** in the order below. Each service goes throu
 > Stack: **Python + FastAPI** or **Java + Spring Boot**
 
 ### Prompts
-- [ ] **Prompt 1 — Plan**: File tree, stack choice + justification, DB schema (songs table with all required columns), CSV ingestion strategy, endpoints, pagination design, env vars, dependencies, validation steps
-- [ ] **Prompt 2 — Generate**: All source files, Dockerfile, dependency manifest, `.env.example`, schema/migration, seed script, README section
-- [ ] **Prompt 3 — Validate/Fix**: Review against acceptance criteria; fix and return only changed files
+- [ ] **Step 1 — Plan**: File tree, stack choice + justification, DB schema (songs table with all required columns), CSV ingestion strategy, endpoints, pagination design, env vars, dependencies, validation steps
+- [ ] **Step 2 — Generate**: All source files, Dockerfile, dependency manifest, `.env.example`, schema/migration, seed script, README section
+- [ ] **Step 3 — Validate/Fix**: Review against acceptance criteria; fix and return only changed files
 
 ### Acceptance Criteria
 - [ ] `GET /catalog/songs` returns a paginated response (`page`, `limit`, `total`, `data` array)
@@ -234,9 +119,9 @@ Services are built **one at a time** in the order below. Each service goes throu
 > Stack: **Node.js + Express** or **Python + FastAPI**
 
 ### Prompts
-- [ ] **Prompt 1 — Plan**: File tree, stack choice + justification, DB schema (`playlists`, `playlist_tracks` with order column, Liked Songs model), all 8 endpoints, track reorder strategy, Liked Songs protection logic, JWT validation, env vars, dependencies, validation steps
-- [ ] **Prompt 2 — Generate**: All source files, Dockerfile, dependency manifest, `.env.example`, schema/migration, README section
-- [ ] **Prompt 3 — Validate/Fix**: Review against acceptance criteria; fix and return only changed files
+- [ ] **Step 1 — Plan**: File tree, stack choice + justification, DB schema (`playlists`, `playlist_tracks` with order column, Liked Songs model), all 8 endpoints, track reorder strategy, Liked Songs protection logic, JWT validation, env vars, dependencies, validation steps
+- [ ] **Step 2 — Generate**: All source files, Dockerfile, dependency manifest, `.env.example`, schema/migration, README section
+- [ ] **Step 3 — Validate/Fix**: Review against acceptance criteria; fix and return only changed files
 
 ### Acceptance Criteria
 - [ ] All 8 required endpoints exist and return correct HTTP status codes
@@ -257,9 +142,9 @@ Services are built **one at a time** in the order below. Each service goes throu
 > Stack: **Go + Gin** or **Node.js + Express**
 
 ### Prompts
-- [ ] **Prompt 1 — Plan**: File tree, stack choice + justification, endpoint design (simulated HLS manifest), dummy segment payload design, MinIO setup, Redis session state (optional), event emission strategy (stdout stub), JWT validation approach, env vars, dependencies, validation steps
-- [ ] **Prompt 2 — Generate**: All source files, Dockerfile, dependency manifest, `.env.example`, MinIO init logic, README section
-- [ ] **Prompt 3 — Validate/Fix**: Review against acceptance criteria; fix and return only changed files
+- [ ] **Step 1 — Plan**: File tree, stack choice + justification, endpoint design (simulated HLS manifest), dummy segment payload design, MinIO setup, Redis session state (optional), event emission strategy (stdout stub), JWT validation approach, env vars, dependencies, validation steps
+- [ ] **Step 2 — Generate**: All source files, Dockerfile, dependency manifest, `.env.example`, MinIO init logic, README section
+- [ ] **Step 3 — Validate/Fix**: Review against acceptance criteria; fix and return only changed files
 
 ### Acceptance Criteria
 - [ ] `GET /stream/:songId` returns `401` when no JWT is provided
@@ -280,9 +165,9 @@ Services are built **one at a time** in the order below. Each service goes throu
 > Stack: **Python + FastAPI** or **Node.js + Express**
 
 ### Prompts
-- [ ] **Prompt 1 — Plan**: File tree, stack choice + justification, endpoint design, search backend strategy (PostgreSQL FTS with `tsvector`/`tsquery`), catalog data population approach, filter logic (genre, BPM range, year), index design, JWT validation, env vars, dependencies, validation steps
-- [ ] **Prompt 2 — Generate**: All source files, Dockerfile, dependency manifest, `.env.example`, schema/migration with indexes, data population script, README section
-- [ ] **Prompt 3 — Validate/Fix**: Review against acceptance criteria; fix and return only changed files
+- [ ] **Step 1 — Plan**: File tree, stack choice + justification, endpoint design, search backend strategy (PostgreSQL FTS with `tsvector`/`tsquery`), catalog data population approach, filter logic (genre, BPM range, year), index design, JWT validation, env vars, dependencies, validation steps
+- [ ] **Step 2 — Generate**: All source files, Dockerfile, dependency manifest, `.env.example`, schema/migration with indexes, data population script, README section
+- [ ] **Step 3 — Validate/Fix**: Review against acceptance criteria; fix and return only changed files
 
 ### Acceptance Criteria
 - [ ] `GET /search?q=test` returns song results matching the query text
@@ -304,9 +189,9 @@ Services are built **one at a time** in the order below. Each service goes throu
 > Stack: **Python + FastAPI** or **Go + Gin**
 
 ### Prompts
-- [ ] **Prompt 1 — Plan**: File tree, stack choice + justification, DB choice (TimescaleDB or PostgreSQL), table/hypertable design, `GET /analytics/me/history` response shape, global charts approach, stub ingest endpoint contract, Prometheus metrics list, JWT validation, env vars, dependencies, validation steps
-- [ ] **Prompt 2 — Generate**: All source files, Dockerfile, dependency manifest, `.env.example`, schema/migration, README section
-- [ ] **Prompt 3 — Validate/Fix**: Review against acceptance criteria; fix and return only changed files
+- [ ] **Step 1 — Plan**: File tree, stack choice + justification, DB choice (TimescaleDB or PostgreSQL), table/hypertable design, `GET /analytics/me/history` response shape, global charts approach, stub ingest endpoint contract, Prometheus metrics list, JWT validation, env vars, dependencies, validation steps
+- [ ] **Step 2 — Generate**: All source files, Dockerfile, dependency manifest, `.env.example`, schema/migration, README section
+- [ ] **Step 3 — Validate/Fix**: Review against acceptance criteria; fix and return only changed files
 
 ### Acceptance Criteria
 - [ ] `POST /analytics/events` (stub) accepts `{userId, songId, eventType, timestamp}` and persists the event
@@ -327,9 +212,9 @@ Services are built **one at a time** in the order below. Each service goes throu
 > Stack: **Python + FastAPI** (preferred) or **Python + Flask**
 
 ### Prompts
-- [ ] **Prompt 1 — Plan**: File tree, stack choice + justification, PostgreSQL schema (user–song interaction matrix), Redis key schema and TTL values, both endpoint designs, v1 algorithm description (genre/BPM heuristic), stub ingest endpoint, cache population strategy, JWT validation, env vars, dependencies, validation steps
-- [ ] **Prompt 2 — Generate**: All source files, Dockerfile, dependency manifest (requirements.txt or pyproject.toml), `.env.example`, schema/migration, README section
-- [ ] **Prompt 3 — Validate/Fix**: Review against acceptance criteria; fix and return only changed files
+- [ ] **Step 1 — Plan**: File tree, stack choice + justification, PostgreSQL schema (user–song interaction matrix), Redis key schema and TTL values, both endpoint designs, v1 algorithm description (genre/BPM heuristic), stub ingest endpoint, cache population strategy, JWT validation, env vars, dependencies, validation steps
+- [ ] **Step 2 — Generate**: All source files, Dockerfile, dependency manifest (requirements.txt or pyproject.toml), `.env.example`, schema/migration, README section
+- [ ] **Step 3 — Validate/Fix**: Review against acceptance criteria; fix and return only changed files
 
 ### Acceptance Criteria
 - [ ] `GET /recommend/daily-mix` returns a non-empty array of song objects for a valid authenticated user
@@ -350,9 +235,9 @@ Services are built **one at a time** in the order below. Each service goes throu
 > Stack: **Node.js + Express**, **Python + FastAPI**, or **Go + Gin**
 
 ### Prompts
-- [ ] **Prompt 1 — Plan**: File tree, stack choice + justification, MongoDB document schema, internal-only exposure rationale, stub ingest endpoint contract for `playlist_updated` and `new_release` events, notification creation logic, env vars, dependencies, validation steps
-- [ ] **Prompt 2 — Generate**: All source files, Dockerfile, dependency manifest, `.env.example`, MongoDB index creation, README section
-- [ ] **Prompt 3 — Validate/Fix**: Review against acceptance criteria; fix and return only changed files
+- [ ] **Step 1 — Plan**: File tree, stack choice + justification, MongoDB document schema, internal-only exposure rationale, stub ingest endpoint contract for `playlist_updated` and `new_release` events, notification creation logic, env vars, dependencies, validation steps
+- [ ] **Step 2 — Generate**: All source files, Dockerfile, dependency manifest, `.env.example`, MongoDB index creation, README section
+- [ ] **Step 3 — Validate/Fix**: Review against acceptance criteria; fix and return only changed files
 
 ### Acceptance Criteria
 - [ ] `POST /notifications/internal` accepts a `playlist_updated` event payload and persists a notification document in MongoDB
@@ -373,9 +258,9 @@ Services are built **one at a time** in the order below. Each service goes throu
 > Stack: **React + TypeScript**, Zustand or Redux Toolkit for global state, React Query or SWR for server state
 
 ### Prompts
-- [ ] **Prompt 1 — Plan**: File tree for `frontend/`, routing strategy, global state shape (session, playback, queue), API client design (JWT injection, retry, error normalization), view inventory, env vars, build/containerization approach, validation steps
-- [ ] **Prompt 2 — Generate**: All source files, Dockerfile, `package.json`, `.env.example`, Vite/CRA config, README section covering build, run, and how to point it at the backend
-- [ ] **Prompt 3 — Validate/Fix**: Review against acceptance criteria; fix and return only changed files
+- [ ] **Step 1 — Plan**: File tree for `frontend/`, routing strategy, global state shape (session, playback, queue), API client design (JWT injection, retry, error normalization), view inventory, env vars, build/containerization approach, validation steps
+- [ ] **Step 2 — Generate**: All source files, Dockerfile, `package.json`, `.env.example`, Vite/CRA config, README section covering build, run, and how to point it at the backend
+- [ ] **Step 3 — Validate/Fix**: Review against acceptance criteria; fix and return only changed files
 
 ### Views to Implement
 - [ ] **Home / Discovery** — Daily Mix cards, "Because you listened to…" rails, trending tracks from Analytics global charts
