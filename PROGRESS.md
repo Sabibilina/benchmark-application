@@ -41,18 +41,6 @@ Generation should begin with the shared deployment environment, including the in
 
 * Integration behavior should be checked incrementally rather than postponed until the entire system has been generated.
 
-### Minimum completion criteria
-
-* All required services start successfully in the local deployment environment.
-
-* Required endpoints are implemented and reachable.
-
-* Protected endpoints enforce JWT authentication.
-
-* Metrics are exposed and collectible through the monitoring setup.
-
-* The load generator can execute the main application flows
-
 ## **More Detailed Checklist**
 
 Services are built **one at a time** in the order below. Each service goes through three prompts:
