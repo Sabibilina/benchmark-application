@@ -151,17 +151,23 @@ The system is composed of eight independent microservices. Each service owns its
 * Persistence:  
   * Must use its own dedicated persistence layer.
 
-## 4. Frontend Architecture
+## 4. Benchmarking Context
 
-### 4.1. Technology & Architecture
+The system is intended to function not only as a music streaming application, but also as a benchmarkable reference system for experimental evaluation. Its fixed service boundaries, dedicated persistence per service, and observable interactions make it suitable for controlled comparison across implementations, deployment setups, and resilience strategies.
+
+The architecture is designed to support benchmarking of performance, scalability, fault tolerance, observability, and cloud cost awareness under representative workloads. For that reason, the system structure described in this document is expected to remain stable so that benchmark results can be compared meaningfully across different runs, configurations, and infrastructure choices.
+
+## 5. Frontend Architecture
+
+### 5.1. Technology & Architecture
 
 The frontend should be a single-page application (SPA) with client-side routing. **React** with TypeScript is the recommended stack, using a state management library (Zustand or Redux Toolkit) for global state such as the current user session, playback state, and queue.
 
-### 4.2. Authentication
+### 5.2. Authentication
 
 The app must support registration and login flows backed by the Auth Service. On login, the issued JWT must be stored in memory (not localStorage) and attached to all subsequent API requests via an `Authorization: Bearer` header.
 
-### 4.3. Core Views
+### 5.3. Core Views
 
 * **Home/Discovery** — Personalized landing page showing Daily Mix cards, "Because you listened to…" rails, and, if implemented, trending tracks from the Analytics Service global charts.
 
@@ -177,15 +183,15 @@ The app must support registration and login flows backed by the Auth Service. On
 
 * **Notifications** — An optional inbox panel (accessible from a bell icon in the nav) listing in-app notifications from the Notification Service, such as playlist updates from collaborators.
 
-### 4.4. Playback Integration
+### 5.4. Playback Integration
 
 The player must call the Streaming Service (`GET /stream/:songId`) to initiate a stream session. Since the service returns a simulated HLS manifest, the frontend should treat playback as a state machine: `idle → loading → playing → paused → ended/skipped`. State transitions must emit the appropriate events (the backend handles event publishing). Skip and completion actions must be explicitly triggered.
 
-### 4.5. API Communication
+### 5.5. API Communication
 
 All HTTP calls to backend services must go through a centralized API client that handles JWT injection, retry with exponential backoff, and error normalization. This should follow the same resilience pattern used for backend service-to-service communication.
 
-### 4.6. Observability
+### 5.6. Observability
 
 The frontend should expose a `/health` route (or equivalent static response) and track key client-side metrics: page load time, API error rates, and playback failure counts. These can be reported to the Analytics Service or logged for Prometheus scraping via a lightweight metrics endpoint.
 
