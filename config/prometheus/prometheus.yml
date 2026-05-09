@@ -1,0 +1,48 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]
+
+  - job_name: auth
+    static_configs:
+      - targets: ["auth:3001"]
+    metrics_path: /metrics
+
+  - job_name: catalog
+    static_configs:
+      - targets: ["catalog:3002"]
+    metrics_path: /metrics
+
+  - job_name: streaming
+    static_configs:
+      - targets: ["streaming:3003"]
+    metrics_path: /metrics
+
+  - job_name: playlist
+    static_configs:
+      - targets: ["playlist:3004"]
+    metrics_path: /metrics
+
+  - job_name: search
+    static_configs:
+      - targets: ["search:3005"]
+    metrics_path: /metrics
+
+  - job_name: analytics
+    static_configs:
+      - targets: ["analytics:3006"]
+    metrics_path: /metrics
+
+  - job_name: recommendation
+    static_configs:
+      - targets: ["recommendation:3007"]
+    metrics_path: /metrics
+
+  - job_name: notification
+    static_configs:
+      - targets: ["notification:3008"]
+    metrics_path: /metrics

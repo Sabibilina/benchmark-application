@@ -1,0 +1,1 @@
+# Placeholder — full dependencies added in Session 6 (Search Service implementation)
