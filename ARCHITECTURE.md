@@ -2,7 +2,7 @@
 
 ## 1. System Overview
 
-The application is a cloud-native music streaming system designed for benchmarking. It consists of a fixed set of microservices, each with clearly defined responsibilities, along with the shared architectural principles that govern how the system is built and operated. 
+The application is a cloud-native music streaming system designed for benchmarking. It consists of a fixed set of microservices, each with clearly defined responsibilities, along with the system-wide architectural principles that govern how the system is built and operated. 
 This architecture is intended to remain stable over time and should not vary based on runtime behavior, deployment conditions, or implementation details.
 
 ## 2. Purpose of this document
@@ -95,7 +95,7 @@ The system is composed of eight independent microservices. Each service owns its
 
 * Purpose: provides filtered text search over the song catalog.  
 * Required endpoint:  
-  * `GET /search?q=\&genre=\&bpm\_min=\&bpm\_max=\&year=`  
+  * `GET /search?q=&genre=&bpm_min=&bpm_max=&year=` 
 * Required behavior:  
   * Supports text search over songs.  
   * Supports filtering by genre, BPM, and year.  
@@ -159,15 +159,15 @@ The frontend should be a single-page application (SPA) with client-side routing.
 
 ### 4.2. Authentication
 
-The app must support registration and login flows backed by the Auth Service. On login, the issued JWT must be stored in memory (not localStorage) and attached to all subsequent API requests via an `Authorization: Bearer` header. A silent refresh mechanism should handle token expiry gracefully, redirecting to login only when the refresh fails.
+The app must support registration and login flows backed by the Auth Service. On login, the issued JWT must be stored in memory (not localStorage) and attached to all subsequent API requests via an `Authorization: Bearer` header.
 
-### 4.3 Core Views
+### 4.3. Core Views
 
-* **Home/Discovery** — Personalized landing page showing Daily Mix cards, "Because you listened to…" rails, and trending tracks from the Analytics Service global charts.
+* **Home/Discovery** — Personalized landing page showing Daily Mix cards, "Because you listened to…" rails, and, if implemented, trending tracks from the Analytics Service global charts.
 
-* **Search** — A full-text search bar with real-time autocomplete suggestions. Results should be filterable by genre, BPM range, and release year. Results should display songs, with optional expanded sections for artists, albums, and playlists.
+* **Search** — A full-text search bar with optional real-time autocomplete suggestions. Results should be filterable by genre, BPM range, and release year. Results should display songs, with optional expanded sections for artists, albums, and playlists.
 
-* **Catalog Browse** — Paginated song grid/list with sort controls (title, artist, BPM). Clicking an artist name navigates to an artist detail page showing their top tracks.
+* **Catalog Browse** — Paginated song grid/list with sort controls (title, artist, BPM). Clicking an artist name may navigate to an artist detail page showing their top tracks.
 
 * **Now Playing/Player Bar** — A persistent bottom bar showing the current track's title, artist, album art placeholder, playback controls (play/pause, skip, previous), a progress scrubber, and volume control. This bar must remain visible across all views.
 
@@ -175,15 +175,15 @@ The app must support registration and login flows backed by the Auth Service. On
 
 * **Listening History** — A chronological log of the user's play events fetched from the Analytics Service, grouped by date.
 
-* **Notifications** — An inbox panel (accessible from a bell icon in the nav) listing in-app notifications from the Notification Service, such as playlist updates from collaborators.
+* **Notifications** — An optional inbox panel (accessible from a bell icon in the nav) listing in-app notifications from the Notification Service, such as playlist updates from collaborators.
 
 ### 4.4. Playback Integration
 
-The player must call the Streaming Service (`GET /stream/:songId`) to initiate a stream session. Since the service returns a simulated HLS manifest, the frontend should treat playback as a state machine: `idle → loading → playing → paused → ended/skipped`. State transitions must emit the appropriate events (the backend handles Kafka publishing). Skip and completion actions must be explicitly triggered.
+The player must call the Streaming Service (`GET /stream/:songId`) to initiate a stream session. Since the service returns a simulated HLS manifest, the frontend should treat playback as a state machine: `idle → loading → playing → paused → ended/skipped`. State transitions must emit the appropriate events (the backend handles event publishing). Skip and completion actions must be explicitly triggered.
 
 ### 4.5. API Communication
 
-All HTTP calls to backend services must go through a centralized API client that handles JWT injection, retry with exponential backoff (mirroring the backend requirement), and error normalization. A React Query or SWR library is recommended for server state caching and background refetching.
+All HTTP calls to backend services must go through a centralized API client that handles JWT injection, retry with exponential backoff, and error normalization. This should follow the same resilience pattern used for backend service-to-service communication.
 
 ### 4.6. Observability
 
