@@ -34,40 +34,8 @@ Java + Spring Boot is the preferred backend stack for all services for the follo
 - It is a strong fit for microservice architectures because it offers mature support for HTTP APIs, security, data access, observability, resilience, and messaging.
 - The team is already familiar with Java and Spring Boot, which makes AI-generated code easier to inspect, manually verify, debug, and repair.
 - The consistency of using one backend stack across services reduces operational overhead during benchmarking.
-
-## 2. Messaging Infrastructure
-
-### Messaging choice: Apache Kafka
-
-- **Apache Kafka** should be the shared event backbone for internal asynchronous communication.
-- Kafka is required because the system emits and consumes internal playback and application events across multiple services.
-- Kafka is a strong choice for benchmark systems because it is widely adopted, durable, scalable, and easy to observe under load.
-
-### Streaming Service
-**Messaging choice: Kafka producer**
-- Publish `play.started`, `play.ended`, and `play.skipped` events to Kafka.
-- Kafka is the right fit because these events are consumed asynchronously by Analytics, Recommendation, and Notification-related flows.
-
-### Playlist Service
-**Messaging choice: Kafka producer if playlist update events are used**
-- Publish playlist update events when playlist mutations occur, when this event source is used for notifications.
-
-### Analytics Service
-**Messaging choice: Kafka consumer**
-- Consume playback events from Kafka and persist them into analytics tables.
-- This keeps the write path decoupled from the Streaming Service and models a realistic event-driven architecture.
-
-### Recommendation Service
-**Messaging choice: Kafka consumer**
-- Consume playback events from Kafka to update recommendation inputs asynchronously.
-- This allows recommendation logic to evolve without coupling it directly to streaming request latency.
-
-### Notification Service
-**Messaging choice: Kafka consumer**
-- Consume playlist update events and, if implemented, other internal application events such as new-release notifications.
-- Persist the resulting notification documents for frontend retrieval.
-
-## 3. Shared Infrastructure
+  
+## 2. Shared Infrastructure
 
 ### Observability
 
@@ -84,6 +52,38 @@ Java + Spring Boot is the preferred backend stack for all services for the follo
 
 - Use a single named Docker network shared by all application services and infrastructure services.
 - Keep CPU and memory limits configurable per service in `docker-compose.yml` for benchmark experiments.
+
+## 3. Messaging Infrastructure per Service
+
+### Messaging choice: Apache Kafka
+
+- **Apache Kafka** should be the shared event backbone for internal asynchronous communication.
+- Kafka is required because the system emits and consumes internal playback and application events across multiple services.
+- Kafka is a strong choice for benchmark systems because it is widely adopted, durable, scalable, and easy to observe under load.
+
+### 3.1. Streaming Service
+**Messaging choice: Kafka producer**
+- Publish `play.started`, `play.ended`, and `play.skipped` events to Kafka.
+- Kafka is the right fit because these events are consumed asynchronously by Analytics, Recommendation, and Notification-related flows.
+
+### 3.2. Playlist Service
+**Messaging choice: Kafka producer if playlist update events are used**
+- Publish playlist update events when playlist mutations occur, when this event source is used for notifications.
+
+### 3.3. Analytics Service
+**Messaging choice: Kafka consumer**
+- Consume playback events from Kafka and persist them into analytics tables.
+- This keeps the write path decoupled from the Streaming Service and models a realistic event-driven architecture.
+
+### 3.4. Recommendation Service
+**Messaging choice: Kafka consumer**
+- Consume playback events from Kafka to update recommendation inputs asynchronously.
+- This allows recommendation logic to evolve without coupling it directly to streaming request latency.
+
+### 3.5. Notification Service
+**Messaging choice: Kafka consumer**
+- Consume playlist update events and, if implemented, other internal application events such as new-release notifications.
+- Persist the resulting notification documents for frontend retrieval.
 
 ## 4. Database and Persistence per Service
 
