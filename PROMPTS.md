@@ -15,6 +15,8 @@ For this step, do not generate service business logic yet. Create an implementat
 
 Do not generate code yet. State assumptions explicitly and do not invent requirements beyond the document.
 
+Record important planning decisions in `PROGRESS.md`, including what was decided, why it was decided, which document or requirement justified it, and which files or services are expected to be affected.
+
 ### Prompt 2
 
 Now generate the repository skeleton and shared deployment environment according to the approved plan and the `ARCHITECTURE.md`, `REQUIREMENTS.md`, and `TECH-STACK.md` documents. Generate:
@@ -27,6 +29,8 @@ Now generate the repository skeleton and shared deployment environment according
 
 Do not implement full service business logic yet. All output must be runnable and consistent with the document.
 
+After generating the repository skeleton and shared deployment environment, update `PROGRESS.md` to reflect what was completed in this phase and document every important decision taken during generation, including the reason, affected files, and any assumptions made.
+
 ### Prompt 3
 
 Now review the generated repository skeleton and deployment environment against the `ARCHITECTURE.md`, `REQUIREMENTS.md`, and `TECH-STACK.md` documents. Validate that:
@@ -37,6 +41,8 @@ Now review the generated repository skeleton and deployment environment against 
 - no requirements were added that are not in the document.
 
 Fix any issues and output only the changed files.
+
+Before considering the phase complete, update `PROGRESS.md` to mark validated checklist items, record fixes made, and document every important decision, correction, deviation, or unresolved issue found during validation.
 
 # Second Prompt Set
 
@@ -75,6 +81,8 @@ Do not generate code yet.
 State assumptions explicitly.
 If a detail is missing, list it instead of inventing behavior.
 
+Record important planning decisions in `PROGRESS.md`, including what was decided, why it was decided, which document or requirement justified it, and which files or services are expected to be affected.
+
 ### **Prompt 2 — Generate**
 
 Now generate the complete runnable implementation for the current phase or service exactly according to the approved plan.
@@ -88,6 +96,8 @@ Whenever applicable, also generate:
 - integration tests for required endpoints and persistence behavior,
 - event production or consumption tests for messaging-based services,
 - frontend component/integration tests for critical UI flows.
+
+After generating the implementation, update `PROGRESS.md` to reflect what was completed in this phase and document every important decision taken during generation, including the reason, affected files, and any assumptions made.
 
 ### **Prompt 3 — Validate/Fix**
 
@@ -108,3 +118,5 @@ Do not modify unrelated files.
 State assumptions explicitly.
 Prefer regeneration over patching if the architecture is wrong.
 Do not consider the phase complete if the implementation or its tests fail.
+
+Before considering the phase complete, update `PROGRESS.md` to mark validated checklist items, record fixes made, and document every important decision, correction, deviation, or unresolved issue found during validation.

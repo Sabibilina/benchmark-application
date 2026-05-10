@@ -43,9 +43,27 @@ Generation should begin with the shared deployment environment, including the in
 
 * Unit tests and integration tests must be generated and executed incrementally for each service before moving to the next phase.
 
+### Progress tracking and decision logging
+
+* After each generation or validation/fix step, `PROGRESS.md` must be updated before moving to the next step or phase.
+
+* The update must mark completed checklist items, note any incomplete or blocked items, and record whether the current phase is ready to continue.
+
+* Every important implementation decision taken during planning, generation, or validation must be documented in `PROGRESS.md`.
+
+* Each recorded decision should briefly state:
+  * what was decided,
+  * why it was decided,
+  * which document or requirement justified it,
+  * and which files or services were affected.
+
+* If the generated output required a deviation, correction, or assumption, that change must also be recorded in `PROGRESS.md`.
+
+* A phase must not be considered complete until both the implementation artifacts and the corresponding `PROGRESS.md` updates are finished.
+
 ## **More Detailed Checklist**
 
-Services are built **one at a time** in the order below. Each service goes through three prompts:
+Services are built **one at a time** in the order below. Each service goes through three steps:
 **Plan → Generate → Validate/Fix**. Do not move to the next service until the current one starts cleanly and passes its acceptance criteria.
 
 ## Phase 0 — Shared Deployment Environment
