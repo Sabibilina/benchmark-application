@@ -35,7 +35,7 @@ The system is composed of eight independent microservices. Each service owns its
 * Persistence:  
   * Must persist authentication-related state in its own dedicated persistence layer.  
 * Allowed implementation:  
-  * Stack must be selected from the Approved Service-Stack Options section.
+  * Stack must follow the implementation technology choices defined in TECH-STACK.md.
 
 ### 3.2. Catalog Service
 
@@ -140,8 +140,9 @@ The system is composed of eight independent microservices. Each service owns its
 ### 3.8. Notification Service
 
 * Purpose: stores internal in-app notifications generated from application events.  
-* Exposure:  
-  * Internal service only; no public client-facing API is required in the minimum version.  
+* Exposure:
+  * Internal service only; no public client-facing API is required in the minimum version.
+  * If notification retrieval is implemented for the optional frontend inbox, it must be exposed through a protected read interface or another explicitly defined access layer.
 * Required behavior:  
   * Consumes internal events.  
   * Stores in-app notifications retrievable from its own storage.  

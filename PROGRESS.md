@@ -209,7 +209,7 @@ Services are built **one at a time** in the order below. Each service goes throu
 
 ### Steps
 - [ ] **Step 1 — Plan**: File tree, endpoint design, recommendation strategy, persistence/caching approach if needed, JWT validation, env vars, dependencies, validation steps
-- [ ] **Step 2 — Generate**: All source files, Dockerfile, dependency manifest (requirements.txt or pyproject.toml), `.env.example`, schema/migration, unit tests, integration tests, README section
+- [ ] **Step 2 — Generate**: All source files, Dockerfile, Maven build files, `.env.example`, schema/migration, unit tests, integration tests, README section
 - [ ] **Step 3 — Validate/Fix**: Review against acceptance criteria; fix and return only changed files
 
 ### Acceptance Criteria
@@ -245,8 +245,8 @@ Services are built **one at a time** in the order below. Each service goes throu
 - [ ] `.env.example` is complete
 - [ ] No requirements from the brief are missing; no extra requirements added
 - [ ] Unit tests cover the core business logic of the service
-- [ ] Integration tests cover the required endpoints and persistence behavior where applicable
-- [ ] Protected endpoint behavior is tested for valid and invalid JWT access where applicable
+- [ ] Integration tests cover internal event consumption and notification persistence behavior
+- [ ] Internal-service behavior is tested according to the implemented exposure model
 - [ ] Test suite passes successfully
 
 ---
@@ -259,18 +259,18 @@ Services are built **one at a time** in the order below. Each service goes throu
 - [ ] **Step 3 — Validate/Fix**: Review against acceptance criteria; fix and return only changed files
 
 ### Views to Implement
-- [ ] **Home / Discovery** — Daily Mix cards, "Because you listened to…" rails, trending tracks from Analytics global charts
+- [ ] **Home / Discovery** — Daily Mix cards and "Because you listened to…" rails; trending tracks from Analytics global charts if implemented
 - [ ] **Search** — Full-text search bar; optional real-time autocomplete; results filterable by genre, BPM range, and release year; song results with optional artist/album/playlist sections
-- [ ] **Catalog Browse** — Paginated song grid/list with sort controls (title, artist, BPM); clicking an artist name navigates to artist detail showing top tracks
+- [ ] **Catalog Browse** — Paginated song grid/list with sort controls (title, artist, BPM); artist detail/top tracks only if implemented
 - [ ] **Now Playing / Player Bar** — Persistent bottom bar with track title, artist, album art placeholder, play/pause/skip/previous controls, progress scrubber, and volume control; visible across all views
 - [ ] **Playlists** — Sidebar list of user's playlists including "Liked Songs"; playlist detail with drag-and-drop reordering, track removal, add-from-search/catalog; playlist creation and deletion
 - [ ] **Listening History** — Chronological log of play events from Analytics Service, grouped by date
-- [ ] **Notifications** — Bell icon in nav opens inbox panel listing in-app notifications from Notification Service
+- [ ] **Notifications** — Optional inbox panel for in-app notifications if notification retrieval is exposed to the frontend in the implemented version
 
 ### Acceptance Criteria
 - [ ] Registration and login flows work end-to-end against the Auth Service; JWT stored in memory (not `localStorage`)
 - [ ] JWT is attached via `Authorization: Bearer` header on all protected API requests
-- [ ] All 7 views are present and navigable via client-side routing (no full-page reload between views)
+- [ ] Required frontend views are present and navigable via client-side routing (no full-page reload between views)
 - [ ] Now Playing bar persists across all route changes
 - [ ] Player calls `GET /stream/:songId` to initiate a stream session; playback state machine transitions correctly (`idle → loading → playing → paused → ended/skipped`)
 - [ ] Skip and completion actions explicitly trigger the appropriate state transitions and backend event payloads
@@ -278,7 +278,7 @@ Services are built **one at a time** in the order below. Each service goes throu
 - [ ] Search returns results and filters (genre, BPM range, year) work in combination
 - [ ] Playlist drag-and-drop reorder calls `PATCH /playlists/:id/tracks/reorder`
 - [ ] "Liked Songs" playlist is visible but the delete control is hidden or disabled
-- [ ] Notifications are retrievable and viewable from the frontend
+- [ ] Notifications are retrievable and viewable from the frontend if the notification inbox is implemented in the current version
 - [ ] Frontend exposes a `/health` route or static response for uptime checks
 - [ ] Key client-side metrics tracked: page load time, API error rates, playback failure counts
 - [ ] Dockerfile builds and container starts without errors; frontend is added to `docker-compose.yml`
@@ -297,7 +297,7 @@ Services are built **one at a time** in the order below. Each service goes throu
 
 ### Monitoring
 - [ ] Prometheus configured to scrape all 8 services
-- [ ] Grafana dashboard configured with panels for traffic, latency, error rate, and top tracks (S-03)
+- [ ] If implemented, Grafana dashboard is configured with panels for traffic, latency, error rate, and top tracks (S-03)
 - [ ] All services expose metrics suitable for Prometheus scraping
 
 ### Load Generator
@@ -333,7 +333,7 @@ Services are built **one at a time** in the order below. Each service goes throu
 - [ ] Database schemas / migrations present for all services with persistence
 - [ ] Catalog CSV seed script included and runs automatically at startup
 - [ ] Prometheus config file included
-- [ ] Grafana dashboard config included
+- [ ] Grafana dashboard config included if Grafana dashboards are implemented
 - [ ] Load generator script and workload definition included
 
 ### Documentation
@@ -353,3 +353,5 @@ Services are built **one at a time** in the order below. Each service goes throu
 - [ ] Protected endpoints enforce JWT authentication
 - [ ] Metrics are exposed and collected through the monitoring stack
 - [ ] Load generator can execute the main application flows end-to-end
+- [ ] Integrated system tests show that all services run correctly together in the shared deployment environment
+- [ ] Cross-service authentication, persistence, and messaging behavior are verified end-to-end
