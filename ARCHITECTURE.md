@@ -195,3 +195,11 @@ All HTTP calls to backend services must go through a centralized API client that
 
 The frontend should expose a `/health` route (or equivalent static response) and track key client-side metrics: page load time, API error rates, and playback failure counts. These can be reported to the Analytics Service or logged for Prometheus scraping via a lightweight metrics endpoint.
 
+## 6. System Verification Deliverable
+
+In addition to implementing the required services and infrastructure, the final system must include evidence that the services operate correctly together as an integrated application.
+
+This verification deliverable must demonstrate that the microservices can run together in the shared deployment environment, communicate through their required interfaces, enforce authentication correctly, and support the main end-to-end application flows.
+
+Verification should include automated testing at both service and system level so that the integrated behavior of the platform can be checked repeatedly across implementations and benchmark runs.
+

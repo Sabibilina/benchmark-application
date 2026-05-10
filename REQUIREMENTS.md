@@ -46,3 +46,21 @@ This document defines the functional and non-functional requirements for the clo
 | W-01 | Will not have | F | Email and push notifications will not be implemented | External SMTP or third-party notification delivery is out of scope |
 | W-02 | Will not have | F | OAuth2 or social login will not be implemented | Authentication is limited to local registration and login |
 | W-03 | Will not have | F | Real audio playback files will not be required | The system simulates streaming behavior and load using metadata and generated payloads only |
+
+## Testing Requirements
+
+The system must include automated tests to verify service behavior, integration correctness, and regression safety.
+
+### Backend testing
+- Each backend microservice must include unit tests for its core business logic.
+- Each backend microservice must include integration tests covering its required endpoints and persistence behavior where applicable.
+- Services with protected endpoints must include integration tests for authenticated and unauthenticated access.
+- Services that publish or consume internal events should include tests for event production or consumption behavior.
+- Tests must be runnable in an automated way as part of local validation.
+
+### Frontend testing
+- The frontend should include automated tests for critical UI behavior, routing, and API integration behavior.
+- Core flows such as authentication, protected API usage, playback state transitions, playlist interaction, and search filtering should be covered by tests.
+
+### Completion expectation
+- A service should not be considered complete if its required tests are missing or failing.

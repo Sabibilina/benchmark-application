@@ -5,7 +5,7 @@ This document defines the iterative generation, validation, and completion workf
 
 ## Generation Protocol
 
-`ARCHITECTURE.md` and `REQUIREMENTS.md` are the only sources of truth for generation and validation.
+`ARCHITECTURE.md` and `REQUIREMENTS.md` define the frozen system shape and validation baseline. `TECH-STACK.md` defines the required implementation technology choices.
 
 The application must be generated iteratively and service-by-service rather than in a single pass. Each service should be completed, reviewed, and validated before moving to the next one so that architectural or integration problems can be detected early.
 
@@ -41,6 +41,8 @@ Generation should begin with the shared deployment environment, including the in
 
 * Integration behavior should be checked incrementally rather than postponed until the entire system has been generated.
 
+* Unit tests and integration tests must be generated and executed incrementally for each service before moving to the next phase.
+
 ## **More Detailed Checklist**
 
 Services are built **one at a time** in the order below. Each service goes through three prompts:
@@ -62,7 +64,7 @@ Services are built **one at a time** in the order below. Each service goes throu
 
 ### Steps
 - [ ] **Step 1 — Plan**: File tree, endpoints, JWT signing and verification approach, persistence approach, env vars, dependencies, validation steps
-- [ ] **Step 2 — Generate**: All source files, Dockerfile, dependency manifest, `.env.example`, `init.sql`, README section
+- [ ] **Step 2 — Generate**: All source files, Dockerfile, dependency manifest, `.env.example`, `init.sql`, unit tests, integration tests, README section
 - [ ] **Step 3 — Validate/Fix**: Review against acceptance criteria; fix and return only changed files
 
 ### Acceptance Criteria
@@ -75,6 +77,10 @@ Services are built **one at a time** in the order below. Each service goes throu
 - [ ] Dockerfile builds and container starts without errors
 - [ ] `.env.example` documents the service configuration
 - [ ] No requirements from the brief are missing; no extra requirements added
+- [ ] Unit tests cover the core business logic of the service
+- [ ] Integration tests cover the required endpoints and persistence behavior where applicable
+- [ ] JWT issuance, signing, and verification behavior is tested, including valid and invalid token cases
+- [ ] Test suite passes successfully
 
 ---
 
@@ -82,7 +88,7 @@ Services are built **one at a time** in the order below. Each service goes throu
 
 ### Steps
 - [ ] **Step 1 — Plan**: File tree, persistence and data model approach, dataset ingestion strategy, endpoints, pagination design, env vars, dependencies, validation steps
-- [ ] **Step 2 — Generate**: All source files, Dockerfile, dependency manifest, `.env.example`, schema/migration, seed script, README section
+- [ ] **Step 2 — Generate**: All source files, Dockerfile, dependency manifest, `.env.example`, schema/migration, seed script, unit tests, integration tests, README section
 - [ ] **Step 3 — Validate/Fix**: Review against acceptance criteria; fix and return only changed files
 
 ### Acceptance Criteria
@@ -94,6 +100,10 @@ Services are built **one at a time** in the order below. Each service goes throu
 - [ ] Dockerfile builds and container starts without errors
 - [ ] `.env.example` is complete
 - [ ] No requirements from the brief are missing; no extra requirements added
+- [ ] Unit tests cover the core business logic of the service
+- [ ] Integration tests cover the required endpoints and persistence behavior where applicable
+- [ ] Protected endpoint behavior is tested for valid and invalid JWT access where applicable
+- [ ] Test suite passes successfully
 
 ---
 
@@ -101,7 +111,7 @@ Services are built **one at a time** in the order below. Each service goes throu
 
 ### Steps
 - [ ] **Step 1 — Plan**: File tree, persistence and data model approach, required endpoints, track reorder strategy, Liked Songs handling, JWT validation, env vars, dependencies, validation steps
-- [ ] **Step 2 — Generate**: All source files, Dockerfile, dependency manifest, `.env.example`, schema/migration, README section
+- [ ] **Step 2 — Generate**: All source files, Dockerfile, dependency manifest, `.env.example`, schema/migration, unit tests, integration tests, README section
 - [ ] **Step 3 — Validate/Fix**: Review against acceptance criteria; fix and return only changed files
 
 ### Acceptance Criteria
@@ -115,6 +125,10 @@ Services are built **one at a time** in the order below. Each service goes throu
 - [ ] Dockerfile builds and container starts without errors
 - [ ] `.env.example` is complete
 - [ ] No requirements from the brief are missing; no extra requirements added
+- [ ] Unit tests cover the core business logic of the service
+- [ ] Integration tests cover the required endpoints and persistence behavior where applicable
+- [ ] Protected endpoint behavior is tested for valid and invalid JWT access where applicable
+- [ ] Test suite passes successfully
 
 ---
 
@@ -122,7 +136,7 @@ Services are built **one at a time** in the order below. Each service goes throu
 
 ### Steps
 - [ ] **Step 1 — Plan**: File tree, endpoint design, dummy segment payload strategy, event emission strategy, JWT validation approach, persistence approach if needed, env vars, dependencies, validation steps
-- [ ] **Step 2 — Generate**: All source files, Dockerfile, dependency manifest, `.env.example`, persistence/bootstrap logic if needed, README section
+- [ ] **Step 2 — Generate**: All source files, Dockerfile, dependency manifest, `.env.example`, persistence/bootstrap logic if needed, unit tests, integration tests, README section
 - [ ] **Step 3 — Validate/Fix**: Review against acceptance criteria; fix and return only changed files
 
 ### Acceptance Criteria
@@ -135,6 +149,10 @@ Services are built **one at a time** in the order below. Each service goes throu
 - [ ] Dockerfile builds and container starts without errors
 - [ ] `.env.example` is complete
 - [ ] No requirements from the brief are missing; no extra requirements added
+- [ ] Unit tests cover the core business logic of the service
+- [ ] Integration tests cover the required endpoints and persistence behavior where applicable
+- [ ] Protected endpoint behavior is tested for valid and invalid JWT access where applicable
+- [ ] Test suite passes successfully
 
 ---
 
@@ -142,7 +160,7 @@ Services are built **one at a time** in the order below. Each service goes throu
 
 ### Steps
 - [ ] **Step 1 — Plan**: File tree, endpoint design, search strategy, filter logic, persistence/indexing approach if needed, env vars, dependencies, validation steps
-- [ ] **Step 2 — Generate**: All source files, Dockerfile, dependency manifest, `.env.example`, schema/migration with indexes, data population script, README section
+- [ ] **Step 2 — Generate**: All source files, Dockerfile, dependency manifest, `.env.example`, schema/migration with indexes, data population script, unit tests, integration tests, README section
 - [ ] **Step 3 — Validate/Fix**: Review against acceptance criteria; fix and return only changed files
 
 ### Acceptance Criteria
@@ -156,6 +174,10 @@ Services are built **one at a time** in the order below. Each service goes throu
 - [ ] Dockerfile builds and container starts without errors
 - [ ] `.env.example` is complete
 - [ ] No requirements from the brief are missing; no extra requirements added
+- [ ] Unit tests cover the core business logic of the service
+- [ ] Integration tests cover the required endpoints and persistence behavior where applicable
+- [ ] Protected endpoint behavior is tested for valid and invalid JWT access where applicable
+- [ ] Test suite passes successfully
 
 ---
 
@@ -163,7 +185,7 @@ Services are built **one at a time** in the order below. Each service goes throu
 
 ### Steps
 - [ ] **Step 1 — Plan**: File tree, persistence approach, history endpoint design, aggregation approach, metrics exposure approach, JWT validation, env vars, dependencies, validation steps
-- [ ] **Step 2 — Generate**: All source files, Dockerfile, dependency manifest, `.env.example`, schema/migration, README section
+- [ ] **Step 2 — Generate**: All source files, Dockerfile, dependency manifest, `.env.example`, schema/migration, unit tests, integration tests, README section
 - [ ] **Step 3 — Validate/Fix**: Review against acceptance criteria; fix and return only changed files
 
 ### Acceptance Criteria
@@ -176,6 +198,10 @@ Services are built **one at a time** in the order below. Each service goes throu
 - [ ] Dockerfile builds and container starts without errors
 - [ ] `.env.example` is complete
 - [ ] No requirements from the brief are missing; no extra requirements added
+- [ ] Unit tests cover the core business logic of the service
+- [ ] Integration tests cover the required endpoints and persistence behavior where applicable
+- [ ] Protected endpoint behavior is tested for valid and invalid JWT access where applicable
+- [ ] Test suite passes successfully
 
 ---
 
@@ -183,7 +209,7 @@ Services are built **one at a time** in the order below. Each service goes throu
 
 ### Steps
 - [ ] **Step 1 — Plan**: File tree, endpoint design, recommendation strategy, persistence/caching approach if needed, JWT validation, env vars, dependencies, validation steps
-- [ ] **Step 2 — Generate**: All source files, Dockerfile, dependency manifest (requirements.txt or pyproject.toml), `.env.example`, schema/migration, README section
+- [ ] **Step 2 — Generate**: All source files, Dockerfile, dependency manifest (requirements.txt or pyproject.toml), `.env.example`, schema/migration, unit tests, integration tests, README section
 - [ ] **Step 3 — Validate/Fix**: Review against acceptance criteria; fix and return only changed files
 
 ### Acceptance Criteria
@@ -195,6 +221,10 @@ Services are built **one at a time** in the order below. Each service goes throu
 - [ ] Dockerfile builds and container starts without errors
 - [ ] `.env.example` is complete
 - [ ] No requirements from the brief are missing; no extra requirements added
+- [ ] Unit tests cover the core business logic of the service
+- [ ] Integration tests cover the required endpoints and persistence behavior where applicable
+- [ ] Protected endpoint behavior is tested for valid and invalid JWT access where applicable
+- [ ] Test suite passes successfully
 
 ---
 
@@ -202,7 +232,7 @@ Services are built **one at a time** in the order below. Each service goes throu
 
 ### Steps
 - [ ] **Step 1 — Plan**: File tree, internal event handling design, notification persistence approach, internal exposure approach, env vars, dependencies, validation steps
-- [ ] **Step 2 — Generate**: All source files, Dockerfile, dependency manifest, `.env.example`, persistence/index setup if needed, README section
+- [ ] **Step 2 — Generate**: All source files, Dockerfile, dependency manifest, `.env.example`, persistence/index setup if needed, unit tests, integration tests, README section
 - [ ] **Step 3 — Validate/Fix**: Review against acceptance criteria; fix and return only changed files
 
 ### Acceptance Criteria
@@ -214,6 +244,10 @@ Services are built **one at a time** in the order below. Each service goes throu
 - [ ] Dockerfile builds and container starts without errors
 - [ ] `.env.example` is complete
 - [ ] No requirements from the brief are missing; no extra requirements added
+- [ ] Unit tests cover the core business logic of the service
+- [ ] Integration tests cover the required endpoints and persistence behavior where applicable
+- [ ] Protected endpoint behavior is tested for valid and invalid JWT access where applicable
+- [ ] Test suite passes successfully
 
 ---
 
@@ -221,7 +255,7 @@ Services are built **one at a time** in the order below. Each service goes throu
 
 ### Steps
 - [ ] **Step 1 — Plan**: File tree for `frontend/`, routing strategy, global state shape (session, playback, queue), API client design (JWT injection, retry, error normalization), view inventory, env vars, build/containerization approach, validation steps
-- [ ] **Step 2 — Generate**: All source files, Dockerfile, `package.json`, `.env.example`, Vite/CRA config, README section covering build, run, and how to point it at the backend
+- [ ] **Step 2 — Generate**: All source files, Dockerfile, `package.json`, `.env.example`, build config, unit/component tests, integration tests, README section covering build, run, and backend configuration
 - [ ] **Step 3 — Validate/Fix**: Review against acceptance criteria; fix and return only changed files
 
 ### Views to Implement
@@ -250,6 +284,12 @@ Services are built **one at a time** in the order below. Each service goes throu
 - [ ] Dockerfile builds and container starts without errors; frontend is added to `docker-compose.yml`
 - [ ] `.env.example` documents all `VITE_` / `REACT_APP_` variables (API base URLs, etc.)
 - [ ] No requirements from the brief are missing; no extra requirements added
+- [ ] Automated tests cover critical UI flows and route behavior
+- [ ] Authentication flow is tested
+- [ ] Playback state transitions are tested
+- [ ] Search filtering behavior is tested
+- [ ] Playlist reorder interaction is tested
+- [ ] Test suite passes successfully
 
 ---
 
@@ -270,6 +310,12 @@ Services are built **one at a time** in the order below. Each service goes throu
 - [ ] Inter-service HTTP calls implement circuit breaker or equivalent failure isolation (M-23)
 - [ ] All 8 services communicate over the shared named Docker network (M-18)
 - [ ] CPU and memory limits are configurable per service in `docker-compose.yml` (M-20)
+
+### System Verification Deliverable
+- [ ] Automated integration tests show that the services run correctly together in the shared deployment environment
+- [ ] End-to-end tests cover the main application flows across service boundaries
+- [ ] Cross-service authentication, persistence, and messaging behavior are validated in the integrated system
+- [ ] Test evidence is documented and included in the final delivery
 
 ---
 
@@ -292,6 +338,13 @@ Services are built **one at a time** in the order below. Each service goes throu
 
 ### Documentation
 - [ ] Top-level README with setup, run, validation, and testing instructions
+
+### Testing Deliverables
+- [ ] All backend unit tests pass
+- [ ] All backend integration tests pass
+- [ ] Frontend automated tests pass
+- [ ] Integrated system tests show that the services run correctly together
+- [ ] End-to-end test results are documented
 
 ### Minimum Completion Criteria
 - [ ] All 8 services start successfully in the local deployment environment
