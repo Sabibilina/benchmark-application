@@ -15,7 +15,7 @@ For this step, do not generate service business logic yet. Create an implementat
 
 Do not generate code yet. State assumptions explicitly and do not invent requirements beyond the document.
 
-Record important planning decisions in `DECISIONS.md`, including what was decided, why it was decided, which document or requirement justified it, and which files or services are expected to be affected. Check the necessary boxes from `PLANNING.md` to reflect the completed steps.
+Record important planning decisions in `DECISIONS.md`, including what was decided, why it was decided, which document or requirement justified it, and which files or services are expected to be affected. Check the necessary boxes from `PROGRESS.md` to reflect the completed steps.
 
 ### Prompt 2
 
@@ -81,7 +81,7 @@ Do not generate code yet.
 State assumptions explicitly.
 If a detail is missing, list it instead of inventing behavior.
 
-Record important planning decisions in `DECISIONS.md`, including what was decided, why it was decided, which document or requirement justified it, and which files or services are expected to be affected. Check the necessary boxes from `PLANNING.md` to reflect the completed steps.
+Record important planning decisions in `DECISIONS.md`, including what was decided, why it was decided, which document or requirement justified it, and which files or services are expected to be affected. Check the necessary boxes from `PROGRESS.md` to reflect the completed steps.
 
 ### **Prompt 2 — Generate**
 
