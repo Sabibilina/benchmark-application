@@ -1,1 +1,0 @@
-# Placeholder — full dependencies added in Session 8 (Recommendation Service implementation)
