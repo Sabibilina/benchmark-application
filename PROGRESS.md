@@ -68,13 +68,13 @@ Services are built **one at a time** in the order below. Each service goes throu
 
 ## Phase 0 — Shared Deployment Environment
 
-- [ ] **Plan** — Propose repo structure, compose file layout, named Docker network, infrastructure, and env/config strategy
-- [ ] **Generate** — Top-level folder structure, `docker-compose.yml`, shared config files, placeholder Dockerfiles, and README
-- [ ] **Validate/Fix** — Confirm compose file reflects required architecture; named network defined; no invented requirements
-- [ ] Compose file starts without errors
-- [ ] Named Docker network is defined and all services reference it
-- [ ] Service directories are scaffolded
-- [ ] README covers startup instructions for this phase
+- [x] **Plan** — Propose repo structure, compose file layout, named Docker network, infrastructure, and env/config strategy
+- [x] **Generate** — Top-level folder structure, `docker-compose.yml`, shared config files, placeholder Dockerfiles, and README
+- [x] **Validate/Fix** — Confirm compose file reflects required architecture; named network defined; no invented requirements
+- [x] Compose file starts without errors
+- [x] Named Docker network is defined and all services reference it
+- [x] Service directories are scaffolded
+- [x] README covers startup instructions for this phase
 
 ---
 

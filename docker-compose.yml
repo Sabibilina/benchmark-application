@@ -1,0 +1,610 @@
+networks:
+  music-net:
+    driver: bridge
+
+volumes:
+  jwt-keys:
+  auth-db-data:
+  catalog-db-data:
+  playlist-db-data:
+  recommendation-db-data:
+  opensearch-data:
+  clickhouse-data:
+  redis-data:
+  mongo-data:
+  kafka-data:
+  zookeeper-data:
+  zookeeper-log:
+  prometheus-data:
+  grafana-data:
+
+services:
+
+  # ── Zookeeper ─────────────────────────────────────────────────────────────
+
+  zookeeper:
+    image: confluentinc/cp-zookeeper:${CONFLUENT_VERSION:-7.6.0}
+    container_name: zookeeper
+    networks: [music-net]
+    volumes:
+      - zookeeper-data:/var/lib/zookeeper/data
+      - zookeeper-log:/var/lib/zookeeper/log
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    ports:
+      - "${ZOOKEEPER_HOST_PORT:-2181}:2181"
+    healthcheck:
+      test: ["CMD-SHELL", "echo ruok | nc -w 2 localhost 2181 | grep imok || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  # ── Kafka ─────────────────────────────────────────────────────────────────
+
+  kafka:
+    image: confluentinc/cp-kafka:${CONFLUENT_VERSION:-7.6.0}
+    container_name: kafka
+    networks: [music-net]
+    depends_on:
+      zookeeper:
+        condition: service_healthy
+    volumes:
+      - kafka-data:/var/lib/kafka/data
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,PLAINTEXT_HOST://0.0.0.0:29092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:${KAFKA_HOST_PORT:-29092}
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+      KAFKA_LOG_RETENTION_HOURS: 24
+    ports:
+      - "${KAFKA_HOST_PORT:-29092}:29092"
+    healthcheck:
+      test: ["CMD-SHELL", "kafka-broker-api-versions --bootstrap-server localhost:9092 > /dev/null 2>&1 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
+
+  # ── PostgreSQL databases (one per service) ────────────────────────────────
+
+  auth-db:
+    image: postgres:${POSTGRES_VERSION:-16-alpine}
+    container_name: auth-db
+    networks: [music-net]
+    volumes:
+      - auth-db-data:/var/lib/postgresql/data
+    environment:
+      POSTGRES_DB: ${AUTH_DB_NAME:-authdb}
+      POSTGRES_USER: ${AUTH_DB_USER:-authuser}
+      POSTGRES_PASSWORD: ${AUTH_DB_PASSWORD:-authpass}
+    ports:
+      - "${AUTH_DB_HOST_PORT:-5432}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${AUTH_DB_USER:-authuser} -d ${AUTH_DB_NAME:-authdb}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  catalog-db:
+    image: postgres:${POSTGRES_VERSION:-16-alpine}
+    container_name: catalog-db
+    networks: [music-net]
+    volumes:
+      - catalog-db-data:/var/lib/postgresql/data
+    environment:
+      POSTGRES_DB: ${CATALOG_DB_NAME:-catalogdb}
+      POSTGRES_USER: ${CATALOG_DB_USER:-cataloguser}
+      POSTGRES_PASSWORD: ${CATALOG_DB_PASSWORD:-catalogpass}
+    ports:
+      - "${CATALOG_DB_HOST_PORT:-5433}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${CATALOG_DB_USER:-cataloguser} -d ${CATALOG_DB_NAME:-catalogdb}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  playlist-db:
+    image: postgres:${POSTGRES_VERSION:-16-alpine}
+    container_name: playlist-db
+    networks: [music-net]
+    volumes:
+      - playlist-db-data:/var/lib/postgresql/data
+    environment:
+      POSTGRES_DB: ${PLAYLIST_DB_NAME:-playlistdb}
+      POSTGRES_USER: ${PLAYLIST_DB_USER:-playlistuser}
+      POSTGRES_PASSWORD: ${PLAYLIST_DB_PASSWORD:-playlistpass}
+    ports:
+      - "${PLAYLIST_DB_HOST_PORT:-5434}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${PLAYLIST_DB_USER:-playlistuser} -d ${PLAYLIST_DB_NAME:-playlistdb}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  recommendation-db:
+    image: postgres:${POSTGRES_VERSION:-16-alpine}
+    container_name: recommendation-db
+    networks: [music-net]
+    volumes:
+      - recommendation-db-data:/var/lib/postgresql/data
+    environment:
+      POSTGRES_DB: ${RECOMMENDATION_DB_NAME:-recommendationdb}
+      POSTGRES_USER: ${RECOMMENDATION_DB_USER:-recommendationuser}
+      POSTGRES_PASSWORD: ${RECOMMENDATION_DB_PASSWORD:-recommendationpass}
+    ports:
+      - "${RECOMMENDATION_DB_HOST_PORT:-5435}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${RECOMMENDATION_DB_USER:-recommendationuser} -d ${RECOMMENDATION_DB_NAME:-recommendationdb}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # ── OpenSearch ────────────────────────────────────────────────────────────
+
+  opensearch:
+    image: opensearchproject/opensearch:${OPENSEARCH_VERSION:-2.13.0}
+    container_name: opensearch
+    networks: [music-net]
+    volumes:
+      - opensearch-data:/usr/share/opensearch/data
+    environment:
+      discovery.type: single-node
+      OPENSEARCH_JAVA_OPTS: "-Xms512m -Xmx512m"
+      DISABLE_SECURITY_PLUGIN: "true"
+      DISABLE_INSTALL_DEMO_CONFIG: "true"
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+      nofile:
+        soft: 65536
+        hard: 65536
+    ports:
+      - "${OPENSEARCH_HOST_PORT:-9200}:9200"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:9200/_cluster/health | grep -qE '\"status\":\"(green|yellow)\"' || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 45s
+
+  # ── ClickHouse ────────────────────────────────────────────────────────────
+
+  clickhouse:
+    image: clickhouse/clickhouse-server:${CLICKHOUSE_VERSION:-24.3}
+    container_name: clickhouse
+    networks: [music-net]
+    volumes:
+      - clickhouse-data:/var/lib/clickhouse
+    environment:
+      CLICKHOUSE_DB: ${CLICKHOUSE_DB:-analyticsdb}
+      CLICKHOUSE_USER: ${CLICKHOUSE_USER:-analyticsuser}
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:-analyticspass}
+    ports:
+      - "${CLICKHOUSE_HTTP_HOST_PORT:-8123}:8123"
+      - "${CLICKHOUSE_NATIVE_HOST_PORT:-9000}:9000"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8123/ping | grep -q 'Ok.' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+  # ── Redis ─────────────────────────────────────────────────────────────────
+
+  redis:
+    image: redis:${REDIS_VERSION:-7.2-alpine}
+    container_name: redis
+    networks: [music-net]
+    volumes:
+      - redis-data:/data
+    command: redis-server --appendonly yes
+    ports:
+      - "${REDIS_HOST_PORT:-6379}:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # ── MongoDB ───────────────────────────────────────────────────────────────
+
+  mongodb:
+    image: mongo:${MONGO_VERSION:-7.0}
+    container_name: mongodb
+    networks: [music-net]
+    volumes:
+      - mongo-data:/data/db
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_USER:-mongouser}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD:-mongopass}
+      MONGO_INITDB_DATABASE: ${MONGO_DB:-notificationdb}
+    ports:
+      - "${MONGO_HOST_PORT:-27017}:27017"
+    healthcheck:
+      test: ["CMD-SHELL", "mongosh --username \"$$MONGO_INITDB_ROOT_USERNAME\" --password \"$$MONGO_INITDB_ROOT_PASSWORD\" --authenticationDatabase admin --eval 'db.runCommand({ ping: 1 })' --quiet || exit 1"]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+  # ── Prometheus ────────────────────────────────────────────────────────────
+
+  prometheus:
+    image: prom/prometheus:${PROMETHEUS_VERSION:-v2.51.2}
+    container_name: prometheus
+    networks: [music-net]
+    volumes:
+      - ./infra/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=15d'
+      - '--web.enable-lifecycle'
+    ports:
+      - "${PROMETHEUS_HOST_PORT:-9090}:9090"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:9090/-/healthy"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  # ── Grafana ───────────────────────────────────────────────────────────────
+
+  grafana:
+    image: grafana/grafana:${GRAFANA_VERSION:-10.4.2}
+    container_name: grafana
+    networks: [music-net]
+    depends_on:
+      prometheus:
+        condition: service_healthy
+    volumes:
+      - ./infra/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./infra/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-admin}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    ports:
+      - "${GRAFANA_HOST_PORT:-3001}:3000"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3000/api/health | grep -q ok || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  # ── Application services ──────────────────────────────────────────────────
+
+  auth-service:
+    build:
+      context: ./services/auth-service
+      dockerfile: Dockerfile
+    container_name: auth-service
+    networks: [music-net]
+    depends_on:
+      auth-db:
+        condition: service_healthy
+    volumes:
+      - jwt-keys:/jwt-keys
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://auth-db:5432/${AUTH_DB_NAME:-authdb}
+      SPRING_DATASOURCE_USERNAME: ${AUTH_DB_USER:-authuser}
+      SPRING_DATASOURCE_PASSWORD: ${AUTH_DB_PASSWORD:-authpass}
+      JWT_KEY_DIR: /jwt-keys
+      JWT_EXPIRATION_MS: ${JWT_EXPIRATION_MS:-3600000}
+    ports:
+      - "${AUTH_SERVICE_HOST_PORT:-8081}:8080"
+    deploy:
+      resources:
+        limits:
+          cpus: "${AUTH_SERVICE_CPU_LIMIT:-1.0}"
+          memory: "${AUTH_SERVICE_MEMORY_LIMIT:-512m}"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fs http://localhost:8080/actuator/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 60s
+
+  catalog-service:
+    build:
+      context: ./services/catalog-service
+      dockerfile: Dockerfile
+    container_name: catalog-service
+    networks: [music-net]
+    depends_on:
+      catalog-db:
+        condition: service_healthy
+    volumes:
+      - jwt-keys:/jwt-keys:ro
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://catalog-db:5432/${CATALOG_DB_NAME:-catalogdb}
+      SPRING_DATASOURCE_USERNAME: ${CATALOG_DB_USER:-cataloguser}
+      SPRING_DATASOURCE_PASSWORD: ${CATALOG_DB_PASSWORD:-catalogpass}
+      JWT_PUBLIC_KEY_PATH: /jwt-keys/public.pem
+    ports:
+      - "${CATALOG_SERVICE_HOST_PORT:-8082}:8080"
+    deploy:
+      resources:
+        limits:
+          cpus: "${CATALOG_SERVICE_CPU_LIMIT:-1.0}"
+          memory: "${CATALOG_SERVICE_MEMORY_LIMIT:-512m}"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fs http://localhost:8080/actuator/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 60s
+
+  streaming-service:
+    build:
+      context: ./services/streaming-service
+      dockerfile: Dockerfile
+    container_name: streaming-service
+    networks: [music-net]
+    depends_on:
+      kafka:
+        condition: service_healthy
+    volumes:
+      - jwt-keys:/jwt-keys:ro
+    environment:
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      JWT_PUBLIC_KEY_PATH: /jwt-keys/public.pem
+      STREAM_SEGMENT_SIZE_BYTES: ${STREAM_SEGMENT_SIZE_BYTES:-65536}
+    ports:
+      - "${STREAMING_SERVICE_HOST_PORT:-8083}:8080"
+    deploy:
+      resources:
+        limits:
+          cpus: "${STREAMING_SERVICE_CPU_LIMIT:-1.0}"
+          memory: "${STREAMING_SERVICE_MEMORY_LIMIT:-512m}"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fs http://localhost:8080/actuator/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 60s
+
+  playlist-service:
+    build:
+      context: ./services/playlist-service
+      dockerfile: Dockerfile
+    container_name: playlist-service
+    networks: [music-net]
+    depends_on:
+      playlist-db:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    volumes:
+      - jwt-keys:/jwt-keys:ro
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://playlist-db:5432/${PLAYLIST_DB_NAME:-playlistdb}
+      SPRING_DATASOURCE_USERNAME: ${PLAYLIST_DB_USER:-playlistuser}
+      SPRING_DATASOURCE_PASSWORD: ${PLAYLIST_DB_PASSWORD:-playlistpass}
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      JWT_PUBLIC_KEY_PATH: /jwt-keys/public.pem
+    ports:
+      - "${PLAYLIST_SERVICE_HOST_PORT:-8084}:8080"
+    deploy:
+      resources:
+        limits:
+          cpus: "${PLAYLIST_SERVICE_CPU_LIMIT:-1.0}"
+          memory: "${PLAYLIST_SERVICE_MEMORY_LIMIT:-512m}"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fs http://localhost:8080/actuator/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 60s
+
+  search-service:
+    build:
+      context: ./services/search-service
+      dockerfile: Dockerfile
+    container_name: search-service
+    networks: [music-net]
+    depends_on:
+      opensearch:
+        condition: service_healthy
+    volumes:
+      - jwt-keys:/jwt-keys:ro
+    environment:
+      OPENSEARCH_HOST: opensearch
+      OPENSEARCH_PORT: 9200
+      JWT_PUBLIC_KEY_PATH: /jwt-keys/public.pem
+    ports:
+      - "${SEARCH_SERVICE_HOST_PORT:-8085}:8080"
+    deploy:
+      resources:
+        limits:
+          cpus: "${SEARCH_SERVICE_CPU_LIMIT:-1.0}"
+          memory: "${SEARCH_SERVICE_MEMORY_LIMIT:-512m}"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fs http://localhost:8080/actuator/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 60s
+
+  analytics-service:
+    build:
+      context: ./services/analytics-service
+      dockerfile: Dockerfile
+    container_name: analytics-service
+    networks: [music-net]
+    depends_on:
+      clickhouse:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    volumes:
+      - jwt-keys:/jwt-keys:ro
+    environment:
+      CLICKHOUSE_HOST: clickhouse
+      CLICKHOUSE_HTTP_PORT: 8123
+      CLICKHOUSE_DB: ${CLICKHOUSE_DB:-analyticsdb}
+      CLICKHOUSE_USER: ${CLICKHOUSE_USER:-analyticsuser}
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:-analyticspass}
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      JWT_PUBLIC_KEY_PATH: /jwt-keys/public.pem
+    ports:
+      - "${ANALYTICS_SERVICE_HOST_PORT:-8086}:8080"
+    deploy:
+      resources:
+        limits:
+          cpus: "${ANALYTICS_SERVICE_CPU_LIMIT:-1.0}"
+          memory: "${ANALYTICS_SERVICE_MEMORY_LIMIT:-512m}"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fs http://localhost:8080/actuator/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 60s
+
+  recommendation-service:
+    build:
+      context: ./services/recommendation-service
+      dockerfile: Dockerfile
+    container_name: recommendation-service
+    networks: [music-net]
+    depends_on:
+      recommendation-db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    volumes:
+      - jwt-keys:/jwt-keys:ro
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://recommendation-db:5432/${RECOMMENDATION_DB_NAME:-recommendationdb}
+      SPRING_DATASOURCE_USERNAME: ${RECOMMENDATION_DB_USER:-recommendationuser}
+      SPRING_DATASOURCE_PASSWORD: ${RECOMMENDATION_DB_PASSWORD:-recommendationpass}
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_PORT: 6379
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      JWT_PUBLIC_KEY_PATH: /jwt-keys/public.pem
+    ports:
+      - "${RECOMMENDATION_SERVICE_HOST_PORT:-8087}:8080"
+    deploy:
+      resources:
+        limits:
+          cpus: "${RECOMMENDATION_SERVICE_CPU_LIMIT:-1.0}"
+          memory: "${RECOMMENDATION_SERVICE_MEMORY_LIMIT:-512m}"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fs http://localhost:8080/actuator/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 60s
+
+  notification-service:
+    build:
+      context: ./services/notification-service
+      dockerfile: Dockerfile
+    container_name: notification-service
+    networks: [music-net]
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    volumes:
+      - jwt-keys:/jwt-keys:ro
+    environment:
+      SPRING_DATA_MONGODB_URI: mongodb://${MONGO_USER:-mongouser}:${MONGO_PASSWORD:-mongopass}@mongodb:27017/${MONGO_DB:-notificationdb}?authSource=admin
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+    ports:
+      - "${NOTIFICATION_SERVICE_HOST_PORT:-8088}:8080"
+    deploy:
+      resources:
+        limits:
+          cpus: "${NOTIFICATION_SERVICE_CPU_LIMIT:-1.0}"
+          memory: "${NOTIFICATION_SERVICE_MEMORY_LIMIT:-512m}"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fs http://localhost:8080/actuator/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 60s
+
+  # ── Frontend ──────────────────────────────────────────────────────────────
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: frontend
+    networks: [music-net]
+    ports:
+      - "${FRONTEND_HOST_PORT:-3000}:80"
+    deploy:
+      resources:
+        limits:
+          cpus: "${FRONTEND_CPU_LIMIT:-0.5}"
+          memory: "${FRONTEND_MEMORY_LIMIT:-256m}"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:80/health | grep -q UP || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # ── Load generator (opt-in profile) ──────────────────────────────────────
+
+  load-generator:
+    build:
+      context: ./load-generator
+      dockerfile: Dockerfile
+    container_name: load-generator
+    networks: [music-net]
+    depends_on:
+      auth-service:
+        condition: service_healthy
+      catalog-service:
+        condition: service_healthy
+      streaming-service:
+        condition: service_healthy
+      playlist-service:
+        condition: service_healthy
+      search-service:
+        condition: service_healthy
+      analytics-service:
+        condition: service_healthy
+      recommendation-service:
+        condition: service_healthy
+    environment:
+      AUTH_SERVICE_URL: http://auth-service:8080
+      CATALOG_SERVICE_URL: http://catalog-service:8080
+      STREAMING_SERVICE_URL: http://streaming-service:8080
+      PLAYLIST_SERVICE_URL: http://playlist-service:8080
+      SEARCH_SERVICE_URL: http://search-service:8080
+      ANALYTICS_SERVICE_URL: http://analytics-service:8080
+      RECOMMENDATION_SERVICE_URL: http://recommendation-service:8080
+      K6_VUS: ${K6_VUS:-10}
+      K6_DURATION: ${K6_DURATION:-60s}
+    profiles:
+      - load-test
+    deploy:
+      resources:
+        limits:
+          cpus: "${LOAD_GENERATOR_CPU_LIMIT:-2.0}"
+          memory: "${LOAD_GENERATOR_MEMORY_LIMIT:-512m}"

@@ -1,0 +1,21 @@
+{
+  "__inputs": [],
+  "__requires": [],
+  "annotations": { "list": [] },
+  "description": "Music Streaming System — overview dashboard. Panels are added in Phase 10.",
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "id": null,
+  "links": [],
+  "panels": [],
+  "schemaVersion": 39,
+  "tags": ["music-streaming"],
+  "templating": { "list": [] },
+  "time": { "from": "now-1h", "to": "now" },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "Music Streaming — System Overview",
+  "uid": "music-streaming-overview",
+  "version": 1
+}
