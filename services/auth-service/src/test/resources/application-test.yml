@@ -1,0 +1,8 @@
+jwt:
+  key-dir: /tmp/auth-service-test-keys
+  expiration-ms: 3600000
+
+spring:
+  jpa:
+    hibernate:
+      ddl-auto: validate

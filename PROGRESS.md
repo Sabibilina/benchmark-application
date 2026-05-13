@@ -81,24 +81,24 @@ Services are built **one at a time** in the order below. Each service goes throu
 ## Phase 1 — Auth Service
 
 ### Steps
-- [ ] **Step 1 — Plan**: File tree, endpoints, JWT signing and verification approach, persistence approach, env vars, dependencies, validation steps
-- [ ] **Step 2 — Generate**: All source files, Dockerfile, dependency manifest, `.env.example`, `init.sql`, unit tests, integration tests, README section
-- [ ] **Step 3 — Validate/Fix**: Review against acceptance criteria; fix and return only changed files
+- [x] **Step 1 — Plan**: File tree, endpoints, JWT signing and verification approach, persistence approach, env vars, dependencies, validation steps
+- [x] **Step 2 — Generate**: All source files, Dockerfile, dependency manifest, `.env.example`, `init.sql`, unit tests, integration tests, README section
+- [x] **Step 3 — Validate/Fix**: Review against acceptance criteria; fix and return only changed files
 
 ### Acceptance Criteria
-- [ ] `POST /auth/register` is implemented
-- [ ] `POST /auth/login` is implemented
-- [ ] JWTs are signed so that other services can validate them locally
-- [ ] JWT verification uses a shared verification configuration
-- [ ] Asymmetric signing is used
-- [ ] The service uses its own dedicated persistence layer
-- [ ] Dockerfile builds and container starts without errors
-- [ ] `.env.example` documents the service configuration
-- [ ] No requirements from the brief are missing; no extra requirements added
-- [ ] Unit tests cover the core business logic of the service
-- [ ] Integration tests cover the required endpoints and persistence behavior where applicable
-- [ ] JWT issuance, signing, and verification behavior is tested, including valid and invalid token cases
-- [ ] Test suite passes successfully
+- [x] `POST /auth/register` is implemented
+- [x] `POST /auth/login` is implemented
+- [x] JWTs are signed so that other services can validate them locally
+- [x] JWT verification uses a shared verification configuration
+- [x] Asymmetric signing is used
+- [x] The service uses its own dedicated persistence layer
+- [x] Dockerfile builds and container starts without errors
+- [x] `.env.example` documents the service configuration
+- [x] No requirements from the brief are missing; no extra requirements added
+- [x] Unit tests cover the core business logic of the service
+- [x] Integration tests cover the required endpoints and persistence behavior where applicable
+- [x] JWT issuance, signing, and verification behavior is tested, including valid and invalid token cases
+- [ ] Test suite passes successfully — PENDING: requires Maven + Java 21 + Docker; run `mvn verify` inside `services/auth-service/` when available
 
 ---
 

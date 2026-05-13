@@ -4,6 +4,22 @@ server:
 spring:
   application:
     name: auth-service
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/authdb}
+    username: ${SPRING_DATASOURCE_USERNAME:authuser}
+    password: ${SPRING_DATASOURCE_PASSWORD:authpass}
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+
+jwt:
+  key-dir: ${JWT_KEY_DIR:/jwt-keys}
+  expiration-ms: ${JWT_EXPIRATION_MS:3600000}
 
 management:
   endpoints:
