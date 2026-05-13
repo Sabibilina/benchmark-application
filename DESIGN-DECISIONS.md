@@ -1117,3 +1117,66 @@ The existing Compose skeleton already defines `KAFKA_BOOTSTRAP_SERVERS` for Play
 | Do not add Kafka messaging to the minimum Playlist implementation. | Playlist event production is conditional in `TECH-STACK.md`, and no must-have Playlist requirement requires event publication. | `TECH-STACK.md` Playlist messaging note; `REQUIREMENTS.md` M-10 and M-11. | `pom.xml`, application config, service code, tests. |
 | Store song IDs as references without Catalog validation in this phase. | The source documents require Playlist track operations but do not require Playlist-to-Catalog validation. | `ARCHITECTURE.md` Playlist behavior; `REQUIREMENTS.md` M-10. | `PlaylistTrack` entity, DTOs, service logic, tests. |
 
+### Phase 3 Step 2 Generation - Playlist Service
+
+#### Completed Artifacts
+
+* Replaced the Phase 0 Playlist placeholder with a runnable Java 21 Spring Boot service.
+* Added `pom.xml`, a multi-stage Dockerfile, `.env.example`, `application.yml`, and a service README.
+* Added Flyway migration `V1__create_playlists.sql` for the dedicated Playlist PostgreSQL schema.
+* Added JWT resource-server security using the shared mounted public key.
+* Added the eight required Playlist endpoints:
+  * `GET /playlists`
+  * `POST /playlists`
+  * `GET /playlists/{id}`
+  * `PATCH /playlists/{id}`
+  * `DELETE /playlists/{id}`
+  * `POST /playlists/{id}/tracks`
+  * `DELETE /playlists/{id}/tracks/{songId}`
+  * `PATCH /playlists/{id}/tracks/reorder`
+* Added unit tests for Liked Songs creation and core playlist behavior.
+* Added integration tests for JWT protection, CRUD behavior, track add/remove/reorder behavior, Liked Songs protection, cross-user isolation, invalid token rejection, and the operational health endpoint.
+
+#### Generation Validation Run
+
+* `docker compose build playlist-service` passed and ran the Maven package/test path.
+* `docker compose config --quiet` passed. Docker still emitted the previously observed sandbox warning about `C:\Users\thele\.docker\config.json` access, but the command exited successfully.
+* `docker compose up -d --build playlist-db playlist-service` initially failed because old local Docker containers referenced a stale deleted network id.
+* Only the stale `playlist-db`, `playlist-service`, and `kafka` containers were removed with `docker compose rm -f playlist-db playlist-service kafka`; no volumes were deleted.
+* `docker compose up -d --build playlist-db playlist-service` then passed.
+* `docker compose ps playlist-db playlist-service kafka` confirmed PostgreSQL healthy, Kafka running because it is still a Compose dependency, and Playlist Service running on host port `8084`.
+* Playlist Service logs confirmed PostgreSQL connection, Flyway migration success, JPA initialization, and Tomcat startup.
+* Live smoke validation confirmed:
+  * unauthenticated `GET /playlists` returns `401`;
+  * `/actuator/health` returns `200`;
+  * `/actuator/prometheus` returns `200`;
+  * an RS256 token signed by the local development private key can create a playlist;
+  * tracks can be added and reordered;
+  * `GET /playlists` lazily creates and returns the user's `Liked Songs` playlist.
+
+#### Generation Decisions Recorded
+
+| Decision | Why | Justification | Affected files/services |
+| --- | --- | --- | --- |
+| Implement Playlist Service as a real Spring Boot service using the same dependency and Docker build pattern as Auth and Catalog. | The service must be runnable and consistent with the backend standard already used in the repo. | `TECH-STACK.md` Shared Backend Standard; user instruction for complete runnable implementation. | `services/playlist-service/pom.xml`, `Dockerfile`, Java source tree. |
+| Use `playlists` and `playlist_tracks` tables owned by `playlist-db`. | Playlist CRUD, ownership, Liked Songs, and ordered tracks require transactional dedicated persistence. | `ARCHITECTURE.md` Playlist persistence; `REQUIREMENTS.md` M-10, M-11, M-26; `TECH-STACK.md` Playlist database choice. | `V1__create_playlists.sql`, `Playlist`, `PlaylistTrack`, repositories. |
+| Use UUID identifiers for playlist and playlist-track rows. | UUIDs avoid cross-service numeric id assumptions and are supported by PostgreSQL and Hibernate for service-owned entities. | `REQUIREMENTS.md` M-26 service data isolation; implementation detail not specified by source docs. | Entities, DTOs, controller path variables, tests. |
+| Store each `songId` at most once per playlist and make repeated add operations idempotent. | Duplicate-track behavior was not specified; one row per song reference keeps remove-by-song-id unambiguous for the required `DELETE /tracks/{songId}` endpoint. | `REQUIREMENTS.md` M-10 required track management; missing detail recorded in Phase 3 plan. | `playlist_tracks` unique constraint, `PlaylistService.addTrack`, tests. |
+| Use zero-based contiguous track positions. | The documents require ordered reordering but do not define numbering; zero-based ordering is simple for APIs and internal list behavior. | `REQUIREMENTS.md` M-10; missing detail recorded in Phase 3 plan. | `PlaylistTrack`, reorder logic, integration tests. |
+| Require reorder requests to include exactly the playlist's current song IDs. | This makes reorder transactional and prevents accidental track loss or implicit track creation during a reorder call. | `ARCHITECTURE.md` Playlist track operations; `REQUIREMENTS.md` M-10. | `ReorderTracksRequest`, `PlaylistService.reorderTracks`, tests. |
+| Reject renaming and deletion of `Liked Songs`. | The requirement fixes a per-user special playlist named `Liked Songs`; preserving that name protects required behavior. | `ARCHITECTURE.md` Playlist behavior; `REQUIREMENTS.md` M-11. | `PlaylistService.updatePlaylist`, `PlaylistService.deletePlaylist`, integration tests. |
+| Create `Liked Songs` lazily on `GET /playlists`. | Creation timing was missing; lazy creation keeps the playlist automatically available when the user first interacts with Playlist Service. | `REQUIREMENTS.md` M-11; Phase 3 plan assumption. | `LikedSongsService`, `PlaylistService.listPlaylists`, tests. |
+| Return `404` for cross-user playlist access. | The source documents require user isolation but do not define disclosure behavior; querying by id and owner avoids revealing whether another user's playlist exists. | `REQUIREMENTS.md` M-25 protected endpoints; M-10 per-user playlist behavior. | Repository queries, `PlaylistService`, integration tests. |
+| Do not add Kafka producer code in this phase. | Playlist update event publication is conditional in `TECH-STACK.md`; M-10 and M-11 do not require it. | `TECH-STACK.md` Playlist messaging note; `REQUIREMENTS.md` M-10 and M-11. | `pom.xml`, application config, service code. |
+| Omit a database-level partial unique index for Liked Songs and enforce uniqueness through service logic in this phase. | H2-based integration tests need to run reliably in the Docker/Maven build path, and the source documents require behavior, not a specific constraint shape. | Backend testing requirements; `REQUIREMENTS.md` M-11. | `V1__create_playlists.sql`, `LikedSongsService`, tests. |
+| Remove only stale Playlist/Kafka containers during runtime validation, preserving volumes. | Docker had local containers pointing at a deleted network id; removing only affected containers fixed startup without deleting persisted service data. | Validation need for current phase; no source requirement changed. | Local Docker runtime state only. |
+
+#### Assumptions Made During Generation
+
+* JWT subject remains the Playlist owner id.
+* Request/response JSON schemas use `name`, optional `description`, `songId`, and `songIds` because exact schemas were not specified.
+* Playlist Service stores Catalog song IDs as references without validating them against Catalog in this phase.
+* Liked Songs is created lazily when `GET /playlists` is called.
+* Cross-user reads and mutations return `404`.
+* Optional smart playlists, queue management, version history, undo, collaborative editing, and playlist update events remain out of scope for this phase.
+

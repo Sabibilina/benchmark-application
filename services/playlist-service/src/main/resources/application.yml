@@ -1,0 +1,32 @@
+server:
+  port: ${SERVER_PORT:8080}
+
+spring:
+  application:
+    name: playlist-service
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://playlist-db:5432/playlist}
+    username: ${SPRING_DATASOURCE_USERNAME:benchmark}
+    password: ${SPRING_DATASOURCE_PASSWORD:benchmark}
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+  flyway:
+    enabled: true
+
+app:
+  jwt:
+    public-key-path: ${JWT_PUBLIC_KEY_PATH:/run/config/jwt/public.pem}
+  playlist:
+    liked-songs-name: ${PLAYLIST_LIKED_SONGS_NAME:Liked Songs}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true
