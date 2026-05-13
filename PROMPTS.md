@@ -15,7 +15,7 @@ For this step, do not generate service business logic yet. Create an implementat
 
 Do not generate code yet. State assumptions explicitly and do not invent requirements beyond the document.
 
-Record important planning decisions in `PROGRESS.md`, including what was decided, why it was decided, which document or requirement justified it, and which files or services are expected to be affected.
+Update `PROGRESS.md` only to mark checklist/task completion status for this planning step. Record important planning decisions in `DESIGN-DECISIONS.md`, including what was decided, why it was decided, which document or requirement justified it, and which files or services are expected to be affected.
 
 ### Prompt 2
 
@@ -29,7 +29,7 @@ Now generate the repository skeleton and shared deployment environment according
 
 Do not implement full service business logic yet. All output must be runnable and consistent with the document.
 
-After generating the repository skeleton and shared deployment environment, update `PROGRESS.md` to reflect what was completed in this phase and document every important decision taken during generation, including the reason, affected files, and any assumptions made.
+After generating the repository skeleton and shared deployment environment, update `PROGRESS.md` only to reflect checklist/task completion status for this phase. Record every important decision taken during generation in `DESIGN-DECISIONS.md`, including the reason, affected files, and any assumptions made.
 
 ### Prompt 3
 
@@ -42,7 +42,7 @@ Now review the generated repository skeleton and deployment environment against 
 
 Fix any issues and output only the changed files.
 
-Before considering the phase complete, update `PROGRESS.md` to mark validated checklist items, record fixes made, and document every important decision, correction, deviation, or unresolved issue found during validation.
+Before considering the phase complete, update `PROGRESS.md` only to mark validated checklist items and phase status. Record fixes made and every important decision, correction, deviation, or unresolved issue found during validation in `DESIGN-DECISIONS.md`.
 
 # Second Prompt Set
 
@@ -81,7 +81,7 @@ Do not generate code yet.
 State assumptions explicitly.
 If a detail is missing, list it instead of inventing behavior.
 
-Record important planning decisions in `PROGRESS.md`, including what was decided, why it was decided, which document or requirement justified it, and which files or services are expected to be affected.
+Update `PROGRESS.md` only to mark checklist/task completion status for this planning step. Record important planning decisions in `DESIGN-DECISIONS.md`, including what was decided, why it was decided, which document or requirement justified it, and which files or services are expected to be affected.
 
 ### **Prompt 2 — Generate**
 
@@ -97,7 +97,7 @@ Whenever applicable, also generate:
 - event production or consumption tests for messaging-based services,
 - frontend component/integration tests for critical UI flows.
 
-After generating the implementation, update `PROGRESS.md` to reflect what was completed in this phase and document every important decision taken during generation, including the reason, affected files, and any assumptions made.
+After generating the implementation, update `PROGRESS.md` only to reflect checklist/task completion status for this phase. Record every important decision taken during generation in `DESIGN-DECISIONS.md`, including the reason, affected files, and any assumptions made.
 
 ### **Prompt 3 — Validate/Fix**
 
@@ -119,4 +119,4 @@ State assumptions explicitly.
 Prefer regeneration over patching if the architecture is wrong.
 Do not consider the phase complete if the implementation or its tests fail.
 
-Before considering the phase complete, update `PROGRESS.md` to mark validated checklist items, record fixes made, and document every important decision, correction, deviation, or unresolved issue found during validation.
+Before considering the phase complete, update `PROGRESS.md` only to mark validated checklist items and phase status. Record fixes made and every important decision, correction, deviation, or unresolved issue found during validation in `DESIGN-DECISIONS.md`.
