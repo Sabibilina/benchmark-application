@@ -105,13 +105,10 @@ services:
       SPRING_DATASOURCE_URL: jdbc:postgresql://playlist-db:5432/playlist
       SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-benchmark}
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-benchmark}
-      KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-kafka:9092}
       JWT_PUBLIC_KEY_PATH: ${JWT_PUBLIC_KEY_PATH:-/run/config/jwt/public.pem}
     depends_on:
       playlist-db:
         condition: service_healthy
-      kafka:
-        condition: service_started
 
   search-service:
     <<: *placeholder-app

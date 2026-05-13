@@ -1180,3 +1180,45 @@ The existing Compose skeleton already defines `KAFKA_BOOTSTRAP_SERVERS` for Play
 * Cross-user reads and mutations return `404`.
 * Optional smart playlists, queue management, version history, undo, collaborative editing, and playlist update events remain out of scope for this phase.
 
+### Phase 3 Step 3 Review - Playlist Service
+
+#### Review Results
+
+* Reviewed Playlist Service against `ARCHITECTURE.md`, `REQUIREMENTS.md`, `TECH-STACK.md`, and the approved Phase 3 plan.
+* Confirmed no conflicts were found between the source documents for this Playlist phase.
+* Confirmed all eight required Playlist endpoints are implemented.
+* Confirmed Playlist application endpoints are protected by JWT and validate tokens locally with the shared RSA public key configuration.
+* Confirmed Playlist uses Java 21, Spring Boot 3.x, Maven, Docker, Docker Compose, PostgreSQL, Flyway, Actuator, and Prometheus metrics as required by `TECH-STACK.md`.
+* Confirmed Playlist state is stored only in the dedicated `playlist-db` PostgreSQL persistence layer.
+* Confirmed no optional Playlist features were added: no smart playlists, queue management, version history, undo, collaborative editing, or Kafka playlist update producer.
+
+#### Fixes Made During Review
+
+| Fix | Reason | Affected files |
+| --- | --- | --- |
+| Removed `KAFKA_BOOTSTRAP_SERVERS` and the `kafka` dependency from the `playlist-service` Compose service. | The approved Playlist plan and `TECH-STACK.md` only require Playlist Kafka production if playlist update events are used; this phase does not implement those events, so Kafka should not be a runtime prerequisite for Playlist startup. | `docker-compose.yml` |
+
+#### Validation Commands Run
+
+* `docker compose config --quiet` passed. Docker emitted the known sandbox warning about `C:\Users\thele\.docker\config.json` access, but the command exited successfully.
+* `docker compose build --no-cache playlist-service` passed and executed the Maven package/test path.
+* `docker compose up -d --build playlist-db playlist-service` passed after the Compose dependency correction.
+* `docker compose ps playlist-db playlist-service` confirmed `playlist-db` healthy and `playlist-service` running.
+* Playlist Service logs confirmed PostgreSQL connection, Flyway validation, schema version `1`, JPA initialization, Actuator endpoint exposure, and Tomcat startup.
+* Live smoke validation confirmed unauthenticated `GET /playlists` returns `401`.
+* Live smoke validation confirmed `/actuator/health` and `/actuator/prometheus` return `200`.
+* Live smoke validation with an RS256 token signed by the local development private key confirmed playlist creation, Liked Songs availability, track addition, and track reorder behavior.
+
+#### Review Decisions and Corrections Recorded
+
+| Decision, correction, or finding | Why | Justification | Affected files/services |
+| --- | --- | --- | --- |
+| Keep Playlist independent of Kafka for this phase. | Playlist update event production is conditional and was not part of the approved minimum Playlist implementation. | `TECH-STACK.md` Playlist messaging note; `REQUIREMENTS.md` M-10 and M-11. | `docker-compose.yml`, `playlist-service`. |
+| Mark Phase 3 validation complete after no-cache build, runtime startup, and live endpoint smoke checks passed. | The implementation, tests, containerization, persistence, protected endpoint behavior, and metrics exposure all met the Playlist acceptance criteria. | `REQUIREMENTS.md` M-10, M-11, M-24, M-25, M-26; backend testing requirements. | `PROGRESS.md`, `DESIGN-DECISIONS.md`, `services/playlist-service`. |
+
+#### Assumptions and Unresolved Issues After Review
+
+* Assumption: JWT `sub` remains the user identity for Playlist ownership, as planned.
+* Assumption: song IDs remain Catalog references and are not validated against Catalog in this phase.
+* No unresolved Playlist implementation or test issues remain for this phase.
+
