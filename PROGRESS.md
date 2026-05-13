@@ -129,7 +129,7 @@ Services are built **one at a time** in the order below. Each service goes throu
 ## Phase 3 — Playlist Service
 
 ### Steps
-- [ ] **Step 1 — Plan**: File tree, persistence and data model approach, required endpoints, track reorder strategy, Liked Songs handling, JWT validation, env vars, dependencies, validation steps
+- [x] **Step 1 — Plan**: File tree, persistence and data model approach, required endpoints, track reorder strategy, Liked Songs handling, JWT validation, env vars, dependencies, validation steps
 - [ ] **Step 2 — Generate**: All source files, Dockerfile, dependency manifest, `.env.example`, schema/migration, unit tests, integration tests, README section
 - [ ] **Step 3 — Validate/Fix**: Review against acceptance criteria; fix and return only changed files
 

@@ -867,4 +867,253 @@ The root Compose service already provides the database URL, credentials, server 
 * The existing local `catalog-db` volume still contains 4 rows from the earlier generated seed file, so the live endpoint reported 85,004 total rows after inserting 85,000 Kaggle rows. This is residual local database state, not an implementation or test failure. A fresh `catalog-db` volume would contain only the 85,000 ingested Kaggle rows.
 * No unresolved Catalog implementation or test issues remain for this phase.
 
+### Phase 3 Step 1 Plan - Playlist Service
+
+#### Source Document Check
+
+* No conflicts were found between `ARCHITECTURE.md`, `REQUIREMENTS.md`, and `TECH-STACK.md` for the Playlist Service plan.
+* `ARCHITECTURE.md` defines Playlist Service responsibilities as user playlist CRUD, playlist track operations, track reordering, and a per-user special `Liked Songs` playlist.
+* `REQUIREMENTS.md` M-10, M-11, M-24, M-25, M-26, and backend testing requirements define the validation baseline for this service.
+* `TECH-STACK.md` requires Java 21, Spring Boot 3.x, Maven, Docker, Docker Compose, PostgreSQL for Playlist persistence, and Prometheus-compatible metrics.
+
+#### Assumptions
+
+* This step is planning only. No Playlist Service source code, Dockerfile replacement, dependency manifest, migrations, tests, or Compose changes are generated in this step.
+* All Playlist application endpoints are protected endpoints because `REQUIREMENTS.md` M-25 says only `POST /auth/register` and `POST /auth/login` may be publicly accessible.
+* `/actuator/health` and `/actuator/prometheus` are treated as operational interfaces, not public application APIs, following the existing M-24/M-25 interpretation used for Auth and Catalog.
+* Playlist Service will validate JWTs locally using the mounted shared public key; it will not call Auth Service per request.
+* Playlist ownership is derived from the JWT subject claim because the documents require authenticated per-user behavior but do not define another user identity source.
+* Song IDs stored in playlists are references to Catalog song IDs; Playlist Service does not copy catalog metadata or call Catalog Service in this phase because the source documents do not require that integration for minimum playlist behavior.
+* Kafka playlist update events are not included in the minimum plan. `TECH-STACK.md` says Playlist may publish playlist update events if that event source is used for notifications, while `REQUIREMENTS.md` does not require Playlist event production in M-10 or M-11.
+* Optional mood-based smart playlists, queue management, version history, undo, and collaborative editing are excluded from this phase because they are could-have features.
+
+#### Missing Details to Resolve During Generation
+
+* Exact request and response JSON schemas are not defined by the source documents.
+* Exact playlist name and description validation limits are not defined.
+* Exact maximum playlist size, duplicate-track behavior, and track-position numbering conventions are not defined.
+* Exact behavior when adding a song ID that does not exist in Catalog is not defined; the plan records the song ID as a reference and does not validate against Catalog in this phase.
+* Exact error response format is not defined; generation should follow the local pattern already used by Auth and Catalog.
+* Exact Liked Songs creation timing is not defined; the plan assumes it should be created lazily when a user first interacts with Playlist Service.
+
+#### Chosen Stack
+
+* Language: Java 21.
+* Framework: Spring Boot 3.x.
+* Build tool: Maven.
+* HTTP/API: Spring Web MVC.
+* Persistence: PostgreSQL through Spring Data JPA.
+* Database migrations: Flyway.
+* Security: Spring Security resource server with JWT verification from the shared public key.
+* Observability: Spring Boot Actuator with Micrometer Prometheus registry.
+* Containerization: Docker and existing root `docker-compose.yml`.
+
+#### Planned File Tree
+
+```text
+services/playlist-service/
+  pom.xml
+  Dockerfile
+  README.md
+  .env.example
+  src/
+    main/
+      java/
+        com/benchmark/playlist/
+          PlaylistServiceApplication.java
+          config/
+            ClockConfig.java
+            JwtProperties.java
+            KeyConfig.java
+            SecurityConfig.java
+          controller/
+            ApiError.java
+            ApiExceptionHandler.java
+            PlaylistController.java
+          dto/
+            AddTrackRequest.java
+            CreatePlaylistRequest.java
+            PlaylistResponse.java
+            PlaylistSummaryResponse.java
+            PlaylistTrackResponse.java
+            ReorderTracksRequest.java
+            UpdatePlaylistRequest.java
+          entity/
+            Playlist.java
+            PlaylistTrack.java
+          repository/
+            PlaylistRepository.java
+            PlaylistTrackRepository.java
+          security/
+            AuthenticatedUser.java
+            PemKeyLoader.java
+            UserPrincipalResolver.java
+          service/
+            LikedSongsService.java
+            PlaylistAccessDeniedException.java
+            PlaylistNotFoundException.java
+            PlaylistService.java
+            PlaylistTrackNotFoundException.java
+      resources/
+        application.yml
+        db/
+          migration/
+            V1__create_playlists.sql
+    test/
+      java/
+        com/benchmark/playlist/
+          controller/
+            PlaylistControllerIntegrationTest.java
+          service/
+            LikedSongsServiceTest.java
+            PlaylistServiceTest.java
+          support/
+            TestKeyFiles.java
+```
+
+If generation needs small mapper/helper classes to keep controllers thin, they should remain within the controller, dto, or service package boundaries above.
+
+#### Dependencies
+
+Planned Maven dependencies:
+
+* `spring-boot-starter-web`
+* `spring-boot-starter-data-jpa`
+* `spring-boot-starter-validation`
+* `spring-boot-starter-security`
+* `spring-boot-starter-oauth2-resource-server`
+* `spring-boot-starter-actuator`
+* `micrometer-registry-prometheus`
+* `flyway-core`
+* `flyway-database-postgresql`
+* `postgresql`
+* Test dependencies: `spring-boot-starter-test`, `spring-security-test`, H2 in PostgreSQL compatibility mode or another automated test database approach that can run inside the Docker/Maven validation path.
+
+Kafka dependencies are not planned for this minimum Playlist phase because event publication is not required by M-10 or M-11.
+
+#### Endpoints and Exposed Interfaces
+
+Application endpoints, all protected by JWT:
+
+* `GET /playlists`
+  * Returns playlists owned by the authenticated user.
+  * Ensures the user's special `Liked Songs` playlist is available.
+
+* `POST /playlists`
+  * Creates a regular playlist owned by the authenticated user.
+  * Request fields planned from missing schema details: `name` and optional `description`.
+
+* `GET /playlists/{id}`
+  * Returns one playlist owned by the authenticated user, including ordered tracks.
+
+* `PATCH /playlists/{id}`
+  * Updates mutable playlist metadata for a playlist owned by the authenticated user.
+  * Must not rename or mutate protected behavior of `Liked Songs` unless generation records a safe allowed subset.
+
+* `DELETE /playlists/{id}`
+  * Deletes a regular playlist owned by the authenticated user.
+  * Must not delete the user's `Liked Songs` playlist.
+
+* `POST /playlists/{id}/tracks`
+  * Adds a song reference to a playlist owned by the authenticated user.
+  * Request fields planned from missing schema details: `songId`.
+
+* `DELETE /playlists/{id}/tracks/{songId}`
+  * Removes a song reference from a playlist owned by the authenticated user.
+
+* `PATCH /playlists/{id}/tracks/reorder`
+  * Reorders tracks transactionally for a playlist owned by the authenticated user.
+  * Request should contain an ordered list of song IDs or track IDs; exact schema is missing and must be recorded during generation.
+
+Operational endpoints:
+
+* `/actuator/health`
+* `/actuator/prometheus`
+
+No optional queue, collaboration, version-history, smart-playlist, or mood endpoint is included in this plan.
+
+#### Environment Variables
+
+Planned service variables:
+
+* `SERVER_PORT` - defaults to `8080`.
+* `SPRING_DATASOURCE_URL` - defaults to `jdbc:postgresql://playlist-db:5432/playlist`.
+* `SPRING_DATASOURCE_USERNAME` - defaults to Compose PostgreSQL user.
+* `SPRING_DATASOURCE_PASSWORD` - defaults to Compose PostgreSQL password.
+* `JWT_PUBLIC_KEY_PATH` - path to the mounted shared public key.
+* `PLAYLIST_DEFAULT_LIKED_SONGS_NAME` - optional default value `Liked Songs` if generation makes the special playlist name configurable.
+
+The existing Compose skeleton already defines `KAFKA_BOOTSTRAP_SERVERS` for Playlist Service, but this phase does not plan to consume it unless generation scope is expanded to playlist update events.
+
+#### Persistence and Messaging Approach
+
+* Playlist Service uses only its dedicated `playlist-db` PostgreSQL service and `playlist-db-data` volume.
+* Flyway owns schema creation.
+* Planned tables:
+  * `playlists`: playlist id, owner user id, name, description, special playlist type or liked-songs flag, created timestamp, updated timestamp.
+  * `playlist_tracks`: track row id or composite identity, playlist id, song id reference, position, added timestamp.
+* Playlist ownership is enforced by queries that include both playlist id and authenticated owner id.
+* `Liked Songs` is represented as a special playlist row per user with uniqueness enforcing one liked-songs playlist per owner.
+* Track reorder should run in one transaction and persist a stable contiguous order.
+* No shared database access, Catalog database access, or Kafka event production/consumption is planned for this phase.
+
+#### Validation Steps
+
+* Confirm no source-document conflict before generation.
+* Build Playlist Service with Docker so Maven tests run in the build path.
+* Run `docker compose config --quiet`.
+* Run `docker compose build playlist-service`.
+* Run `docker compose up -d --build playlist-db playlist-service`.
+* Confirm `playlist-db` is healthy and `playlist-service` is running.
+* Confirm startup logs show successful PostgreSQL connection and Flyway migration.
+* Use a JWT issued by Auth Service or a test-valid RS256 token signed by the local development private key to call protected Playlist endpoints.
+* Verify unauthenticated requests to all Playlist application endpoints return `401`.
+* Verify authenticated `GET /playlists` returns only the authenticated user's playlists and includes the special `Liked Songs` playlist.
+* Verify authenticated playlist create, read, update, and delete behavior for regular playlists.
+* Verify `Liked Songs` cannot be deleted through `DELETE /playlists/{id}`.
+* Verify adding, removing, and transactionally reordering tracks works for a user-owned playlist.
+* Verify another user's JWT cannot access or mutate a playlist they do not own.
+* Verify `/actuator/health` returns `UP` and `/actuator/prometheus` exposes metrics.
+
+#### Required Unit Tests
+
+* Playlist creation stores the authenticated user as owner.
+* Listing returns only playlists owned by the authenticated user.
+* Liked Songs is created or available per user and is unique per owner.
+* Regular playlist metadata update succeeds for the owner.
+* Regular playlist deletion succeeds for the owner.
+* Liked Songs deletion is rejected.
+* Track addition appends with the correct order.
+* Track removal removes the selected song reference and compacts or preserves order according to the generated rule.
+* Track reorder validates membership and persists the requested order transactionally.
+* Cross-user access is rejected in service logic.
+
+#### Required Integration Tests
+
+* Each required endpoint rejects missing/invalid JWT with `401`.
+* `GET /playlists` returns only the authenticated user's playlists and includes `Liked Songs`.
+* `POST /playlists` creates a regular playlist for the authenticated user.
+* `GET /playlists/{id}` returns playlist details and ordered tracks.
+* `PATCH /playlists/{id}` updates regular playlist metadata.
+* `DELETE /playlists/{id}` deletes a regular playlist and rejects deletion of `Liked Songs`.
+* `POST /playlists/{id}/tracks` adds a song reference.
+* `DELETE /playlists/{id}/tracks/{songId}` removes a song reference.
+* `PATCH /playlists/{id}/tracks/reorder` updates track order transactionally.
+* Cross-user access to playlist read/update/delete/track operations returns a forbidden or not-found response according to the generated access strategy.
+* Flyway migration and persistence behavior run in the automated test database.
+* `/actuator/health` is reachable as an operational endpoint.
+
+#### Planning Decisions Recorded
+
+| Decision | Why | Justification | Expected affected files/services |
+| --- | --- | --- | --- |
+| Implement Playlist Service with Java 21, Spring Boot 3.x, and Maven. | All backend services should use the shared backend standard. | `TECH-STACK.md` Shared Backend Standard. | `services/playlist-service/pom.xml`, Java source tree, Dockerfile. |
+| Use PostgreSQL as the Playlist system of record. | Playlist ownership, CRUD, liked songs, and ordered tracks require transactional relational persistence. | `ARCHITECTURE.md` Playlist persistence; `REQUIREMENTS.md` M-10, M-11, M-26; `TECH-STACK.md` Playlist database choice. | `playlist-db`, `playlist-db-data`, migrations, JPA entities/repositories. |
+| Implement exactly the eight required Playlist endpoints for this phase. | These are the minimum endpoints required by the architecture and requirements. | `ARCHITECTURE.md` Playlist required endpoints; `REQUIREMENTS.md` M-10. | `PlaylistController`, DTOs, service tests, integration tests. |
+| Protect all Playlist application endpoints with JWT verification using the shared public key. | Only Auth registration and login may be public, and protected services must validate JWTs locally. | `REQUIREMENTS.md` M-03 and M-25. | `SecurityConfig`, JWT config, integration tests, Compose key mount. |
+| Use JWT subject as Playlist owner id. | The documents require per-user playlist behavior but do not define a separate user lookup contract. | `ARCHITECTURE.md` Playlist behavior; `REQUIREMENTS.md` M-10, M-11, M-25. | Security principal resolver, `Playlist` entity, repository queries, tests. |
+| Represent `Liked Songs` as a special playlist row per user. | The requirements say liked songs must be a per-user special playlist named `Liked Songs`. | `ARCHITECTURE.md` Playlist behavior; `REQUIREMENTS.md` M-11. | `Playlist` entity, Flyway migration, `LikedSongsService`, tests. |
+| Exclude optional smart playlists, queue management, version history, undo, and collaborative editing from this phase. | These are could-have features, while the current phase targets must-have Playlist behavior only. | `ARCHITECTURE.md` Playlist optional behavior; `REQUIREMENTS.md` C-01, C-02, C-07, C-08. | No optional endpoint/service code in this phase. |
+| Do not add Kafka messaging to the minimum Playlist implementation. | Playlist event production is conditional in `TECH-STACK.md`, and no must-have Playlist requirement requires event publication. | `TECH-STACK.md` Playlist messaging note; `REQUIREMENTS.md` M-10 and M-11. | `pom.xml`, application config, service code, tests. |
+| Store song IDs as references without Catalog validation in this phase. | The source documents require Playlist track operations but do not require Playlist-to-Catalog validation. | `ARCHITECTURE.md` Playlist behavior; `REQUIREMENTS.md` M-10. | `PlaylistTrack` entity, DTOs, service logic, tests. |
 
