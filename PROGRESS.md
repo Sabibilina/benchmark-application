@@ -178,7 +178,7 @@ Services are built **one at a time** in the order below. Each service goes throu
 ## Phase 5 — Search Service
 
 ### Steps
-- [ ] **Step 1 — Plan**: File tree, endpoint design, search strategy, filter logic, persistence/indexing approach if needed, env vars, dependencies, validation steps
+- [x] **Step 1 — Plan**: File tree, endpoint design, search strategy, filter logic, persistence/indexing approach if needed, env vars, dependencies, validation steps
 - [ ] **Step 2 — Generate**: All source files, Dockerfile, dependency manifest, `.env.example`, schema/migration with indexes, data population script, unit tests, integration tests, README section
 - [ ] **Step 3 — Validate/Fix**: Review against acceptance criteria; fix and return only changed files
 
@@ -374,4 +374,3 @@ Services are built **one at a time** in the order below. Each service goes throu
 - [ ] Load generator can execute the main application flows end-to-end
 - [ ] Integrated system tests show that all services run correctly together in the shared deployment environment
 - [ ] Cross-service authentication, persistence, and messaging behavior are verified end-to-end
-

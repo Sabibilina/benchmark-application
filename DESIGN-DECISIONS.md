@@ -1566,3 +1566,218 @@ Planned service variables:
 * Assumption: generated deterministic dummy bytes satisfy the configurable dummy payload requirement because the documents do not require true randomness.
 * No unresolved Streaming implementation or test issues remain for this phase.
 
+### Phase 5 Step 1 Plan - Search Service
+
+#### Source Document Check
+
+No conflict was found between `ARCHITECTURE.md`, `REQUIREMENTS.md`, and `TECH-STACK.md` for the Search Service planning step.
+
+`ARCHITECTURE.md` allows Elasticsearch or another search backend as optional rather than mandatory. `TECH-STACK.md`, which is the source of truth for implementation technology choices, selects OpenSearch as the Search Service's dedicated search persistence/index layer. This is treated as the implementation technology choice for this phase, not as an additional product requirement.
+
+#### Assumptions
+
+* This step is planning only. No Search Service source code, Dockerfile, dependency manifest, Compose changes, or runtime configuration is generated in this step.
+* `GET /search` is a protected application endpoint because `REQUIREMENTS.md` M-25 says all protected endpoints require JWT and only Auth register/login are public.
+* `/actuator/health` and `/actuator/prometheus` remain operational endpoints for health and metrics exposure, consistent with the existing service pattern and `REQUIREMENTS.md` M-24.
+* JWT validation will use the shared RSA public key mounted into the service, so Search can validate tokens locally without a per-request Auth Service call.
+* OpenSearch stores a derived search index only. Catalog remains the song metadata system of record.
+* The documents do not define a Search indexing API, catalog event stream, or Catalog-to-Search synchronization contract. For the minimum runnable phase, Search will populate its OpenSearch index from a read-only mounted copy of the same Kaggle catalog CSV used by Catalog Service startup ingestion.
+* Optional Search features are not included in this phase: autocomplete, expanded artist/album/playlist result sections, and explicit fuzzy/faceted behavior beyond the required text search plus filters.
+* Exact response schema, result sorting, pagination defaults, OpenSearch index name, analyzer details, and the exact CSV column-to-search-field mapping are not specified by the source documents and must be documented during implementation rather than presented as source requirements.
+
+#### Chosen Stack
+
+* Java 21.
+* Spring Boot 3.x.
+* Maven.
+* Spring Web MVC for HTTP endpoints.
+* Spring Security OAuth2 Resource Server for local JWT verification.
+* OpenSearch as the dedicated search persistence/index layer.
+* Spring Boot Actuator with Micrometer Prometheus for metrics.
+* Docker and Docker Compose on the shared named network.
+
+#### Planned File Tree
+
+```text
+services/search-service/
+  Dockerfile
+  README.md
+  .env.example
+  pom.xml
+  src/
+    main/
+      java/
+        com/
+          benchmark/
+            search/
+              SearchServiceApplication.java
+              config/
+                JwtProperties.java
+                OpenSearchConfig.java
+                SearchProperties.java
+                SecurityConfig.java
+              controller/
+                ApiError.java
+                ApiExceptionHandler.java
+                SearchController.java
+              dto/
+                SearchPageResponse.java
+                SearchRequest.java
+                SearchResultResponse.java
+              indexing/
+                CatalogCsvReader.java
+                SearchDocument.java
+                SearchIndexInitializer.java
+              opensearch/
+                OpenSearchIndexClient.java
+                OpenSearchQueryBuilder.java
+              security/
+                PemKeyLoader.java
+              service/
+                SearchService.java
+                SearchValidationException.java
+      resources/
+        application.yml
+    test/
+      java/
+        com/
+          benchmark/
+            search/
+              controller/
+                SearchControllerIntegrationTest.java
+              indexing/
+                CatalogCsvReaderTest.java
+                SearchIndexInitializerTest.java
+              opensearch/
+                OpenSearchQueryBuilderTest.java
+              service/
+                SearchServiceTest.java
+              support/
+                TestDataFiles.java
+                TestKeyFiles.java
+```
+
+Small helper classes may be added inside the listed package boundaries if implementation requires them, but no unrelated service modules should be modified in the Search implementation step.
+
+#### Dependencies
+
+Planned Maven dependencies:
+
+* `spring-boot-starter-web`
+* `spring-boot-starter-validation`
+* `spring-boot-starter-security`
+* `spring-boot-starter-oauth2-resource-server`
+* `spring-boot-starter-actuator`
+* `micrometer-registry-prometheus`
+* OpenSearch Java client dependency compatible with the selected Spring Boot version
+* CSV parsing dependency such as Apache Commons CSV for startup indexing from the catalog dataset
+* Test dependencies: `spring-boot-starter-test`, `spring-security-test`, and Mockito support from Spring Boot test
+
+No JPA, Flyway, PostgreSQL driver, Kafka producer, or Kafka consumer dependency is planned for this minimum Search phase.
+
+#### Endpoints and Exposed Interfaces
+
+Application endpoint, protected by JWT:
+
+* `GET /search?q=&genre=&bpm_min=&bpm_max=&year=`
+  * Performs text search over songs.
+  * Applies optional genre filter.
+  * Applies optional BPM lower and upper bounds.
+  * Applies optional release year filter.
+  * Supports combined filters in one request.
+
+Implementation may include bounded pagination parameters such as `page` and `size` to avoid unbounded responses, but these are implementation controls rather than additional source-document requirements.
+
+Operational endpoints:
+
+* `/actuator/health`
+* `/actuator/prometheus`
+
+No autocomplete endpoint, expanded artist/album/playlist endpoint, or write/index-management API is planned for this phase.
+
+#### Environment Variables
+
+Planned service variables:
+
+* `SERVER_PORT` - defaults to `8080` inside the container.
+* `JWT_PUBLIC_KEY_PATH` - path to the mounted shared public key.
+* `OPENSEARCH_URL` - container-network URL for OpenSearch.
+* `SEARCH_INDEX_NAME` - OpenSearch index name for song search documents.
+* `SEARCH_CATALOG_DATASET_PATH` - path to the mounted Kaggle catalog CSV used for index population.
+* `SEARCH_INDEXING_ENABLED` - enables startup index creation and CSV population in local Compose.
+* `SEARCH_DEFAULT_PAGE_SIZE` - default bounded result size if pagination is implemented.
+* `SEARCH_MAX_PAGE_SIZE` - maximum allowed result size if pagination is implemented.
+
+#### Persistence and Indexing Approach
+
+* Search Service will use its own OpenSearch index as a dedicated persistence/index layer, satisfying `REQUIREMENTS.md` M-26 when search indexes are stored.
+* The OpenSearch container already planned for the system is the only Search persistence dependency.
+* Startup indexing will create or validate the song index and idempotently upsert documents from the mounted catalog CSV.
+* Indexed document fields should support the required behavior: song title or track name text, artist text where available, album text where available, genre keyword, BPM/tempo numeric, and release year numeric.
+* Search queries will combine text matching with structured filters for genre, BPM range, and year.
+* Search Service will not share the Catalog PostgreSQL database and will not write to Catalog Service storage.
+* No Kafka messaging is planned for this phase because the source documents do not define Search Service event production or consumption.
+
+#### Validation Steps
+
+* Confirm no source-document conflict before generation.
+* Build Search Service with Docker so Maven tests run during the build path.
+* Run `docker compose config --quiet`.
+* Run `docker compose build search-service`.
+* Run `docker compose up -d --build search-opensearch search-service`.
+* Confirm `search-opensearch` and `search-service` are running on the shared named Docker network.
+* Confirm startup logs show OpenSearch connectivity, index creation or validation, and catalog CSV indexing.
+* Verify unauthenticated and invalid-token requests to `GET /search` return `401`.
+* Verify an authenticated text search returns song results from the indexed catalog data.
+* Verify authenticated genre, BPM range, year, and combined filter requests behave as required.
+* Verify `/actuator/health` returns healthy status and `/actuator/prometheus` exposes metrics.
+* Verify the Search README documents how search data is populated.
+
+#### Required Unit Tests
+
+* Query builder creates a text search query when `q` is provided.
+* Query builder applies genre filtering.
+* Query builder applies `bpm_min` and `bpm_max` range filtering.
+* Query builder applies year filtering.
+* Query builder combines text search, genre, BPM, and year filters.
+* Request validation rejects invalid BPM ranges such as `bpm_min` greater than `bpm_max`.
+* Request validation rejects negative BPM values and invalid pagination bounds if pagination is implemented.
+* CSV reader maps the required catalog fields into search documents.
+* Index initializer creates or validates the index and performs idempotent document upserts through the OpenSearch client abstraction.
+* Search service maps OpenSearch hits into Search API response DTOs.
+
+#### Required Integration Tests
+
+* `GET /search` rejects missing JWT with `401`.
+* `GET /search` rejects invalid JWT with `401`.
+* `GET /search?q=...` with a valid JWT returns matching song results from test-indexed data.
+* Genre filter returns only matching genre results.
+* BPM range filter returns only results inside the requested range.
+* Year filter returns only results from the requested year.
+* Combined text, genre, BPM, and year filters work together.
+* Startup indexing behavior is covered against a test OpenSearch client abstraction or controlled test index path.
+* `/actuator/health` is reachable as an operational endpoint.
+
+#### Missing Details Not Defined by the Source Documents
+
+* Exact Search response JSON schema.
+* Exact CSV column names to use for title, artist, album, genre, BPM, and year after the Kaggle dataset replacement.
+* Exact OpenSearch index name and analyzer configuration.
+* Exact default result ordering or relevance tie-breaker.
+* Whether pagination is required by the Search endpoint.
+* Whether Search should synchronize from Catalog via API, events, or direct dataset import after startup. The minimum plan uses documented startup CSV indexing because no synchronization contract is specified.
+
+#### Planning Decisions Recorded
+
+| Decision | Why | Justification | Expected affected files/services |
+| --- | --- | --- | --- |
+| Implement Search Service with Java 21, Spring Boot 3.x, and Maven. | All backend services must use the shared backend standard. | `TECH-STACK.md` Shared Backend Standard. | `services/search-service/pom.xml`, Java source tree, Dockerfile. |
+| Use OpenSearch as the dedicated Search persistence/index layer. | The Search Service needs full-text matching and structured filters, and the stack document selects OpenSearch for this service. | `TECH-STACK.md` Search backend; `ARCHITECTURE.md` Search persistence and indexing. | `search-opensearch`, `services/search-service`, `docker-compose.yml`. |
+| Protect `GET /search` with local JWT validation using the shared public key. | All protected endpoints require JWT and only Auth register/login may be public. | `REQUIREMENTS.md` M-25. | `SecurityConfig`, `PemKeyLoader`, `.env.example`, integration tests, Compose key mount. |
+| Expose only the required `GET /search` application endpoint in this phase. | The source documents require song search and filters; autocomplete and expanded result types are optional. | `ARCHITECTURE.md` Search Service; `REQUIREMENTS.md` M-12, C-05, C-06. | `SearchController`, DTOs, tests. |
+| Exclude autocomplete, expanded artist/album/playlist search, and explicit fuzzy/faceted endpoints from this phase. | These are could-have or optional features and are not required for the minimum Search phase. | `REQUIREMENTS.md` C-04, C-05, C-06; `ARCHITECTURE.md` optional Search behavior. | No optional Search endpoints or UI-specific APIs. |
+| Populate the OpenSearch index from a read-only mounted catalog CSV at startup. | The documents require use of the Kaggle dataset but do not define a Search synchronization API or event contract. CSV startup indexing keeps the phase runnable without sharing the Catalog database. | `ARCHITECTURE.md` Catalog dataset requirements; `REQUIREMENTS.md` M-12 and M-26; missing synchronization detail recorded above. | `SearchIndexInitializer`, `CatalogCsvReader`, `application.yml`, `.env.example`, `docker-compose.yml`, README. |
+| Treat the OpenSearch index as derived data, not the song metadata system of record. | Catalog owns song metadata persistence, while Search owns search-specific indexes. | `ARCHITECTURE.md` Catalog and Search service boundaries; `REQUIREMENTS.md` M-26. | Search index, Search README, no Catalog DB access. |
+| Do not add Kafka messaging to Search in this phase. | The source documents do not define Search event production or consumption. | `ARCHITECTURE.md` Search Service; `TECH-STACK.md` Messaging Infrastructure per Service. | `pom.xml`, `application.yml`, no Search Kafka config. |
+| Use Actuator and Micrometer Prometheus for Search metrics. | Each service must expose Prometheus-suitable metrics. | `REQUIREMENTS.md` M-24; `TECH-STACK.md` Observability. | `pom.xml`, `application.yml`, `/actuator/prometheus`, Prometheus scrape config if needed. |
+| Document unresolved details rather than filling them in as requirements. | The user instructed that missing details must be listed instead of invented. | User instruction for this planning step. | `DESIGN-DECISIONS.md`, future Search implementation README. |
