@@ -4,6 +4,28 @@ server:
 spring:
   application:
     name: catalog-service
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/catalogdb}
+    username: ${SPRING_DATASOURCE_USERNAME:cataloguser}
+    password: ${SPRING_DATASOURCE_PASSWORD:catalogpass}
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+
+jwt:
+  public-key-path: ${JWT_PUBLIC_KEY_PATH:/jwt-keys/public.pem}
+
+catalog:
+  seed:
+    enabled: ${CATALOG_SEED_ENABLED:true}
+    batch-size: ${CATALOG_SEED_BATCH_SIZE:500}
+  page:
+    max-size: 100
 
 management:
   endpoints:

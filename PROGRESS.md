@@ -105,23 +105,23 @@ Services are built **one at a time** in the order below. Each service goes throu
 ## Phase 2 — Catalog Service
 
 ### Steps
-- [ ] **Step 1 — Plan**: File tree, persistence and data model approach, dataset ingestion strategy, endpoints, pagination design, env vars, dependencies, validation steps
-- [ ] **Step 2 — Generate**: All source files, Dockerfile, dependency manifest, `.env.example`, schema/migration, seed script, unit tests, integration tests, README section
-- [ ] **Step 3 — Validate/Fix**: Review against acceptance criteria; fix and return only changed files
+- [x] **Step 1 — Plan**: File tree, persistence and data model approach, dataset ingestion strategy, endpoints, pagination design, env vars, dependencies, validation steps
+- [x] **Step 2 — Generate**: All source files, Dockerfile, dependency manifest, `.env.example`, schema/migration, seed script, unit tests, integration tests, README section
+- [x] **Step 3 — Validate/Fix**: Review against acceptance criteria; fix and return only changed files
 
 ### Acceptance Criteria
-- [ ] `GET /catalog/songs` is implemented with pagination
-- [ ] `GET /catalog/songs/:id` returns song metadata
-- [ ] The required dataset is ingested automatically at startup
-- [ ] Stored song records include the metadata fields required by the application and recommendation/search flows
-- [ ] The service uses its own dedicated persistence layer
-- [ ] Dockerfile builds and container starts without errors
-- [ ] `.env.example` is complete
-- [ ] No requirements from the brief are missing; no extra requirements added
-- [ ] Unit tests cover the core business logic of the service
-- [ ] Integration tests cover the required endpoints and persistence behavior where applicable
-- [ ] Protected endpoint behavior is tested for valid and invalid JWT access where applicable
-- [ ] Test suite passes successfully
+- [x] `GET /catalog/songs` is implemented with pagination
+- [x] `GET /catalog/songs/:id` returns song metadata
+- [x] The required dataset is ingested automatically at startup
+- [x] Stored song records include the metadata fields required by the application and recommendation/search flows
+- [x] The service uses its own dedicated persistence layer
+- [x] Dockerfile builds and container starts without errors
+- [x] `.env.example` is complete
+- [x] No requirements from the brief are missing; no extra requirements added
+- [x] Unit tests cover the core business logic of the service
+- [x] Integration tests cover the required endpoints and persistence behavior where applicable
+- [x] Protected endpoint behavior is tested for valid and invalid JWT access where applicable
+- [x] Test suite passes successfully — 27/27 tests pass (docker run with Testcontainers via mounted Docker socket)
 
 ---
 

@@ -1,0 +1,9 @@
+catalog:
+  seed:
+    enabled: false
+    batch-size: 500
+
+spring:
+  jpa:
+    hibernate:
+      ddl-auto: validate
