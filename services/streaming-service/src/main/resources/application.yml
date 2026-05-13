@@ -1,0 +1,29 @@
+server:
+  port: ${SERVER_PORT:8080}
+
+spring:
+  application:
+    name: streaming-service
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:kafka:9092}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+
+app:
+  jwt:
+    public-key-path: ${JWT_PUBLIC_KEY_PATH:/run/config/jwt/public.pem}
+  streaming:
+    playback-events-topic: ${STREAMING_PLAYBACK_EVENTS_TOPIC:playback-events}
+    segment-count: ${STREAMING_SEGMENT_COUNT:5}
+    segment-size-bytes: ${STREAMING_SEGMENT_SIZE_BYTES:65536}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true
