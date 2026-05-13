@@ -1,0 +1,40 @@
+server:
+  port: ${SERVER_PORT:8080}
+
+spring:
+  application:
+    name: catalog-service
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://catalog-db:5432/catalog}
+    username: ${SPRING_DATASOURCE_USERNAME:benchmark}
+    password: ${SPRING_DATASOURCE_PASSWORD:benchmark}
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+    properties:
+      hibernate:
+        jdbc:
+          batch_size: 100
+        order_inserts: true
+  flyway:
+    enabled: true
+
+app:
+  jwt:
+    public-key-path: ${JWT_PUBLIC_KEY_PATH:/run/config/jwt/public.pem}
+  catalog:
+    dataset-path: ${CATALOG_DATASET_PATH:/app/data/catalog.csv}
+    ingestion-enabled: ${CATALOG_INGESTION_ENABLED:true}
+    default-page-size: ${CATALOG_DEFAULT_PAGE_SIZE:20}
+    max-page-size: ${CATALOG_MAX_PAGE_SIZE:100}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true

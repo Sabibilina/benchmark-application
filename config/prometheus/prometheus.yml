@@ -1,0 +1,21 @@
+global:
+  scrape_interval: 15s
+
+scrape_configs:
+  - job_name: prometheus
+    static_configs:
+      - targets:
+          - prometheus:9090
+
+  - job_name: application-services
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets:
+          - auth-service:8080
+          - catalog-service:8080
+          - streaming-service:8080
+          - playlist-service:8080
+          - search-service:8080
+          - analytics-service:8080
+          - recommendation-service:8080
+          - notification-service:8080

@@ -1,0 +1,401 @@
+name: benchmark-application
+
+x-placeholder-app: &placeholder-app
+  restart: unless-stopped
+  networks:
+    - benchmark-network
+  cpus: ${DEFAULT_SERVICE_CPUS:-0.50}
+  mem_limit: ${DEFAULT_SERVICE_MEMORY:-512m}
+  volumes:
+    - ./config/jwt/public.pem:/run/config/jwt/public.pem:ro
+
+x-postgres: &postgres
+  image: postgres:16-alpine
+  restart: unless-stopped
+  networks:
+    - benchmark-network
+  cpus: ${INFRA_CPUS:-1.00}
+  mem_limit: ${INFRA_MEMORY:-1g}
+  environment:
+    POSTGRES_USER: ${POSTGRES_USER:-benchmark}
+    POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-benchmark}
+  healthcheck:
+    test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER}"]
+    interval: 10s
+    timeout: 5s
+    retries: 10
+
+services:
+  auth-service:
+    <<: *placeholder-app
+    build:
+      context: ./services/auth-service
+      args:
+        SERVICE_NAME: auth-service
+    ports:
+      - "${AUTH_SERVICE_HOST_PORT:-8081}:8080"
+    environment:
+      SERVICE_NAME: auth-service
+      SERVER_PORT: 8080
+      SPRING_DATASOURCE_URL: jdbc:postgresql://auth-db:5432/auth
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-benchmark}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-benchmark}
+      JWT_PUBLIC_KEY_PATH: ${JWT_PUBLIC_KEY_PATH:-/run/config/jwt/public.pem}
+      JWT_PRIVATE_KEY_PATH: ${JWT_PRIVATE_KEY_PATH:-/run/secrets/jwt/private.pem}
+      JWT_ISSUER: ${JWT_ISSUER:-benchmark-auth}
+      JWT_ACCESS_TOKEN_TTL: ${JWT_ACCESS_TOKEN_TTL:-PT1H}
+    volumes:
+      - ./config/jwt/public.pem:/run/config/jwt/public.pem:ro
+      - ./config/jwt/private.pem:/run/secrets/jwt/private.pem:ro
+    depends_on:
+      auth-db:
+        condition: service_healthy
+
+  catalog-service:
+    <<: *placeholder-app
+    build:
+      context: ./services/catalog-service
+      args:
+        SERVICE_NAME: catalog-service
+    ports:
+      - "${CATALOG_SERVICE_HOST_PORT:-8082}:8080"
+    environment:
+      SERVICE_NAME: catalog-service
+      SERVER_PORT: 8080
+      SPRING_DATASOURCE_URL: jdbc:postgresql://catalog-db:5432/catalog
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-benchmark}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-benchmark}
+      JWT_PUBLIC_KEY_PATH: ${JWT_PUBLIC_KEY_PATH:-/run/config/jwt/public.pem}
+      CATALOG_DATASET_PATH: ${CATALOG_DATASET_PATH:-/app/data/catalog.csv}
+      CATALOG_INGESTION_ENABLED: ${CATALOG_INGESTION_ENABLED:-true}
+      CATALOG_DEFAULT_PAGE_SIZE: ${CATALOG_DEFAULT_PAGE_SIZE:-20}
+      CATALOG_MAX_PAGE_SIZE: ${CATALOG_MAX_PAGE_SIZE:-100}
+    depends_on:
+      catalog-db:
+        condition: service_healthy
+
+  streaming-service:
+    <<: *placeholder-app
+    build:
+      context: ./services/streaming-service
+      args:
+        SERVICE_NAME: streaming-service
+    ports:
+      - "${STREAMING_SERVICE_HOST_PORT:-8083}:8080"
+    environment:
+      SERVICE_NAME: streaming-service
+      SERVER_PORT: 8080
+      KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-kafka:9092}
+      JWT_PUBLIC_KEY_PATH: ${JWT_PUBLIC_KEY_PATH:-/run/config/jwt/public.pem}
+    depends_on:
+      kafka:
+        condition: service_started
+
+  playlist-service:
+    <<: *placeholder-app
+    build:
+      context: ./services/playlist-service
+      args:
+        SERVICE_NAME: playlist-service
+    ports:
+      - "${PLAYLIST_SERVICE_HOST_PORT:-8084}:8080"
+    environment:
+      SERVICE_NAME: playlist-service
+      SERVER_PORT: 8080
+      SPRING_DATASOURCE_URL: jdbc:postgresql://playlist-db:5432/playlist
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-benchmark}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-benchmark}
+      KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-kafka:9092}
+      JWT_PUBLIC_KEY_PATH: ${JWT_PUBLIC_KEY_PATH:-/run/config/jwt/public.pem}
+    depends_on:
+      playlist-db:
+        condition: service_healthy
+      kafka:
+        condition: service_started
+
+  search-service:
+    <<: *placeholder-app
+    build:
+      context: ./services/search-service
+      args:
+        SERVICE_NAME: search-service
+    ports:
+      - "${SEARCH_SERVICE_HOST_PORT:-8085}:8080"
+    environment:
+      SERVICE_NAME: search-service
+      SERVER_PORT: 8080
+      OPENSEARCH_URL: http://search-opensearch:9200
+      JWT_PUBLIC_KEY_PATH: ${JWT_PUBLIC_KEY_PATH:-/run/config/jwt/public.pem}
+    depends_on:
+      search-opensearch:
+        condition: service_started
+
+  analytics-service:
+    <<: *placeholder-app
+    build:
+      context: ./services/analytics-service
+      args:
+        SERVICE_NAME: analytics-service
+    ports:
+      - "${ANALYTICS_SERVICE_HOST_PORT:-8086}:8080"
+    environment:
+      SERVICE_NAME: analytics-service
+      SERVER_PORT: 8080
+      CLICKHOUSE_URL: jdbc:clickhouse://analytics-db:8123/analytics
+      CLICKHOUSE_USER: ${CLICKHOUSE_USER:-benchmark}
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:-benchmark}
+      KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-kafka:9092}
+      JWT_PUBLIC_KEY_PATH: ${JWT_PUBLIC_KEY_PATH:-/run/config/jwt/public.pem}
+    depends_on:
+      analytics-db:
+        condition: service_started
+      kafka:
+        condition: service_started
+
+  recommendation-service:
+    <<: *placeholder-app
+    build:
+      context: ./services/recommendation-service
+      args:
+        SERVICE_NAME: recommendation-service
+    ports:
+      - "${RECOMMENDATION_SERVICE_HOST_PORT:-8087}:8080"
+    environment:
+      SERVICE_NAME: recommendation-service
+      SERVER_PORT: 8080
+      SPRING_DATASOURCE_URL: jdbc:postgresql://recommendation-db:5432/recommendation
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-benchmark}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-benchmark}
+      REDIS_URL: redis://recommendation-redis:6379
+      KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-kafka:9092}
+      JWT_PUBLIC_KEY_PATH: ${JWT_PUBLIC_KEY_PATH:-/run/config/jwt/public.pem}
+    depends_on:
+      recommendation-db:
+        condition: service_healthy
+      recommendation-redis:
+        condition: service_started
+      kafka:
+        condition: service_started
+
+  notification-service:
+    <<: *placeholder-app
+    build:
+      context: ./services/notification-service
+      args:
+        SERVICE_NAME: notification-service
+    ports:
+      - "${NOTIFICATION_SERVICE_HOST_PORT:-8088}:8080"
+    environment:
+      SERVICE_NAME: notification-service
+      SERVER_PORT: 8080
+      MONGODB_URI: mongodb://${MONGO_INITDB_ROOT_USERNAME:-benchmark}:${MONGO_INITDB_ROOT_PASSWORD:-benchmark}@notification-db:27017/notification?authSource=admin
+      KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-kafka:9092}
+      JWT_PUBLIC_KEY_PATH: ${JWT_PUBLIC_KEY_PATH:-/run/config/jwt/public.pem}
+    depends_on:
+      notification-db:
+        condition: service_started
+      kafka:
+        condition: service_started
+
+  frontend:
+    restart: unless-stopped
+    build:
+      context: ./frontend
+      args:
+        SERVICE_NAME: frontend
+    networks:
+      - benchmark-network
+    ports:
+      - "${FRONTEND_HOST_PORT:-5173}:5173"
+    cpus: ${DEFAULT_SERVICE_CPUS:-0.50}
+    mem_limit: ${DEFAULT_SERVICE_MEMORY:-512m}
+    environment:
+      SERVICE_NAME: frontend
+
+  auth-db:
+    <<: *postgres
+    environment:
+      POSTGRES_DB: auth
+      POSTGRES_USER: ${POSTGRES_USER:-benchmark}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-benchmark}
+    volumes:
+      - auth-db-data:/var/lib/postgresql/data
+
+  catalog-db:
+    <<: *postgres
+    environment:
+      POSTGRES_DB: catalog
+      POSTGRES_USER: ${POSTGRES_USER:-benchmark}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-benchmark}
+    volumes:
+      - catalog-db-data:/var/lib/postgresql/data
+
+  playlist-db:
+    <<: *postgres
+    environment:
+      POSTGRES_DB: playlist
+      POSTGRES_USER: ${POSTGRES_USER:-benchmark}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-benchmark}
+    volumes:
+      - playlist-db-data:/var/lib/postgresql/data
+
+  recommendation-db:
+    <<: *postgres
+    environment:
+      POSTGRES_DB: recommendation
+      POSTGRES_USER: ${POSTGRES_USER:-benchmark}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-benchmark}
+    volumes:
+      - recommendation-db-data:/var/lib/postgresql/data
+
+  recommendation-redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    networks:
+      - benchmark-network
+    ports:
+      - "${REDIS_HOST_PORT:-6379}:6379"
+    cpus: ${INFRA_CPUS:-1.00}
+    mem_limit: ${INFRA_MEMORY:-1g}
+    volumes:
+      - recommendation-redis-data:/data
+
+  search-opensearch:
+    image: opensearchproject/opensearch:2.13.0
+    restart: unless-stopped
+    networks:
+      - benchmark-network
+    ports:
+      - "${OPENSEARCH_HOST_PORT:-9200}:9200"
+    cpus: ${INFRA_CPUS:-1.00}
+    mem_limit: ${OPENSEARCH_MEMORY:-2g}
+    environment:
+      discovery.type: single-node
+      DISABLE_SECURITY_PLUGIN: "true"
+      OPENSEARCH_INITIAL_ADMIN_PASSWORD: ${OPENSEARCH_INITIAL_ADMIN_PASSWORD:-BenchmarkAdmin123!}
+      OPENSEARCH_JAVA_OPTS: -Xms512m -Xmx512m
+    volumes:
+      - search-opensearch-data:/usr/share/opensearch/data
+
+  analytics-db:
+    image: clickhouse/clickhouse-server:24.3-alpine
+    restart: unless-stopped
+    networks:
+      - benchmark-network
+    ports:
+      - "${CLICKHOUSE_HTTP_HOST_PORT:-8123}:8123"
+      - "${CLICKHOUSE_NATIVE_HOST_PORT:-9000}:9000"
+    cpus: ${INFRA_CPUS:-1.00}
+    mem_limit: ${CLICKHOUSE_MEMORY:-2g}
+    environment:
+      CLICKHOUSE_DB: analytics
+      CLICKHOUSE_USER: ${CLICKHOUSE_USER:-benchmark}
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:-benchmark}
+    volumes:
+      - analytics-db-data:/var/lib/clickhouse
+
+  notification-db:
+    image: mongo:7
+    restart: unless-stopped
+    networks:
+      - benchmark-network
+    ports:
+      - "${MONGO_HOST_PORT:-27017}:27017"
+    cpus: ${INFRA_CPUS:-1.00}
+    mem_limit: ${INFRA_MEMORY:-1g}
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_INITDB_ROOT_USERNAME:-benchmark}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_INITDB_ROOT_PASSWORD:-benchmark}
+    volumes:
+      - notification-db-data:/data/db
+
+  kafka:
+    image: apache/kafka:3.7.0
+    restart: unless-stopped
+    networks:
+      - benchmark-network
+    ports:
+      - "${KAFKA_HOST_PORT:-9092}:9092"
+    cpus: ${INFRA_CPUS:-1.00}
+    mem_limit: ${KAFKA_MEMORY:-1g}
+    environment:
+      CLUSTER_ID: MkU3OEVBNTcwNTJENDM2Qk
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+    volumes:
+      - kafka-data:/var/lib/kafka/data
+
+  prometheus:
+    image: prom/prometheus:v2.52.0
+    restart: unless-stopped
+    networks:
+      - benchmark-network
+    ports:
+      - "${PROMETHEUS_HOST_PORT:-9090}:9090"
+    cpus: ${INFRA_CPUS:-1.00}
+    mem_limit: ${PROMETHEUS_MEMORY:-512m}
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+    volumes:
+      - ./config/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+
+  grafana:
+    image: grafana/grafana:10.4.2
+    restart: unless-stopped
+    networks:
+      - benchmark-network
+    ports:
+      - "${GRAFANA_HOST_PORT:-3001}:3000"
+    cpus: ${INFRA_CPUS:-1.00}
+    mem_limit: ${GRAFANA_MEMORY:-512m}
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./config/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./config/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    depends_on:
+      prometheus:
+        condition: service_started
+
+  k6:
+    image: grafana/k6:0.49.0
+    restart: unless-stopped
+    networks:
+      - benchmark-network
+    cpus: ${DEFAULT_SERVICE_CPUS:-0.50}
+    mem_limit: ${K6_MEMORY:-512m}
+    entrypoint:
+      - /bin/sh
+      - -c
+      - echo 'k6 placeholder for Phase 0. Workload scripts are added in later phases.'; tail -f /dev/null
+    volumes:
+      - ./load-generator/k6:/scripts:ro
+
+networks:
+  benchmark-network:
+    name: benchmark-network
+    driver: bridge
+
+volumes:
+  auth-db-data:
+  catalog-db-data:
+  playlist-db-data:
+  recommendation-db-data:
+  recommendation-redis-data:
+  search-opensearch-data:
+  analytics-db-data:
+  notification-db-data:
+  kafka-data:
+  prometheus-data:
+  grafana-data:
