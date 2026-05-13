@@ -1,0 +1,11 @@
+jwt:
+  public-key-path: /tmp/playlist-service-test-keys/public.pem
+
+playlist:
+  kafka:
+    topic: playlist-events-test
+
+spring:
+  kafka:
+    producer:
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer

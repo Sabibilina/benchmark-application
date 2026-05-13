@@ -128,25 +128,25 @@ Services are built **one at a time** in the order below. Each service goes throu
 ## Phase 3 — Playlist Service
 
 ### Steps
-- [ ] **Step 1 — Plan**: File tree, persistence and data model approach, required endpoints, track reorder strategy, Liked Songs handling, JWT validation, env vars, dependencies, validation steps
-- [ ] **Step 2 — Generate**: All source files, Dockerfile, dependency manifest, `.env.example`, schema/migration, unit tests, integration tests, README section
-- [ ] **Step 3 — Validate/Fix**: Review against acceptance criteria; fix and return only changed files
+- [x] **Step 1 — Plan**: File tree, persistence and data model approach, required endpoints, track reorder strategy, Liked Songs handling, JWT validation, env vars, dependencies, validation steps
+- [x] **Step 2 — Generate**: All source files, Dockerfile, dependency manifest, `.env.example`, schema/migration, unit tests, integration tests, README section
+- [x] **Step 3 — Validate/Fix**: Review against acceptance criteria; fix and return only changed files
 
 ### Acceptance Criteria
-- [ ] All 8 required endpoints exist and return correct HTTP status codes
-- [ ] All endpoints return `401` when no valid JWT is provided
-- [ ] `POST /playlists` creates a playlist owned by the authenticated user
-- [ ] `GET /playlists` returns only playlists belonging to the authenticated user
-- [ ] `POST /playlists/:id/tracks` adds a track; `DELETE` removes it; `PATCH /reorder` updates track order transactionally
-- [ ] "Liked Songs" playlist is automatically available per user and cannot be deleted via `DELETE /playlists/:id`
-- [ ] Service uses its own dedicated persistence layer
-- [ ] Dockerfile builds and container starts without errors
-- [ ] `.env.example` is complete
-- [ ] No requirements from the brief are missing; no extra requirements added
-- [ ] Unit tests cover the core business logic of the service
-- [ ] Integration tests cover the required endpoints and persistence behavior where applicable
-- [ ] Protected endpoint behavior is tested for valid and invalid JWT access where applicable
-- [ ] Test suite passes successfully
+- [x] All 8 required endpoints exist and return correct HTTP status codes
+- [x] All endpoints return `401` when no valid JWT is provided
+- [x] `POST /playlists` creates a playlist owned by the authenticated user
+- [x] `GET /playlists` returns only playlists belonging to the authenticated user
+- [x] `POST /playlists/:id/tracks` adds a track; `DELETE` removes it; `PATCH /reorder` updates track order transactionally
+- [x] "Liked Songs" playlist is automatically available per user and cannot be deleted via `DELETE /playlists/:id`
+- [x] Service uses its own dedicated persistence layer
+- [x] Dockerfile builds and container starts without errors
+- [x] `.env.example` is complete
+- [x] No requirements from the brief are missing; no extra requirements added
+- [x] Unit tests cover the core business logic of the service
+- [x] Integration tests cover the required endpoints and persistence behavior where applicable
+- [x] Protected endpoint behavior is tested for valid and invalid JWT access where applicable
+- [x] Test suite passes successfully — 44/44 tests pass (21 unit + 1 context + 22 integration); Docker image builds cleanly
 
 ---
 
