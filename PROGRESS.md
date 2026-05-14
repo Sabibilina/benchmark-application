@@ -205,20 +205,20 @@ Services are built **one at a time** in the order below. Each service goes throu
 ### Steps
 - [x] **Step 1 — Plan**: File tree, persistence approach, history endpoint design, aggregation approach, metrics exposure approach, JWT validation, env vars, dependencies, validation steps
 - [x] **Step 2 — Generate**: All source files, Dockerfile, dependency manifest, `.env.example`, schema/migration, unit tests, integration tests, README section
-- [ ] **Step 3 — Validate/Fix**: Review against acceptance criteria; fix and return only changed files
+- [x] **Step 3 — Validate/Fix**: Review against acceptance criteria; fix and return only changed files
 
 ### Acceptance Criteria
-- [ ] `GET /analytics/me/history` is implemented
-- [ ] Listen history persists across sessions
-- [ ] Playback events are aggregated into chart data
-- [ ] Global play-count-based rankings are computable
-- [ ] Metrics suitable for Prometheus scraping are exposed
-- [ ] The service uses its own dedicated persistence layer
-- [ ] Dockerfile builds and container starts without errors
-- [ ] `.env.example` is complete
-- [ ] No requirements from the brief are missing; no extra requirements added
-- [ ] Unit tests cover the core business logic of the service
-- [ ] Integration tests cover the required endpoints and persistence behavior where applicable
+- [x] `GET /analytics/me/history` is implemented
+- [x] Listen history persists across sessions
+- [x] Playback events are aggregated into chart data
+- [x] Global play-count-based rankings are computable
+- [x] Metrics suitable for Prometheus scraping are exposed
+- [x] The service uses its own dedicated persistence layer
+- [x] Dockerfile builds and container starts without errors
+- [x] `.env.example` is complete
+- [x] No requirements from the brief are missing; no extra requirements added
+- [x] Unit tests cover the core business logic of the service
+- [x] Integration tests cover the required endpoints and persistence behavior where applicable
 - [ ] Protected endpoint behavior is tested for valid and invalid JWT access where applicable
 - [ ] Test suite passes successfully
 

@@ -2155,7 +2155,7 @@ Planned service variables:
 * Live smoke validation confirmed unauthenticated and malformed Bearer token requests to `GET /analytics/me/history` return `401`.
 * Live smoke validation inserted two `play.started` rows into ClickHouse through `clickhouse-client` and confirmed:
   * `/actuator/health` returns `UP`;
-  * authenticated `GET /analytics/me/history?size=5` returns the persisted events for `analytics-smoke-user`;
+  * authenticated `GET /analytics/me/history?size=5` returns the persisted events when the ClickHouse `user_id` matches the Auth-issued UUID stored in the JWT `sub`;
   * authenticated `GET /analytics/charts/global?limit=5` returns `song-smoke-1` with a play count of `2`.
 
 #### Generation Decisions Recorded
@@ -2180,3 +2180,29 @@ Planned service variables:
 * `play.started` is the event type counted for global play-count rankings.
 * The should-have global chart endpoint is included because it is explicitly documented, but personal charts/statistics remain out of scope.
 * The controller integration tests use mocked persistence; live ClickHouse behavior was validated through Docker Compose smoke checks.
+
+### Phase 6 Analytics Identity Fix
+
+#### Fix Recorded
+
+* Corrected Analytics identity handling so playback events and `/analytics/me/history` use the same canonical authenticated identity end-to-end.
+* The canonical identity is the Auth-issued UUID stored in JWT `sub`; Analytics now rejects non-UUID JWT subjects for history requests and ignores playback events whose `userId` is not a UUID.
+* Updated tests to use UUID-form user ids instead of placeholder names such as `analytics-smoke-user` or `user-1`.
+* Verified history should include stored `play.started`, `play.ended`, and `play.skipped` events, while global charts continue counting only `play.started`.
+
+#### Decisions Recorded
+
+| Decision | Why | Justification | Affected files/services |
+| --- | --- | --- | --- |
+| Treat the Auth-issued UUID in JWT `sub` as the canonical Analytics user identity. | Streaming already emits playback event `userId` from JWT `sub`, and history reads by JWT `sub`; hard-coded smoke users caused stored rows and authenticated queries to diverge. | `REQUIREMENTS.md` M-13 and M-25; prior Streaming decision to emit JWT subject as playback event user id. | `UserPrincipalResolver`, `PlaybackEventConsumer`, Analytics tests, README. |
+| Reject non-UUID JWT subjects and ignore non-UUID playback event user ids. | Auth tokens use UUID subjects, so accepting placeholder identities can create history rows that no real authenticated user can retrieve. | Auth Service JWT behavior; `REQUIREMENTS.md` M-13 and M-25. | `UserPrincipalResolver`, `PlaybackEventConsumer`, tests. |
+| Keep listen history inclusive of stored `play.started`, `play.ended`, and `play.skipped` events. | The documents require persistent listen history but do not say history starts only after `play.ended`; the approved plan stored all supported playback events and reserved `play.started` counting for global charts. | `ARCHITECTURE.md` Analytics behavior; `REQUIREMENTS.md` M-13 and M-14; Phase 6 Step 1 plan. | `AnalyticsServiceTest`, README, no repository filter change. |
+| Preserve the existing single-broker Kafka Compose configuration. | The requested fix was limited to Analytics identity/history behavior and explicitly said Kafka ingestion and the Docker Compose broker fix already work. | User instruction for current fix. | No Kafka Compose settings changed. |
+
+#### Validation Recorded
+
+* Ran Analytics unit and integration tests through the Analytics Maven test suite.
+* Rebuilt the Analytics container with Docker Compose.
+* Started `kafka`, `analytics-db`, and `analytics-service` with Docker Compose.
+* Confirmed live smoke rows using the same UUID as the JWT `sub` are returned by `/analytics/me/history`; the smoke check returned two matching events with `play.ended` and `play.started`.
+* Confirmed live global charts still count `play.started`; the smoke song appeared in the chart response with a positive play count.

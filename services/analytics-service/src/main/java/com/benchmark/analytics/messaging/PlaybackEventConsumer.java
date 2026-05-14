@@ -3,6 +3,7 @@ package com.benchmark.analytics.messaging;
 import com.benchmark.analytics.persistence.AnalyticsEventRecord;
 import com.benchmark.analytics.persistence.AnalyticsEventRepository;
 import java.util.List;
+import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.kafka.annotation.KafkaListener;
@@ -35,8 +36,18 @@ public class PlaybackEventConsumer {
                 && SUPPORTED_EVENT_TYPES.contains(event.type())
                 && event.userId() != null
                 && !event.userId().isBlank()
+                && isCanonicalUserId(event.userId())
                 && event.songId() != null
                 && !event.songId().isBlank()
                 && event.timestamp() != null;
+    }
+
+    private boolean isCanonicalUserId(String userId) {
+        try {
+            UUID.fromString(userId);
+            return true;
+        } catch (IllegalArgumentException ex) {
+            return false;
+        }
     }
 }
