@@ -1,0 +1,51 @@
+server:
+  port: ${SERVER_PORT:8080}
+
+spring:
+  application:
+    name: recommendation-service
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://recommendation-db:5432/recommendation}
+    username: ${SPRING_DATASOURCE_USERNAME:benchmark}
+    password: ${SPRING_DATASOURCE_PASSWORD:benchmark}
+  flyway:
+    enabled: true
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+  data:
+    redis:
+      url: ${REDIS_URL:redis://recommendation-redis:6379}
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:kafka:9092}
+    consumer:
+      group-id: ${RECOMMENDATION_KAFKA_CONSUMER_GROUP_ID:recommendation-service}
+      key-deserializer: org.springframework.kafka.support.serializer.ErrorHandlingDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.ErrorHandlingDeserializer
+      properties:
+        spring.deserializer.key.delegate.class: org.apache.kafka.common.serialization.StringDeserializer
+        spring.deserializer.value.delegate.class: org.springframework.kafka.support.serializer.JsonDeserializer
+        spring.json.trusted.packages: com.benchmark.recommendation.messaging
+        spring.json.value.default.type: com.benchmark.recommendation.messaging.PlaybackEvent
+        spring.json.use.type.headers: false
+      auto-offset-reset: earliest
+
+app:
+  jwt:
+    public-key-path: ${JWT_PUBLIC_KEY_PATH:/run/config/jwt/public.pem}
+  recommendation:
+    playback-events-topic: ${RECOMMENDATION_PLAYBACK_EVENTS_TOPIC:playback-events}
+    default-limit: ${RECOMMENDATION_DEFAULT_LIMIT:10}
+    max-limit: ${RECOMMENDATION_MAX_LIMIT:50}
+    cache-ttl: ${RECOMMENDATION_CACHE_TTL:PT5M}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true

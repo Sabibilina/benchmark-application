@@ -2535,3 +2535,49 @@ Assumptions for this phase:
 | Use simple deterministic heuristics for first-version recommendations. | The architecture allows simple recommendation quality in the first version as long as endpoints and behavior are functional. | `ARCHITECTURE.md` Recommendation behavior; `REQUIREMENTS.md` M-15 and M-16. | `RecommendationService`, unit tests. |
 | Include Kafka deserialization robustness from the start. | Analytics already exposed that old type headers or malformed messages can block consumers; Recommendation consumes the same event stream. | Prior Analytics validation finding; `TECH-STACK.md` Kafka consumer choice. | `KafkaConsumerConfig`, Kafka integration tests. |
 | Do not add synchronous Catalog/Analytics calls in this phase. | The Recommendation source documents require endpoints and event consumption, but do not define cross-service query contracts for enrichment. | Missing detail in `ARCHITECTURE.md` and `REQUIREMENTS.md`. | No WebClient/Resilience4j dependency planned for this phase. |
+
+## Phase 7 Step 2 Generation - Recommendation Service
+
+### Completed Implementation
+
+Generated a runnable Recommendation Service implementation under `services/recommendation-service` with:
+
+* Java 21 Spring Boot Maven application source.
+* JWT-protected REST endpoints:
+  * `GET /recommend/daily-mix`
+  * `GET /recommend/similar/{songId}`
+* Kafka consumer for Streaming playback events on the configured `playback-events` topic.
+* PostgreSQL-backed recommendation state:
+  * `user_song_interactions`
+  * `song_affinities`
+* Redis-backed cache for default daily mix and similar-song responses.
+* Flyway migration, Dockerfile, service `.env.example`, root `.env.example` updates, Compose environment wiring, and service README.
+* Unit and integration tests covering recommendation logic, cache behavior, JWT endpoint protection, repository persistence queries, event consumer behavior, and Kafka deserialization robustness.
+
+### Generation Decisions
+
+| Decision | Why | Justification | Affected files/services |
+| --- | --- | --- | --- |
+| Implemented Recommendation as a Spring Boot 3.3.5 Maven service on Java 21. | This matches the approved Phase 7 plan and the shared backend stack. | `TECH-STACK.md` backend standard; Phase 7 Step 1 plan. | `services/recommendation-service/pom.xml`, `RecommendationServiceApplication`, Dockerfile. |
+| Used JWT resource-server validation with the shared RSA public key and required UUID `sub` values for authenticated user identity. | Recommendation endpoints are protected, and previous services use JWT `sub` as canonical authenticated identity. | `REQUIREMENTS.md` M-25; `ARCHITECTURE.md` Auth/JWT rules; Phase 7 Step 1 assumptions. | `SecurityConfig`, `KeyConfig`, `PemKeyLoader`, `UserPrincipalResolver`, controller tests. |
+| Implemented only the two documented Recommendation endpoints. | The documents and approved plan define daily mix and similar-song interfaces only. | `REQUIREMENTS.md` M-15; Phase 7 Step 1 plan. | `RecommendationController`, `RecommendationService`, README. |
+| Consumed Streaming playback event JSON using the existing Streaming field names `type` and `timestamp`, while accepting `eventType` and `occurredAt` as aliases. | The current Streaming service emits `PlaybackEvent(UUID eventId, String type, String userId, String songId, Instant timestamp)`. Accepting aliases keeps the consumer tolerant without changing the canonical event shape. | Existing `services/streaming-service/src/main/java/com/benchmark/streaming/messaging/PlaybackEvent.java`; Phase 7 Step 1 plan listed `type` and `timestamp`; Analytics robustness lesson. | `PlaybackEvent`, `RecommendationService`, Kafka robustness test. |
+| Stored durable recommendation state in PostgreSQL and cached derived responses in Redis. | The approved plan assigns PostgreSQL + Redis to Recommendation, with Redis as cache rather than source of truth. | `TECH-STACK.md` Recommendation persistence choice; `ARCHITECTURE.md` dedicated persistence rule. | `V1__create_recommendation_tables.sql`, entities, repositories, `RecommendationCache`, `docker-compose.yml`. |
+| Used `BIGSERIAL` internal table ids and stored canonical UUID user identities as string values after validation. | This matches the generated migration style already present in the local Recommendation DB volume and keeps the externally meaningful user identity as the validated JWT UUID. | Phase 7 Step 1 did not require internal primary-key UUIDs; `REQUIREMENTS.md` requires canonical authenticated identity but not a database column type. | `UserSongInteraction`, `SongAffinity`, repositories, migration, repository tests. |
+| Treated `play.started` and `play.ended` as positive recommendation signals and persisted `play.skipped` as non-positive interaction state. | The approved plan explicitly left skipped treatment as missing detail and assumed started/ended are positive while skipped is persisted but not positive. | Phase 7 Step 1 assumptions; `REQUIREMENTS.md` M-16 requires playback interaction consumption. | `RecommendationService`, unit tests. |
+| Used deterministic heuristic ranking instead of ML. | The documented baseline allows simple recommendation quality, and no ML model/training requirements exist. | `REQUIREMENTS.md` M-15; Phase 7 Step 1 decision to avoid invented ML requirements. | `RecommendationService`, service tests. |
+| Configured Kafka `ErrorHandlingDeserializer`, ignored producer type headers, and added a bad-record robustness integration test. | A malformed or legacy-typed Kafka record should not block later valid playback events. | Analytics Kafka robustness correction; Phase 7 Step 1 plan. | `application.yml`, `KafkaConsumerConfig`, `PlaybackEventKafkaRobustnessIntegrationTest`. |
+| Added Compose env vars for topic, consumer group, limits, and cache TTL. | These were identified in the approved plan as phase configuration values. | Phase 7 Step 1 env var plan. | `.env.example`, `services/recommendation-service/.env.example`, `docker-compose.yml`, `application.yml`. |
+
+### Validation Performed During Generation
+
+* `docker compose build recommendation-service` passed, including the Maven test suite.
+* `docker compose up -d recommendation-service` started Recommendation with `recommendation-db`, `recommendation-redis`, and `kafka`.
+* `GET http://localhost:8087/actuator/health` returned `UP`.
+* Unauthenticated `GET http://localhost:8087/recommend/daily-mix` returned `401`.
+
+### Assumptions Preserved
+
+* Recommendation responses contain song ids, rank, and reason only; no Catalog metadata enrichment was added because no cross-service enrichment contract is defined.
+* Redis remains a recomputable cache and PostgreSQL remains the durable recommendation source of truth.
+* Recommendation endpoints may return an empty list before playback-derived recommendation state exists; tests cover non-empty behavior when state exists.
