@@ -2206,3 +2206,34 @@ Planned service variables:
 * Started `kafka`, `analytics-db`, and `analytics-service` with Docker Compose.
 * Confirmed live smoke rows using the same UUID as the JWT `sub` are returned by `/analytics/me/history`; the smoke check returned two matching events with `play.ended` and `play.started`.
 * Confirmed live global charts still count `play.started`; the smoke song appeared in the chart response with a positive play count.
+
+### Phase 6 Analytics Kafka Deserialization Robustness Fix
+
+#### Fix Recorded
+
+* Updated the Analytics Kafka consumer so one malformed or incompatible record in `playback-events` cannot permanently block consumption of later valid records.
+* Replaced direct Kafka key/value deserializers with Spring Kafka `ErrorHandlingDeserializer` delegates:
+  * key delegate: `StringDeserializer`;
+  * value delegate: `JsonDeserializer`.
+* Configured Analytics to ignore producer type headers and deserialize valid JSON into `com.benchmark.analytics.messaging.PlaybackEvent`.
+* Kept trusted packages scoped to `com.benchmark.analytics.messaging` rather than broadening trust to the Streaming service package.
+* Added a Kafka listener `DefaultErrorHandler` that treats deserialization failures as non-retryable and skips those records, while preserving short retries for other listener failures.
+* Added an embedded-Kafka regression test that publishes malformed bytes followed by valid playback-event JSON carrying the old Streaming type header, then verifies the valid record is consumed.
+
+#### Decisions Recorded
+
+| Decision | Why | Justification | Affected files/services |
+| --- | --- | --- | --- |
+| Use `ErrorHandlingDeserializer` for Analytics Kafka key and value deserialization. | Deserialization failures occur before the listener method runs; without the error-handling wrapper, one bad record can pin the consumer offset. | Live smoke failure logs; `TECH-STACK.md` Analytics Kafka consumer choice. | `application.yml`, Analytics Kafka consumer runtime. |
+| Ignore producer type headers and use the Analytics `PlaybackEvent` default value type. | Older records can carry `com.benchmark.streaming.messaging.PlaybackEvent` type headers even though the JSON shape is compatible; Analytics should consume the contract shape without trusting Streaming implementation classes. | Existing Streaming playback event contract; `REQUIREMENTS.md` M-14. | `application.yml`, `PlaybackEventKafkaRobustnessIntegrationTest`. |
+| Keep trusted packages limited to `com.benchmark.analytics.messaging`. | The bug can be fixed without broadening deserialization trust beyond the Analytics-owned message DTO. | Security-focused deserialization configuration; user instruction not to broaden trust more than necessary. | `application.yml`. |
+| Add a `DefaultErrorHandler` that skips deserialization failures but retries other listener failures briefly. | Bad Kafka records should not block later valid events, but non-deserialization listener failures should not be silently dropped immediately. | Live smoke failure behavior; reliability requirement implied by Analytics event aggregation. | `KafkaConsumerConfig`. |
+| Add an embedded-Kafka regression test for bad-record recovery. | Unit tests alone cannot prove consumer offset recovery after a deserialization failure. | User request for tests proving malformed/incompatible records do not permanently stop later valid records. | `PlaybackEventKafkaRobustnessIntegrationTest`. |
+
+#### Validation Recorded
+
+* `docker compose build analytics-service` passed, including the embedded-Kafka regression test.
+* `docker compose up -d --build kafka analytics-db analytics-service` passed.
+* `GET /actuator/health` returned `UP`.
+* Analytics logs showed `value.deserializer = class org.springframework.kafka.support.serializer.ErrorHandlingDeserializer`.
+* Analytics logs confirmed subscription to `playback-events`.
