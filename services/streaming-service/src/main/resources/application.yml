@@ -4,6 +4,24 @@ server:
 spring:
   application:
     name: streaming-service
+  kafka:
+    bootstrap-servers: ${SPRING_KAFKA_BOOTSTRAP_SERVERS:localhost:29092}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      acks: all
+
+jwt:
+  public-key-path: ${JWT_PUBLIC_KEY_PATH:/jwt-keys/public.pem}
+
+stream:
+  segment:
+    size-bytes: ${STREAM_SEGMENT_SIZE_BYTES:65536}
+    count: ${STREAM_SEGMENT_COUNT:10}
+
+kafka:
+  topic:
+    playback-events: ${KAFKA_TOPIC_PLAYBACK_EVENTS:playback-events}
 
 management:
   endpoints:

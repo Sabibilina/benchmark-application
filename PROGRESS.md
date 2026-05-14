@@ -153,24 +153,24 @@ Services are built **one at a time** in the order below. Each service goes throu
 ## Phase 4 — Streaming Service
 
 ### Steps
-- [ ] **Step 1 — Plan**: File tree, endpoint design, dummy segment payload strategy, event emission strategy, JWT validation approach, persistence approach if needed, env vars, dependencies, validation steps
-- [ ] **Step 2 — Generate**: All source files, Dockerfile, dependency manifest, `.env.example`, persistence/bootstrap logic if needed, unit tests, integration tests, README section
-- [ ] **Step 3 — Validate/Fix**: Review against acceptance criteria; fix and return only changed files
+- [x] **Step 1 — Plan**: File tree, endpoint design, dummy segment payload strategy, event emission strategy, JWT validation approach, persistence approach if needed, env vars, dependencies, validation steps
+- [x] **Step 2 — Generate**: All source files, Dockerfile, dependency manifest, `.env.example`, persistence/bootstrap logic if needed, unit tests, integration tests, README section
+- [x] **Step 3 — Validate/Fix**: Review against acceptance criteria; fix and return only changed files
 
 ### Acceptance Criteria
-- [ ] `GET /stream/:songId` requires a valid JWT
-- [ ] `GET /stream/:songId` returns a simulated HLS manifest or equivalent stream descriptor
-- [ ] Segment payloads are configurable in size
-- [ ] `play.started`, `play.ended`, and `play.skipped` events are emitted with user, song, and timestamp data
-- [ ] JWT validation uses the Auth Service public key or equivalent shared verification setup
-- [ ] If the service persists state, it uses its own dedicated persistence layer
-- [ ] Dockerfile builds and container starts without errors
-- [ ] `.env.example` is complete
-- [ ] No requirements from the brief are missing; no extra requirements added
-- [ ] Unit tests cover the core business logic of the service
-- [ ] Integration tests cover the required endpoints and persistence behavior where applicable
-- [ ] Protected endpoint behavior is tested for valid and invalid JWT access where applicable
-- [ ] Test suite passes successfully
+- [x] `GET /stream/:songId` requires a valid JWT
+- [x] `GET /stream/:songId` returns a simulated HLS manifest or equivalent stream descriptor
+- [x] Segment payloads are configurable in size
+- [x] `play.started`, `play.ended`, and `play.skipped` events are emitted with user, song, and timestamp data
+- [x] JWT validation uses the Auth Service public key or equivalent shared verification setup
+- [x] If the service persists state, it uses its own dedicated persistence layer (N/A — stateless by spec)
+- [x] Dockerfile builds and container starts without errors
+- [x] `.env.example` is complete
+- [x] No requirements from the brief are missing; no extra requirements added
+- [x] Unit tests cover the core business logic of the service
+- [x] Integration tests cover the required endpoints and persistence behavior where applicable
+- [x] Protected endpoint behavior is tested for valid and invalid JWT access where applicable
+- [x] Test suite passes successfully — 24/24 tests pass (8 unit + 15 integration + 1 context); Docker image builds cleanly
 
 ---
 

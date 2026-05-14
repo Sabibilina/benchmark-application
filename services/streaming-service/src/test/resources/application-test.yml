@@ -1,0 +1,16 @@
+jwt:
+  public-key-path: /tmp/streaming-service-test-keys/public.pem
+
+stream:
+  segment:
+    size-bytes: 1024
+    count: 3
+
+kafka:
+  topic:
+    playback-events: playback-events-test
+
+spring:
+  kafka:
+    producer:
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
