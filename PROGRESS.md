@@ -236,7 +236,7 @@ Services are built **one at a time** in the order below. Each service goes throu
 ## Phase 7 — Recommendation Service
 
 ### Steps
-- [ ] **Step 1 — Plan**: File tree, endpoint design, recommendation strategy, persistence/caching approach if needed, JWT validation, env vars, dependencies, validation steps
+- [x] **Step 1 — Plan**: File tree, endpoint design, recommendation strategy, persistence/caching approach if needed, JWT validation, env vars, dependencies, validation steps
 - [ ] **Step 2 — Generate**: All source files, Dockerfile, Maven build files, `.env.example`, schema/migration, unit tests, integration tests, README section
 - [ ] **Step 3 — Validate/Fix**: Review against acceptance criteria; fix and return only changed files
 

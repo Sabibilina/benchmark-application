@@ -2284,3 +2284,254 @@ Planned service variables:
 * Listen history includes stored `play.started`, `play.ended`, and `play.skipped` events.
 * Global play-count rankings count `play.started` events.
 * The should-have global chart endpoint remains included because `REQUIREMENTS.md` documents it as S-02.
+
+## Phase 7 Step 1 Plan - Recommendation Service
+
+### Source Review
+
+`ARCHITECTURE.md` defines Recommendation Service as the service that generates personalised and song-based recommendations from observed listening behavior. It requires `GET /recommend/daily-mix`, `GET /recommend/similar/:songId`, playback-related interaction consumption, non-empty responses for valid requests, dedicated persistence if recommendation data/models/caches are stored, and functional but simple recommendation quality for the first version.
+
+`REQUIREMENTS.md` requires personalised and song-based recommendation endpoints (`M-15`), playback event consumption with non-empty valid responses (`M-16`), protected endpoint JWT enforcement (`M-25`), metrics suitable for Prometheus (`M-24`), and dedicated persistence where service state is stored (`M-26` from the cross-service persistence rule already used in prior phases).
+
+`TECH-STACK.md` selects Java 21, Spring Boot 3.x, Maven, Kafka consumer messaging, PostgreSQL for durable recommendation state, Redis for low-latency caches, Docker Compose, Prometheus, and Grafana.
+
+No conflicts were found between `ARCHITECTURE.md`, `REQUIREMENTS.md`, and `TECH-STACK.md` for this phase.
+
+### Chosen Stack
+
+* Java 21.
+* Spring Boot 3.x with Maven.
+* Spring Web for HTTP endpoints.
+* Spring Security OAuth2 Resource Server for local JWT verification using the shared RSA public key.
+* Spring Kafka as a Kafka consumer for playback events.
+* Spring Data JPA with PostgreSQL for durable recommendation state.
+* Flyway for PostgreSQL schema migration, matching the established PostgreSQL service pattern in the repository.
+* Spring Data Redis for low-latency recommendation caches.
+* Spring Boot Actuator and Micrometer Prometheus for health and metrics.
+* JUnit 5, Spring Boot Test, Spring Security Test, Mockito, and Spring Kafka Test for validation.
+
+### Planned File Tree
+
+```text
+services/recommendation-service/
+  Dockerfile
+  README.md
+  pom.xml
+  .env.example
+  src/
+    main/
+      java/com/benchmark/recommendation/
+        RecommendationServiceApplication.java
+        config/
+          ClockConfig.java
+          JwtProperties.java
+          KafkaConsumerConfig.java
+          KeyConfig.java
+          RecommendationProperties.java
+          RedisConfig.java
+          SecurityConfig.java
+        controller/
+          ApiError.java
+          ApiExceptionHandler.java
+          RecommendationController.java
+        dto/
+          RecommendationItemResponse.java
+          RecommendationResponse.java
+        entity/
+          SongAffinity.java
+          UserSongInteraction.java
+        messaging/
+          PlaybackEvent.java
+          PlaybackEventConsumer.java
+        repository/
+          SongAffinityRepository.java
+          UserSongInteractionRepository.java
+        security/
+          AuthenticatedUser.java
+          PemKeyLoader.java
+          UserPrincipalResolver.java
+        service/
+          RecommendationService.java
+          RecommendationCache.java
+          RecommendationValidationException.java
+      resources/
+        application.yml
+        db/migration/
+          V1__create_recommendation_tables.sql
+    test/
+      java/com/benchmark/recommendation/
+        controller/
+          RecommendationControllerIntegrationTest.java
+        messaging/
+          PlaybackEventConsumerTest.java
+          PlaybackEventKafkaRobustnessIntegrationTest.java
+        repository/
+          RecommendationRepositoryTest.java
+        service/
+          RecommendationServiceTest.java
+        support/
+          TestKeyFiles.java
+```
+
+### Dependencies
+
+Planned Maven dependencies:
+
+* `spring-boot-starter-web`
+* `spring-boot-starter-security`
+* `spring-boot-starter-oauth2-resource-server`
+* `spring-boot-starter-validation`
+* `spring-boot-starter-data-jpa`
+* `spring-boot-starter-data-redis`
+* `spring-boot-starter-actuator`
+* `spring-kafka`
+* `flyway-core`
+* `flyway-database-postgresql`
+* `postgresql`
+* `micrometer-registry-prometheus`
+* `spring-boot-starter-test`
+* `spring-security-test`
+* `spring-kafka-test`
+* `h2` for repository/service tests where a lightweight relational test store is sufficient.
+
+### Endpoints and Exposed Interfaces
+
+Application endpoints, protected by JWT:
+
+* `GET /recommend/daily-mix`
+  * Returns a non-empty list of recommendation items for the authenticated JWT subject.
+  * Uses user-specific interaction history where available.
+  * Falls back to globally popular or recently observed songs if the user has no interaction history.
+
+* `GET /recommend/similar/{songId}`
+  * Returns a non-empty list of songs similar to the requested song id.
+  * Uses co-listening/co-interaction affinity where available.
+  * Falls back to globally popular or recently observed songs excluding the requested song where possible.
+
+Operational endpoints, public for infrastructure:
+
+* `GET /actuator/health`
+* `GET /actuator/prometheus`
+
+Kafka consumer interface:
+
+* Consumes Streaming playback event JSON from the configured playback-events topic.
+* Expected fields: `eventId`, `type`, `userId`, `songId`, `timestamp`.
+* Supported event types: `play.started`, `play.ended`, `play.skipped`.
+
+No additional public recommendation endpoints are planned for this phase.
+
+### Environment Variables
+
+* `SERVER_PORT` - service HTTP port, default `8080`.
+* `SPRING_DATASOURCE_URL` - PostgreSQL JDBC URL, default Compose value `jdbc:postgresql://recommendation-db:5432/recommendation`.
+* `SPRING_DATASOURCE_USERNAME` - PostgreSQL username.
+* `SPRING_DATASOURCE_PASSWORD` - PostgreSQL password.
+* `REDIS_URL` - Redis connection URL, default Compose value `redis://recommendation-redis:6379`.
+* `KAFKA_BOOTSTRAP_SERVERS` - Kafka bootstrap servers, default `kafka:9092`.
+* `JWT_PUBLIC_KEY_PATH` - shared RSA public key path for JWT verification.
+* `RECOMMENDATION_PLAYBACK_EVENTS_TOPIC` - Kafka topic for playback events, default `playback-events`.
+* `RECOMMENDATION_KAFKA_CONSUMER_GROUP_ID` - Kafka consumer group id, default `recommendation-service`.
+* `RECOMMENDATION_DEFAULT_LIMIT` - default number of recommendations returned.
+* `RECOMMENDATION_MAX_LIMIT` - maximum allowed recommendation limit.
+* `RECOMMENDATION_CACHE_TTL` - Redis TTL for cached recommendation responses.
+
+### Persistence and Messaging Approach
+
+PostgreSQL:
+
+* Store one row per consumed user-song interaction in `user_song_interactions`.
+* Store or maintain simple song-to-song affinity summaries in `song_affinities`.
+* Keep Recommendation Service state in `recommendation-db`; do not write to Catalog, Analytics, Streaming, or Playlist persistence.
+
+Redis:
+
+* Cache daily mix responses per authenticated user.
+* Cache similar-song responses per song id.
+* Cache entries are derived from PostgreSQL/Kafka-observed state and may be safely recomputed.
+
+Kafka:
+
+* Consume the same `playback-events` topic emitted by Streaming Service.
+* Derive user-song interaction records from supported playback events.
+* Update simple affinity state from observed user/song interactions.
+* Use `ErrorHandlingDeserializer` and ignore producer type headers, following the Analytics robustness correction, so one malformed or older type-header record does not block later valid playback events.
+
+Recommendation strategy:
+
+* First version uses simple deterministic heuristics rather than ML:
+  * Daily mix: prefer songs connected to the authenticated user's observed interactions, then globally observed songs, then any known songs from recommendation state.
+  * Similar songs: prefer songs co-observed with the requested song through shared users/interactions, then globally observed songs.
+* Responses are non-empty for valid requests when the service has any observed recommendation state.
+
+### Validation Steps
+
+* Review generated files against `ARCHITECTURE.md`, `REQUIREMENTS.md`, and `TECH-STACK.md`.
+* Run `docker compose build recommendation-service`.
+* Run `docker compose up -d --build kafka recommendation-db recommendation-redis recommendation-service`.
+* Confirm `docker compose ps kafka recommendation-db recommendation-redis recommendation-service` shows required services running.
+* Confirm `/actuator/health` returns healthy status.
+* Confirm `/actuator/prometheus` exposes metrics.
+* Confirm unauthenticated requests to `GET /recommend/daily-mix` and `GET /recommend/similar/{songId}` return `401`.
+* Confirm invalid JWT requests are rejected.
+* Use a valid Auth-issued RS256 JWT to call both recommendation endpoints.
+* Produce or seed playback events and confirm Recommendation consumes them into PostgreSQL state.
+* Confirm both recommendation endpoints return non-empty responses for valid requests after recommendation state exists.
+* Confirm malformed/incompatible Kafka records do not block later valid playback events.
+* Confirm Redis cache is used where applicable without becoming the source of truth.
+
+### Required Unit Tests
+
+* Recommendation service returns a non-empty daily mix when user interaction state exists.
+* Recommendation service falls back to globally observed songs when a user has no interaction state.
+* Similar-song logic returns co-observed/affinity songs for a requested song id.
+* Similar-song logic falls back to global candidates when direct affinity is missing.
+* Request validation rejects invalid limits and blank/invalid song ids.
+* Playback event consumer persists supported events with UUID user ids.
+* Playback event consumer ignores unsupported event types and malformed payload objects.
+* Cache component stores and retrieves daily mix and similar-song responses with configured TTL.
+
+### Required Integration Tests
+
+* `GET /recommend/daily-mix` rejects missing JWT with `401`.
+* `GET /recommend/daily-mix` rejects invalid JWT with `401`.
+* `GET /recommend/daily-mix` returns a non-empty response for a valid JWT when recommendation state exists.
+* `GET /recommend/similar/{songId}` rejects missing JWT with `401`.
+* `GET /recommend/similar/{songId}` rejects invalid JWT with `401`.
+* `GET /recommend/similar/{songId}` returns a non-empty response for a valid JWT when recommendation state exists.
+* Repository integration verifies PostgreSQL persistence for interactions and affinity summaries.
+* Kafka integration verifies a valid playback event is consumed and persisted.
+* Kafka robustness integration verifies a malformed or incompatible record does not block a later valid playback event.
+* Health endpoint integration verifies `/actuator/health` is reachable.
+
+### Missing Details and Assumptions
+
+Missing details:
+
+* Exact recommendation response schema is not defined.
+* Exact recommendation ranking algorithm is not defined.
+* Exact number of recommendations per endpoint is not defined.
+* Exact Redis cache TTL is not defined.
+* Exact treatment of `play.skipped` as positive, negative, or neutral feedback is not defined.
+* Whether Recommendation may call Catalog Service synchronously for metadata enrichment is not defined.
+
+Assumptions for this phase:
+
+* Recommendation responses can contain song ids and ranking metadata without catalog metadata enrichment unless a later frontend phase requires richer display fields.
+* JWT `sub` remains the canonical authenticated user id, matching existing Auth, Playlist, Streaming, and Analytics patterns.
+* `play.started` and `play.ended` count as positive interaction signals; `play.skipped` is persisted but not used as a positive affinity signal in the first version.
+* A simple heuristic recommendation strategy satisfies the documented allowance that first-version recommendation quality may be simple.
+* Redis is a cache, while PostgreSQL is the durable source of truth for recommendation state.
+* The service should not add optional personal analytics, ML model training, external ML platforms, or synchronous cross-service dependencies unless later requirements explicitly introduce them.
+
+### Decisions Recorded
+
+| Decision | Why | Justification | Affected files/services |
+| --- | --- | --- | --- |
+| Implement Recommendation as a Java 21 Spring Boot Maven service. | The shared backend stack uses Java 21, Spring Boot 3.x, and Maven. | `TECH-STACK.md` shared backend standard. | `services/recommendation-service/pom.xml`, Java source tree, Dockerfile. |
+| Protect Recommendation application endpoints with local JWT validation using the shared public key. | All protected endpoints require JWT, and only Auth register/login may be public. | `REQUIREMENTS.md` M-25; `ARCHITECTURE.md` Auth JWT verification rules. | `SecurityConfig`, `PemKeyLoader`, controller tests, Compose key mount. |
+| Use Kafka consumer messaging on `playback-events`. | Recommendation must consume playback interaction data asynchronously. | `REQUIREMENTS.md` M-16; `TECH-STACK.md` Recommendation messaging choice. | `PlaybackEventConsumer`, Kafka config, tests, `docker-compose.yml`. |
+| Use PostgreSQL for durable recommendation state and Redis for cached recommendation responses. | The selected technology stack explicitly assigns PostgreSQL + Redis to Recommendation. | `TECH-STACK.md` Recommendation database choices; `ARCHITECTURE.md` dedicated persistence requirement if data/caches are stored. | `recommendation-db`, `recommendation-redis`, repositories, cache component, migrations. |
+| Use simple deterministic heuristics for first-version recommendations. | The architecture allows simple recommendation quality in the first version as long as endpoints and behavior are functional. | `ARCHITECTURE.md` Recommendation behavior; `REQUIREMENTS.md` M-15 and M-16. | `RecommendationService`, unit tests. |
+| Include Kafka deserialization robustness from the start. | Analytics already exposed that old type headers or malformed messages can block consumers; Recommendation consumes the same event stream. | Prior Analytics validation finding; `TECH-STACK.md` Kafka consumer choice. | `KafkaConsumerConfig`, Kafka integration tests. |
+| Do not add synchronous Catalog/Analytics calls in this phase. | The Recommendation source documents require endpoints and event consumption, but do not define cross-service query contracts for enrichment. | Missing detail in `ARCHITECTURE.md` and `REQUIREMENTS.md`. | No WebClient/Resilience4j dependency planned for this phase. |
