@@ -2581,3 +2581,41 @@ Generated a runnable Recommendation Service implementation under `services/recom
 * Recommendation responses contain song ids, rank, and reason only; no Catalog metadata enrichment was added because no cross-service enrichment contract is defined.
 * Redis remains a recomputable cache and PostgreSQL remains the durable recommendation source of truth.
 * Recommendation endpoints may return an empty list before playback-derived recommendation state exists; tests cover non-empty behavior when state exists.
+
+## Phase 7 Step 3 Validation - Recommendation Service
+
+### Validation Result
+
+Validated the generated Recommendation Service against `ARCHITECTURE.md`, `REQUIREMENTS.md`, `TECH-STACK.md`, and the approved Phase 7 Step 1 plan. No conflicts were found between the source documents.
+
+### Fixes Made During Validation
+
+| Fix | Why | Justification | Affected files/services |
+| --- | --- | --- | --- |
+| Added a Kafka persistence integration test that sends a real embedded-Kafka playback event through the actual consumer/service path and verifies the event is persisted in the service database. | The generated suite already covered listener delegation, Kafka bad-record robustness, repository queries, and endpoint security, but validation needed stronger proof that a valid playback event is consumed and stored by the real service path. | `REQUIREMENTS.md` M-16 requires Recommendation to consume playback events; Phase 7 Step 1 required integration tests for event consumption and persistence behavior. | `PlaybackEventKafkaPersistenceIntegrationTest`, `pom.xml`. |
+| Added Awaitility as a test dependency. | Kafka listener assertions need bounded asynchronous waiting without sleeps or timing races. | Required to make the new Kafka persistence integration test deterministic. | `services/recommendation-service/pom.xml`. |
+
+### Validation Commands and Results
+
+* `docker compose build recommendation-service` passed, including unit and integration tests.
+* `docker compose up -d recommendation-db recommendation-redis kafka recommendation-service` started the required phase services.
+* `GET http://localhost:8087/actuator/health` returned `UP`.
+* `GET http://localhost:8087/actuator/prometheus` returned Prometheus metrics.
+* Unauthenticated `GET http://localhost:8087/recommend/daily-mix` returned `401`.
+* Invalid-token `GET http://localhost:8087/recommend/similar/smoke-song-a` returned `401`.
+* After seeding PostgreSQL recommendation state for an Auth-style UUID subject and signing a JWT with the shared private key:
+  * `GET /recommend/daily-mix` returned a non-empty response.
+  * `GET /recommend/similar/smoke-song-a` returned a non-empty response.
+* `docker compose ps recommendation-service recommendation-db recommendation-redis kafka` showed all required phase containers running.
+
+### Validation Decisions
+
+| Decision | Why | Justification | Affected files/services |
+| --- | --- | --- | --- |
+| Marked all Phase 7 acceptance criteria as validated. | The implementation has the two required endpoints, consumes playback events, uses dedicated PostgreSQL/Redis state, enforces JWT protection, exposes metrics, builds successfully, starts in Compose, and has passing unit/integration tests. | `ARCHITECTURE.md` Recommendation Service; `REQUIREMENTS.md` M-15, M-16, M-24, M-25, M-26; `TECH-STACK.md` Recommendation stack. | `PROGRESS.md`. |
+| Kept Recommendation endpoint responses limited to song ids, rank, and reason. | The source documents do not define a richer response schema or a Catalog enrichment contract. | Missing detail recorded in Phase 7 Step 1; no requirement permits inventing cross-service enrichment. | No source changes. |
+| Treated non-empty response validation as requiring observed recommendation state. | Recommendation depends on consumed playback behavior; returning fabricated songs before any observed state would invent data not defined by the documents. | `ARCHITECTURE.md` says recommendations come from observed listening behavior; Phase 7 Step 1 assumption says responses are non-empty when recommendation state exists. | Tests and live smoke seed state before asserting non-empty responses. |
+
+### Unresolved Issues
+
+* None for Phase 7 Step 3.
