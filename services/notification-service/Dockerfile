@@ -1,8 +1,14 @@
-FROM eclipse-temurin:21-jre-alpine
+FROM maven:3.9.9-eclipse-temurin-21 AS build
+WORKDIR /workspace
+COPY pom.xml .
+RUN mvn -q -DskipTests dependency:go-offline
+COPY src ./src
+RUN mvn -q package
 
-ARG SERVICE_NAME=notification-service
-ENV SERVICE_NAME=${SERVICE_NAME}
+FROM eclipse-temurin:21-jre-alpine
+WORKDIR /app
+COPY --from=build /workspace/target/notification-service-*.jar /app/notification-service.jar
 
 EXPOSE 8080
 
-CMD ["sh", "-c", "echo \"$SERVICE_NAME Phase 0 placeholder container. Service implementation is generated in a later phase.\"; tail -f /dev/null"]
+ENTRYPOINT ["java", "-jar", "/app/notification-service.jar"]

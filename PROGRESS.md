@@ -260,7 +260,7 @@ Services are built **one at a time** in the order below. Each service goes throu
 
 ### Steps
 - [x] **Step 1 — Plan**: File tree, internal event handling design, notification persistence approach, internal exposure approach, env vars, dependencies, validation steps
-- [ ] **Step 2 — Generate**: All source files, Dockerfile, dependency manifest, `.env.example`, persistence/index setup if needed, unit tests, integration tests, README section
+- [x] **Step 2 — Generate**: All source files, Dockerfile, dependency manifest, `.env.example`, persistence/index setup if needed, unit tests, integration tests, README section
 - [ ] **Step 3 — Validate/Fix**: Review against acceptance criteria; fix and return only changed files
 
 ### Acceptance Criteria

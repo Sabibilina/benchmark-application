@@ -2838,3 +2838,38 @@ Assumptions for this phase:
 | Keep the minimum phase internal-only with Actuator and Kafka as exposed interfaces. | `ARCHITECTURE.md` says no public client-facing API is required in the minimum version. | `ARCHITECTURE.md` Notification exposure section. | No application controller required unless generation elects a protected read interface. |
 | Validate retrieval through Mongo repository/service tests unless a read API is explicitly planned later. | The service must persist notifications retrievable from its own storage, but the minimum architecture does not require an HTTP inbox API. | `REQUIREMENTS.md` M-17; `ARCHITECTURE.md` Notification exposure section. | Repository and service tests. |
 | Record missing upstream Playlist event production rather than modifying Playlist in this phase. | The current task is planning Notification only, and earlier Playlist decisions excluded Kafka playlist update production. | Phase scope; `DESIGN-DECISIONS.md` prior Playlist decisions. | Future Playlist or event-source phase may be needed for end-to-end producer wiring. |
+
+## Phase 8 Step 2 Generation - Notification Service
+
+### Completed Generation
+
+Generated a runnable Notification Service implementation under `services/notification-service` with Java 21, Spring Boot, Maven, Kafka consumption, MongoDB persistence, Actuator health, Prometheus metrics, containerization, local environment documentation, and automated tests.
+
+Updated shared runtime wiring so the existing Compose Notification Service receives the playlist event topic and consumer group configuration from environment variables.
+
+### Decisions Recorded
+
+| Decision | Why | Justification | Affected files/services |
+| --- | --- | --- | --- |
+| Implemented Notification as an internal Kafka consumer with no public notification inbox API. | The minimum architecture requires internal event consumption and states no public client-facing API is required. | `ARCHITECTURE.md` Notification Service exposure; `REQUIREMENTS.md` M-17. | `services/notification-service/src/main/java`, no notification controller added. |
+| Added `spring-boot-starter-web` so Actuator health and Prometheus endpoints are served over HTTP. | The phase requires runnable container health and metrics checks, and the service exposes Actuator interfaces. | `ARCHITECTURE.md` monitoring expectations; `PROGRESS.md` Phase 8 validation plan. | `services/notification-service/pom.xml`, `application.yml`, Docker runtime port. |
+| Used MongoDB documents with recipient/time and source-event indexes. | Notification state belongs in the service's own dedicated persistence layer and must support persisted in-app notifications. | `TECH-STACK.md` Notification persistence choice; `REQUIREMENTS.md` M-17 and M-26. | `NotificationDocument`, `NotificationRepository`, `notification-db`. |
+| Used `sourceEventId` as the idempotency key for playlist event processing. | Kafka delivery can repeat records, and duplicate playlist updates should not create duplicate notifications. | Phase 8 approved plan; messaging reliability expectation from existing service patterns. | `NotificationDocument`, `NotificationService`, service tests. |
+| Configured Kafka with `ErrorHandlingDeserializer`, the local `PlaylistUpdateEvent` default type, and ignored producer type headers. | A malformed or incompatible internal event must not block later valid events; this follows the robustness pattern already fixed for Analytics. | Phase 8 approved plan; prior Analytics Kafka robustness correction in `BUGS.md` and `DESIGN-DECISIONS.md`. | `application.yml`, `KafkaConsumerConfig`, `PlaylistUpdateKafkaIntegrationTest`. |
+| Persisted one notification per `recipientUserIds` entry for supported `playlist.updated` events. | The documents do not define collaborator lookup or recipient derivation, so the event contract carries recipients explicitly. | Phase 8 approved plan missing-detail assumptions; `REQUIREMENTS.md` M-17. | `PlaylistUpdateEvent`, `NotificationEventMapper`, unit tests. |
+| Did not implement email, push, SMTP, external delivery, or frontend inbox behavior. | Email and push are out of scope, and frontend notification retrieval is optional only if an inbox API is implemented later. | `ARCHITECTURE.md` Notification out-of-scope section; `REQUIREMENTS.md` W-01. | No mail/push dependencies; no inbox controller. |
+| Added a public Spring constructor annotation for `NotificationService` after container smoke testing found ambiguous constructor selection. | The service has a test-only constructor overload; Spring needed the production constructor to be explicit for container startup. | Runnable generation requirement; Spring Boot dependency injection behavior. | `NotificationService.java`. |
+
+### Validation Performed During Generation
+
+* `docker compose build notification-service` passed and ran the Notification unit and Kafka integration test suite.
+* `docker compose up -d --force-recreate kafka notification-db notification-service` started the required runtime services.
+* `GET http://localhost:8088/actuator/health` returned `UP`.
+* `GET http://localhost:8088/actuator/prometheus` returned HTTP `200`.
+* Published a `playlist.updated` smoke event to `playlist-events`; `notification-db.notifications` stored the expected recipient notification with `sourceEventId` `phase8-step2-smoke-001`.
+
+### Assumptions Preserved
+
+* Playlist Service still does not publish playlist update events in this repository state; Phase 8 validates Notification's consumer contract without modifying Playlist.
+* `recipientUserIds` is supplied by playlist update events because no document defines a synchronous recipient lookup contract.
+* A future protected inbox API can be planned separately if the frontend phase requires notification retrieval.
