@@ -180,23 +180,23 @@ Services are built **one at a time** in the order below. Each service goes throu
 ### Steps
 - [x] **Step 1 — Plan**: File tree, endpoint design, search strategy, filter logic, persistence/indexing approach if needed, env vars, dependencies, validation steps
 - [x] **Step 2 — Generate**: All source files, Dockerfile, dependency manifest, `.env.example`, schema/migration with indexes, data population script, unit tests, integration tests, README section
-- [ ] **Step 3 — Validate/Fix**: Review against acceptance criteria; fix and return only changed files
+- [x] **Step 3 — Validate/Fix**: Review against acceptance criteria; fix and return only changed files
 
 ### Acceptance Criteria
-- [ ] `GET /search` supports text search
-- [ ] Genre filtering works
-- [ ] BPM range filtering works
-- [ ] Year filtering works
-- [ ] Combined filters work together
-- [ ] If search indexes or cached search data are stored, the service uses its own dedicated persistence layer
-- [ ] The method used to populate search data is documented
-- [ ] Dockerfile builds and container starts without errors
-- [ ] `.env.example` is complete
-- [ ] No requirements from the brief are missing; no extra requirements added
-- [ ] Unit tests cover the core business logic of the service
-- [ ] Integration tests cover the required endpoints and persistence behavior where applicable
-- [ ] Protected endpoint behavior is tested for valid and invalid JWT access where applicable
-- [ ] Test suite passes successfully
+- [x] `GET /search` supports text search
+- [x] Genre filtering works
+- [x] BPM range filtering works
+- [x] Year filtering works
+- [x] Combined filters work together
+- [x] If search indexes or cached search data are stored, the service uses its own dedicated persistence layer
+- [x] The method used to populate search data is documented
+- [x] Dockerfile builds and container starts without errors
+- [x] `.env.example` is complete
+- [x] No requirements from the brief are missing; no extra requirements added
+- [x] Unit tests cover the core business logic of the service
+- [x] Integration tests cover the required endpoints and persistence behavior where applicable
+- [x] Protected endpoint behavior is tested for valid and invalid JWT access where applicable
+- [x] Test suite passes successfully
 
 ---
 

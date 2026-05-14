@@ -1833,3 +1833,52 @@ Planned service variables:
 * `title`, `artist`, `album`, `genre`, `bpm`, and `year` are sufficient indexed fields for the required song search and filters.
 * Query result ordering follows OpenSearch relevance by default because the source documents do not specify sorting.
 * The health and Prometheus Actuator endpoints are operational endpoints and remain public.
+
+### Phase 5 Step 3 Review - Search Service
+
+#### Review Results
+
+* Reviewed Search Service against `ARCHITECTURE.md`, `REQUIREMENTS.md`, `TECH-STACK.md`, and the approved Phase 5 plan.
+* Confirmed no conflicts were found between the source documents for this Search phase.
+* Confirmed the required protected endpoint `GET /search?q=&genre=&bpm_min=&bpm_max=&year=` exists.
+* Confirmed Search supports text search over songs and filters by genre, BPM range, year, and combined filter requests.
+* Confirmed Search uses OpenSearch as its own dedicated search persistence/index layer and does not share the Catalog PostgreSQL database.
+* Confirmed Search populates its derived OpenSearch index from the read-only mounted Kaggle catalog CSV, and the method is documented in the service README.
+* Confirmed no optional autocomplete endpoint, expanded artist/album/playlist endpoint, email/push behavior, object storage, or Kafka messaging was added to Search.
+* Confirmed the implementation follows Java 21, Spring Boot 3.x, Maven, Docker, Docker Compose, Actuator, Micrometer Prometheus, and OpenSearch choices from `TECH-STACK.md`.
+
+#### Fixes Made During Review
+
+No repository file fixes were required during this review step. The generated Search implementation, configuration, containerization, tests, and documentation matched the approved plan.
+
+#### Validation Commands Run
+
+* `docker compose build search-service` passed.
+* `docker compose config --quiet` passed. Docker emitted the known sandbox warning about `C:\Users\thele\.docker\config.json` access, but the command exited successfully.
+* `docker compose build --no-cache search-service` passed and executed the Maven package/test path.
+* `docker compose up -d --build search-opensearch search-service` passed.
+* `docker compose ps search-opensearch search-service` confirmed OpenSearch is healthy and Search Service is running.
+* Search Service logs confirmed startup indexing completed with `85000` catalog documents indexed into the `songs` OpenSearch index.
+* Live smoke validation confirmed:
+  * unauthenticated `GET /search?q=love` returns `401`;
+  * malformed Bearer token access returns `401`;
+  * `/actuator/health` returns `UP`;
+  * authenticated `GET /search?q=love&size=2` returns indexed results;
+  * authenticated BPM range and year filter requests return indexed results;
+  * authenticated `GET /search?genre=Pop&size=2` returns `Pop` results;
+  * authenticated combined `GET /search?genre=Pop&bpm_min=0&bpm_max=300&year=2020&size=2` returns `Pop` results from year `2020`.
+
+#### Review Decisions and Corrections Recorded
+
+| Decision, correction, or finding | Why | Justification | Affected files/services |
+| --- | --- | --- | --- |
+| Mark Search validation complete after no-cache build tests, Compose config validation, container startup, OpenSearch indexing, and live JWT/filter smoke checks passed. | The implementation, tests, containerization, authentication, persistence/indexing, and required search filters met the Search acceptance criteria. | `REQUIREMENTS.md` M-12, M-24, M-25, M-26; backend testing requirements. | `PROGRESS.md`, `DESIGN-DECISIONS.md`, `services/search-service`. |
+| Keep genre filtering as exact keyword matching using the indexed genre value. | `GET /search?genre=pop` returned no live results because the Kaggle CSV stores the sampled value as `Pop`; exact keyword matching is appropriate for a structured genre filter and the API works when the indexed value is used. | `REQUIREMENTS.md` M-12; `TECH-STACK.md` Search backend. | `OpenSearchQueryBuilder`, live validation notes. |
+| Keep the Search index population method unchanged. | The read-only CSV startup import completed successfully and preserved the service-owned OpenSearch index boundary. | Phase 5 Step 1 and Step 2 decisions; `REQUIREMENTS.md` M-26. | `SearchIndexInitializer`, `CatalogCsvReader`, `docker-compose.yml`, Search README. |
+
+#### Assumptions and Unresolved Issues After Review
+
+* Assumption: Search continues to use the mounted Kaggle catalog CSV as the minimum indexing source until a later phase defines a Catalog-to-Search synchronization contract.
+* Assumption: Genre filters use the dataset's exact genre spelling/casing.
+* Assumption: OpenSearch relevance ordering is acceptable because the source documents do not define sorting.
+* No unresolved Search implementation or test issues remain for this phase.
