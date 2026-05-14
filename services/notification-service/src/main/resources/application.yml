@@ -4,6 +4,28 @@ server:
 spring:
   application:
     name: notification-service
+  data:
+    mongodb:
+      uri: ${SPRING_DATA_MONGODB_URI:mongodb://mongouser:mongopass@localhost:27017/notificationdb?authSource=admin}
+      auto-index-creation: true
+  kafka:
+    bootstrap-servers: ${SPRING_KAFKA_BOOTSTRAP_SERVERS:localhost:29092}
+    consumer:
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      auto-offset-reset: earliest
+  jackson:
+    serialization:
+      write-dates-as-timestamps: false
+
+jwt:
+  public-key-path: ${JWT_PUBLIC_KEY_PATH:/jwt-keys/public.pem}
+
+kafka:
+  topic:
+    playlist-events: ${KAFKA_TOPIC_PLAYLIST_EVENTS:playlist-events}
+  consumer:
+    group-id: ${KAFKA_CONSUMER_GROUP_ID:notification-service}
 
 management:
   endpoints:

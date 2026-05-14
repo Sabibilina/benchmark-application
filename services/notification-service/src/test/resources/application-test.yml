@@ -1,0 +1,14 @@
+spring:
+  kafka:
+    bootstrap-servers: ${spring.embedded.kafka.brokers}
+    consumer:
+      auto-offset-reset: earliest
+
+jwt:
+  public-key-path: /tmp/notification-service-test-keys/public.pem
+
+kafka:
+  topic:
+    playlist-events: playlist-events-test
+  consumer:
+    group-id: notification-service-test
