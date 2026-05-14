@@ -261,21 +261,30 @@ Services are built **one at a time** in the order below. Each service goes throu
 ### Steps
 - [x] **Step 1 — Plan**: File tree, internal event handling design, notification persistence approach, internal exposure approach, env vars, dependencies, validation steps
 - [x] **Step 2 — Generate**: All source files, Dockerfile, dependency manifest, `.env.example`, persistence/index setup if needed, unit tests, integration tests, README section
-- [ ] **Step 3 — Validate/Fix**: Review against acceptance criteria; fix and return only changed files
+- [x] **Step 3 — Validate/Fix**: Review against acceptance criteria; fix and return only changed files
 
 ### Acceptance Criteria
-- [ ] Internal events are consumed
-- [ ] In-app notifications are persisted in the service’s own storage
-- [ ] At least playlist update events or new release events result in stored notifications
-- [ ] No email or push logic is implemented
-- [ ] The service uses its own dedicated persistence layer
-- [ ] Dockerfile builds and container starts without errors
-- [ ] `.env.example` is complete
-- [ ] No requirements from the brief are missing; no extra requirements added
-- [ ] Unit tests cover the core business logic of the service
-- [ ] Integration tests cover internal event consumption and notification persistence behavior
-- [ ] Internal-service behavior is tested according to the implemented exposure model
-- [ ] Test suite passes successfully
+- [x] Internal events are consumed
+- [x] In-app notifications are persisted in the service’s own storage
+- [x] At least playlist update events or new release events result in stored notifications
+- [x] No email or push logic is implemented
+- [x] The service uses its own dedicated persistence layer
+- [x] Dockerfile builds and container starts without errors
+- [x] `.env.example` is complete
+- [x] No requirements from the brief are missing; no extra requirements added
+- [x] Unit tests cover the core business logic of the service
+- [x] Integration tests cover internal event consumption and notification persistence behavior
+- [x] Internal-service behavior is tested according to the implemented exposure model
+- [x] Test suite passes successfully
+
+### Latest Validation
+- [x] Source documents reviewed against Notification implementation
+- [x] Notification Docker image rebuilt with tests
+- [x] Notification Service, Kafka, and MongoDB started through Docker Compose
+- [x] Health endpoint returned `UP`
+- [x] Prometheus metrics endpoint returned `200`
+- [x] Playlist update Kafka smoke event persisted to `notification-db`
+- [x] No email or push delivery code found
 
 ---
 

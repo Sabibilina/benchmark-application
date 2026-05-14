@@ -2873,3 +2873,32 @@ Updated shared runtime wiring so the existing Compose Notification Service recei
 * Playlist Service still does not publish playlist update events in this repository state; Phase 8 validates Notification's consumer contract without modifying Playlist.
 * `recipientUserIds` is supplied by playlist update events because no document defines a synchronous recipient lookup contract.
 * A future protected inbox API can be planned separately if the frontend phase requires notification retrieval.
+
+## Phase 8 Step 3 Validation - Notification Service
+
+### Review Result
+
+Reviewed the Notification Service implementation against `ARCHITECTURE.md`, `REQUIREMENTS.md`, `TECH-STACK.md`, and the Phase 8 plan. The service matches the approved internal-only Notification shape: Java 21 Spring Boot, Kafka consumer, MongoDB persistence, Actuator health and Prometheus metrics, no public inbox API, and no email or push delivery.
+
+### Correction Made
+
+| Correction | Why | Justification | Affected files/services |
+| --- | --- | --- | --- |
+| Tightened the Kafka integration test to use the real `PlaylistUpdateEventConsumer`, `NotificationService`, and mapper, with only `NotificationRepository` mocked. | The previous test proved malformed Kafka records did not block a later valid event, but it mocked the whole service and therefore did not verify the consumer-to-persistence boundary. | `REQUIREMENTS.md` testing requirements for services that consume internal events; Phase 8 acceptance criterion for internal event consumption and notification persistence behavior. | `services/notification-service/src/test/java/com/benchmark/notification/messaging/PlaylistUpdateKafkaIntegrationTest.java`. |
+
+### Validation Performed
+
+* Re-reviewed required Notification interfaces: Kafka consumption of playlist update events plus Actuator health and Prometheus metrics.
+* Confirmed no public client-facing Notification API was added because the minimum architecture does not require one.
+* Confirmed `notification-db` is the dedicated persistence layer and Notification does not share another service database.
+* Confirmed no email, SMTP, push, Firebase, APNS, Twilio, or SendGrid implementation exists in the Notification Service or its Compose/env wiring.
+* `docker compose build notification-service` passed and ran the unit and integration test suite.
+* `docker compose up -d --force-recreate kafka notification-db notification-service` started required runtime services.
+* `GET http://localhost:8088/actuator/health` returned `UP`.
+* `GET http://localhost:8088/actuator/prometheus` returned HTTP `200`.
+* Published a `playlist.updated` validation event to `playlist-events`; `notification-db.notifications` stored the expected notification with `sourceEventId` `phase8-step3-smoke-001`.
+
+### Assumptions and Unresolved Items
+
+* Playlist Service event production remains outside this phase; Notification's contract and consumer are validated independently.
+* No protected read interface exists because the minimum architecture says no public client-facing API is required. If the frontend inbox is implemented later, that interface must be planned and validated in that phase.

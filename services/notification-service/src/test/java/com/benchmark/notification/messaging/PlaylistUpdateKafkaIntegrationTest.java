@@ -1,12 +1,16 @@
 package com.benchmark.notification.messaging;
 
-import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
-import com.benchmark.notification.service.NotificationService;
+import com.benchmark.notification.document.NotificationDocument;
+import com.benchmark.notification.repository.NotificationRepository;
 import java.time.Instant;
+import java.util.Collection;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import org.apache.kafka.clients.producer.KafkaProducer;
@@ -15,6 +19,7 @@ import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.header.internals.RecordHeader;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -38,10 +43,17 @@ class PlaylistUpdateKafkaIntegrationTest {
     EmbeddedKafkaBroker embeddedKafkaBroker;
 
     @MockBean
-    NotificationService notificationService;
+    NotificationRepository notificationRepository;
+
+    @BeforeEach
+    void setUp() {
+        when(notificationRepository.existsBySourceEventId(anyString())).thenReturn(false);
+        when(notificationRepository.saveAll(org.mockito.ArgumentMatchers.<Collection<NotificationDocument>>any()))
+                .thenAnswer(invocation -> List.copyOf(invocation.getArgument(0)));
+    }
 
     @Test
-    void malformedRecordDoesNotBlockLaterValidPlaylistUpdateEvent() {
+    void malformedRecordDoesNotBlockLaterValidPlaylistUpdateEventPersistence() {
         String topic = "notification-playlist-events-test";
         sendRaw(topic, "not valid json".getBytes(), false);
         UUID eventId = UUID.randomUUID();
@@ -59,12 +71,13 @@ class PlaylistUpdateKafkaIntegrationTest {
                 """.formatted(eventId);
         sendRaw(topic, validJson.getBytes(), true);
 
-        verify(notificationService, timeout(10000)).processPlaylistUpdate(argThat(event ->
-                event != null
-                        && event.eventId().equals(eventId.toString())
-                        && event.eventType().equals("playlist.updated")
-                        && event.recipientUserIds().contains("recipient-user")
-                        && event.occurredAt().equals(Instant.parse("2026-01-01T00:00:00Z"))));
+        verify(notificationRepository, timeout(10000)).saveAll(org.mockito.ArgumentMatchers.<Collection<NotificationDocument>>argThat(
+                documents -> documents.size() == 1
+                        && documents.iterator().next().getSourceEventId().equals(eventId.toString())
+                        && documents.iterator().next().getSourceEventType().equals("playlist.updated")
+                        && documents.iterator().next().getRecipientUserId().equals("recipient-user")
+                        && documents.iterator().next().getSourceAggregateId().equals("playlist-1")
+                        && documents.iterator().next().getCreatedAt().equals(Instant.parse("2026-01-01T00:00:00Z"))));
     }
 
     private void sendRaw(String topic, byte[] value, boolean legacyTypeHeader) {
