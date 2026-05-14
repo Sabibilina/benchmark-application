@@ -2619,3 +2619,222 @@ Validated the generated Recommendation Service against `ARCHITECTURE.md`, `REQUI
 ### Unresolved Issues
 
 * None for Phase 7 Step 3.
+
+## Phase 8 Step 1 Plan - Notification Service
+
+### Source Review
+
+`ARCHITECTURE.md` defines Notification Service as an internal service that stores in-app notifications generated from application events. It requires internal event consumption, notification persistence in the service's own storage, and at least playlist update events or new release events producing stored in-app notifications. It explicitly says no public client-facing API is required in the minimum version, and email/push notifications are out of scope.
+
+`REQUIREMENTS.md` requires Notification Service to consume internal events and persist in-app notifications retrievable from its own storage (`M-17`), requires protected endpoints to use JWT if any protected HTTP interface is exposed (`M-25`), and requires dedicated persistence for stateful services (`M-26`). `W-01` excludes email and push delivery.
+
+`TECH-STACK.md` selects Java 21, Spring Boot, Maven, Apache Kafka consumer messaging, and MongoDB as the dedicated Notification database.
+
+No conflicts were found between `ARCHITECTURE.md`, `REQUIREMENTS.md`, and `TECH-STACK.md` for this phase.
+
+### Chosen Stack
+
+* Java 21.
+* Spring Boot 3.x with Maven.
+* Spring Kafka as a Kafka consumer.
+* Spring Data MongoDB for notification persistence.
+* Spring Boot Actuator and Micrometer Prometheus for health and metrics.
+* Spring Security OAuth2 Resource Server only if a protected read interface is implemented in this phase; otherwise no application HTTP endpoint is planned beyond Actuator.
+* JUnit 5, Spring Boot Test, Mockito, Spring Kafka Test, and embedded MongoDB/Testcontainers if needed for integration validation.
+
+### Planned File Tree
+
+```text
+services/notification-service/
+  Dockerfile
+  README.md
+  pom.xml
+  .env.example
+  src/
+    main/
+      java/com/benchmark/notification/
+        NotificationServiceApplication.java
+        config/
+          KafkaConsumerConfig.java
+          NotificationProperties.java
+          MongoConfig.java
+          JwtProperties.java
+          KeyConfig.java
+          SecurityConfig.java
+        document/
+          NotificationDocument.java
+        messaging/
+          PlaylistUpdateEvent.java
+          PlaylistUpdateEventConsumer.java
+        repository/
+          NotificationRepository.java
+        service/
+          NotificationService.java
+          NotificationEventMapper.java
+          NotificationValidationException.java
+        web/
+          ApiError.java
+          ApiExceptionHandler.java
+    resources/
+      application.yml
+    test/
+      java/com/benchmark/notification/
+        messaging/
+          PlaylistUpdateEventConsumerTest.java
+          PlaylistUpdateKafkaIntegrationTest.java
+        repository/
+          NotificationRepositoryTest.java
+        service/
+          NotificationServiceTest.java
+        support/
+          TestKeyFiles.java
+```
+
+If the generation step keeps the minimum internal-only exposure and no protected read endpoint is implemented, `web/`, `JwtProperties`, `KeyConfig`, `SecurityConfig`, and `TestKeyFiles` may be omitted. If a protected internal read interface is implemented, they should be included and tested.
+
+### Dependencies
+
+Maven dependencies planned:
+
+* `spring-boot-starter-actuator`
+* `spring-boot-starter-data-mongodb`
+* `spring-boot-starter-validation`
+* `spring-kafka`
+* `micrometer-registry-prometheus`
+* `spring-boot-starter-security` and `spring-boot-starter-oauth2-resource-server` only if a protected read interface is implemented
+* `spring-boot-starter-test`
+* `spring-kafka-test`
+* Mongo integration test support through Testcontainers MongoDB or embedded Mongo if available in the local test setup
+* `spring-security-test` only if a protected read interface is implemented
+
+### Endpoints or Exposed Interfaces
+
+Minimum phase interface:
+
+* Kafka consumer for playlist update events.
+* Actuator health and Prometheus metrics:
+  * `GET /actuator/health`
+  * `GET /actuator/prometheus`
+
+No public client-facing Notification API is planned for the minimum version because `ARCHITECTURE.md` says none is required. Notification retrieval will be validated through MongoDB repository/service integration tests, satisfying the requirement that persisted notifications are retrievable from the service's own storage without inventing a frontend inbox API.
+
+If a later phase requires a frontend inbox, a protected read interface can be planned separately.
+
+### Environment Variables
+
+* `SERVER_PORT` - service HTTP port, default `8080`.
+* `MONGODB_URI` - MongoDB connection URI, default Compose value `mongodb://benchmark:benchmark@notification-db:27017/notification?authSource=admin`.
+* `KAFKA_BOOTSTRAP_SERVERS` - Kafka bootstrap servers, default `kafka:9092`.
+* `NOTIFICATION_PLAYLIST_EVENTS_TOPIC` - playlist event topic, planned default `playlist-events`.
+* `NOTIFICATION_KAFKA_CONSUMER_GROUP_ID` - consumer group id, planned default `notification-service`.
+* `JWT_PUBLIC_KEY_PATH` - shared JWT public key path only if a protected read interface is implemented.
+
+Existing Compose already provides `SERVER_PORT`, `MONGODB_URI`, `KAFKA_BOOTSTRAP_SERVERS`, and `JWT_PUBLIC_KEY_PATH`; generation should add the notification topic and consumer group env vars if used.
+
+### Persistence and Messaging Approach
+
+MongoDB:
+
+* Store one document per resulting in-app notification.
+* Planned document fields:
+  * `id`
+  * `recipientUserId`
+  * `type`
+  * `title`
+  * `message`
+  * `sourceEventId`
+  * `sourceEventType`
+  * `sourceAggregateId`
+  * flexible `metadata`
+  * `read`
+  * `createdAt`
+* Keep all Notification state in `notification-db`; do not write notification data into Auth, Catalog, Playlist, Search, Analytics, Recommendation, or Streaming persistence.
+* Create indexes for recipient/time lookup and source event id idempotency.
+
+Kafka:
+
+* Consume playlist update events from `NOTIFICATION_PLAYLIST_EVENTS_TOPIC`.
+* Map supported playlist update event types to in-app notification documents.
+* Treat event id as idempotency key to avoid duplicate stored notifications.
+* Configure `ErrorHandlingDeserializer` and ignore producer type headers, following the Analytics and Recommendation robustness pattern, so malformed or older records do not block later valid records.
+
+Event contract planned for this phase:
+
+```text
+eventId
+eventType
+actorUserId
+recipientUserIds
+playlistId
+playlistName
+occurredAt
+metadata
+```
+
+Supported event type for the minimum phase:
+
+* `playlist.updated`
+
+Additional playlist event names may be accepted only if they are clearly documented during generation and covered by tests. New-release events are not planned because the documents do not define a release source service or event schema.
+
+### Validation Steps
+
+* Review generated files against `ARCHITECTURE.md`, `REQUIREMENTS.md`, `TECH-STACK.md`, and this plan.
+* Run `docker compose build notification-service`.
+* Run `docker compose up -d --build kafka notification-db notification-service`.
+* Confirm `docker compose ps kafka notification-db notification-service` shows required services running.
+* Confirm `/actuator/health` returns healthy status.
+* Confirm `/actuator/prometheus` exposes metrics.
+* Produce or test a valid playlist update event and confirm one notification document is stored for each intended recipient.
+* Confirm duplicate events with the same `eventId` do not create duplicate notifications.
+* Confirm malformed/incompatible Kafka records do not block later valid playlist events.
+* Confirm no email or push delivery logic exists.
+* Confirm the service persists only to `notification-db`.
+
+### Required Unit Tests
+
+* Notification event mapper converts a supported playlist update event into notification documents.
+* Notification service persists notifications for all recipient user ids.
+* Notification service is idempotent for duplicate source event ids.
+* Notification service rejects or ignores malformed events according to the chosen validation behavior.
+* Unsupported event types do not create notifications.
+* No email or push delivery components are present in the implementation.
+
+### Required Integration Tests
+
+* Kafka integration verifies a valid playlist update event is consumed and persisted to MongoDB.
+* Kafka robustness integration verifies a malformed/incompatible record does not block a later valid playlist event.
+* Mongo repository integration verifies notification persistence and retrieval from the service's own storage.
+* Actuator health endpoint integration verifies `/actuator/health` is reachable.
+* If a protected read interface is implemented, endpoint tests must verify missing/invalid JWT returns `401` and valid JWT can read only the authenticated user's notifications.
+
+### Missing Details and Assumptions
+
+Missing details:
+
+* Exact playlist update event schema is not defined in `ARCHITECTURE.md` or `REQUIREMENTS.md`.
+* The current Playlist Service does not publish playlist update Kafka events; its earlier approved phase explicitly left playlist update events out of scope.
+* No new-release source service or event schema is defined.
+* Exact notification title/message copy is not defined.
+* Exact recipient derivation rules for playlist updates are not defined.
+* Exact notification read/unread API is not defined.
+
+Assumptions for this phase:
+
+* The Notification Service can define and consume a minimal `playlist.updated` event contract in its own phase and validate it with tests, even though the current Playlist Service does not yet publish that event.
+* `recipientUserIds` will be present in playlist update events because the documents do not define collaborator lookup or a synchronous Playlist query contract.
+* Notification retrieval can be validated through service/repository access rather than a public HTTP API because the minimum architecture says no public client-facing API is required.
+* Stored notification documents will include a `read` flag for future inbox support, but no read/update endpoint is planned in the minimum phase.
+* Email and push delivery will not be implemented.
+
+### Decisions Recorded
+
+| Decision | Why | Justification | Affected files/services |
+| --- | --- | --- | --- |
+| Implement Notification as a Java 21 Spring Boot Maven service. | This matches the shared backend stack. | `TECH-STACK.md` backend standard. | `services/notification-service/pom.xml`, Java source tree, Dockerfile. |
+| Use MongoDB as the dedicated notification store. | Notification data is event-derived and document-like, and TECH-STACK selects MongoDB. | `TECH-STACK.md` Notification database choice; `REQUIREMENTS.md` M-26. | `notification-db`, `NotificationDocument`, repository, tests. |
+| Consume playlist update events over Kafka. | Notification must consume internal events, and TECH-STACK names playlist update events as the Notification event source. | `REQUIREMENTS.md` M-17; `TECH-STACK.md` Notification messaging choice. | `PlaylistUpdateEventConsumer`, Kafka config, tests, Compose env vars. |
+| Do not plan email or push delivery. | Email and push notifications are explicitly out of scope. | `ARCHITECTURE.md` Notification out-of-scope section; `REQUIREMENTS.md` W-01. | No mail, SMTP, push, or external delivery dependencies. |
+| Keep the minimum phase internal-only with Actuator and Kafka as exposed interfaces. | `ARCHITECTURE.md` says no public client-facing API is required in the minimum version. | `ARCHITECTURE.md` Notification exposure section. | No application controller required unless generation elects a protected read interface. |
+| Validate retrieval through Mongo repository/service tests unless a read API is explicitly planned later. | The service must persist notifications retrievable from its own storage, but the minimum architecture does not require an HTTP inbox API. | `REQUIREMENTS.md` M-17; `ARCHITECTURE.md` Notification exposure section. | Repository and service tests. |
+| Record missing upstream Playlist event production rather than modifying Playlist in this phase. | The current task is planning Notification only, and earlier Playlist decisions excluded Kafka playlist update production. | Phase scope; `DESIGN-DECISIONS.md` prior Playlist decisions. | Future Playlist or event-source phase may be needed for end-to-end producer wiring. |
