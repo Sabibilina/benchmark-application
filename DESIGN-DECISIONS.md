@@ -1781,3 +1781,55 @@ Planned service variables:
 | Do not add Kafka messaging to Search in this phase. | The source documents do not define Search event production or consumption. | `ARCHITECTURE.md` Search Service; `TECH-STACK.md` Messaging Infrastructure per Service. | `pom.xml`, `application.yml`, no Search Kafka config. |
 | Use Actuator and Micrometer Prometheus for Search metrics. | Each service must expose Prometheus-suitable metrics. | `REQUIREMENTS.md` M-24; `TECH-STACK.md` Observability. | `pom.xml`, `application.yml`, `/actuator/prometheus`, Prometheus scrape config if needed. |
 | Document unresolved details rather than filling them in as requirements. | The user instructed that missing details must be listed instead of invented. | User instruction for this planning step. | `DESIGN-DECISIONS.md`, future Search implementation README. |
+
+### Phase 5 Step 2 Generation - Search Service
+
+#### Completed Artifacts
+
+* Replaced the Search placeholder with a runnable Java 21 Spring Boot service.
+* Added Search Service `pom.xml`, Dockerfile, `.env.example`, `application.yml`, and README.
+* Added local JWT validation through the shared public key configuration.
+* Added protected `GET /search` with text search, genre filtering, BPM range filtering, year filtering, and combined filter support.
+* Added OpenSearch index creation and search execution through the OpenSearch REST client.
+* Added startup indexing from the mounted Kaggle catalog CSV into a Search-owned OpenSearch index.
+* Added bounded pagination controls as implementation safety settings.
+* Added Actuator health and Prometheus metrics exposure.
+* Updated `docker-compose.yml` so Search mounts the read-only catalog CSV and waits for a healthy OpenSearch service.
+* Added unit tests for query construction, request validation, CSV mapping, startup indexing, and service response mapping.
+* Added integration tests for JWT protection, required search endpoint behavior, combined filters, invalid request handling, and health.
+
+#### Generation Validation Run
+
+* `docker compose build search-service` initially failed because the OpenSearch REST client uses Apache HttpComponents 4 imports, while the first implementation used HttpComponents 5 imports. The imports and request entity type were corrected.
+* `docker compose build search-service` then passed and executed the Maven package/test path.
+* `docker compose config --quiet` passed. Docker emitted the known sandbox warning about `C:\Users\thele\.docker\config.json` access, but the command exited successfully.
+* `docker compose up -d --build search-opensearch search-service` initially failed because Docker had stale container metadata pointing at a deleted network. The stale Search containers were removed with `docker compose rm -f search-opensearch search-service`, then recreated successfully.
+* The first runtime startup exposed that indexing the whole Kaggle CSV in a single bulk request could exhaust the Search container heap. Startup indexing was corrected to stream the CSV and send bounded OpenSearch bulk batches.
+* `docker compose up -d --build search-opensearch search-service` passed after batching was added.
+* `docker compose ps search-opensearch search-service` confirmed OpenSearch is healthy and Search Service is running.
+* Search logs confirmed `85000` catalog documents were indexed into the `songs` OpenSearch index.
+* Live smoke validation confirmed `/actuator/health` returns `UP`.
+* Live smoke validation with an RS256 JWT signed by the local development private key confirmed `GET /search?q=love&size=2` returns indexed Search results.
+
+#### Generation Decisions Recorded
+
+| Decision | Why | Justification | Affected files/services |
+| --- | --- | --- | --- |
+| Implement Search Service as a Spring Boot Maven service using the same service pattern as Auth, Catalog, Playlist, and Streaming. | The backend stack must remain consistent across services. | `TECH-STACK.md` Shared Backend Standard. | `services/search-service/pom.xml`, Java source tree, Dockerfile. |
+| Use the OpenSearch REST client for index and query operations. | OpenSearch is the selected Search persistence/index layer; the REST client keeps the implementation direct and compatible with the OpenSearch container. | `TECH-STACK.md` Search backend. | `OpenSearchConfig`, `OpenSearchIndexClient`, `pom.xml`. |
+| Store only a Search-owned derived index in OpenSearch. | Catalog owns metadata persistence; Search owns search-specific indexed data and must not share the Catalog database. | `ARCHITECTURE.md` Catalog and Search boundaries; `REQUIREMENTS.md` M-26. | `SearchIndexInitializer`, `docker-compose.yml`, Search README. |
+| Populate the Search index from the mounted Catalog Kaggle CSV at startup. | The source documents require the dataset but do not define Catalog-to-Search synchronization. Startup CSV indexing keeps the phase runnable without inventing an API or event flow. | Phase 5 Step 1 missing details; `ARCHITECTURE.md` Catalog dataset requirement; `REQUIREMENTS.md` M-12. | `CatalogCsvReader`, `SearchIndexInitializer`, `docker-compose.yml`, `.env.example`, README. |
+| Stream CSV indexing in bounded batches with configurable `SEARCH_INDEX_BATCH_SIZE`. | Runtime validation showed a single large bulk request could exhaust the small benchmark container heap with the Kaggle CSV. Batching preserves the startup indexing approach while keeping resource use bounded. | `REQUIREMENTS.md` M-20 benchmark resource configurability; runtime validation finding. | `SearchIndexInitializer`, `SearchProperties`, `application.yml`, `.env.example`, `docker-compose.yml`. |
+| Add an OpenSearch healthcheck and make Search depend on `service_healthy`. | Runtime validation showed Search can start before OpenSearch accepts connections. Waiting for health reduces restart churn during local Compose startup. | `PROGRESS.md` Validation Expectations; `TECH-STACK.md` Docker Compose runtime. | `docker-compose.yml`, `search-opensearch`, `search-service`. |
+| Protect `GET /search` and permit only Actuator health/prometheus operational endpoints without JWT. | All protected endpoints require JWT; only Auth register/login are public. | `REQUIREMENTS.md` M-25; `REQUIREMENTS.md` M-24. | `SecurityConfig`, `SearchControllerIntegrationTest`. |
+| Keep optional autocomplete, expanded artist/album/playlist search, and explicit fuzzy/faceted APIs out of this generation step. | These features are optional/could-have and were not part of the approved minimum Search plan. | `ARCHITECTURE.md` optional Search behavior; `REQUIREMENTS.md` C-04, C-05, C-06. | No optional endpoint files added. |
+| Use bounded `page` and `size` parameters as implementation controls. | The required endpoint does not specify pagination, but bounded response size prevents unbounded search responses and is configurable. | Phase 5 Step 1 assumption and missing detail. | `SearchRequest`, `SearchPageResponse`, `SearchProperties`, tests. |
+| Remove stale Search containers during validation after Docker reported a deleted network reference. | Compose could not recreate the Search containers until stale metadata was removed; no volumes or unrelated services were removed. | Runtime validation finding. | Docker runtime state for `search-opensearch` and `search-service`; no repository files. |
+
+#### Assumptions Made During Generation
+
+* The mounted Catalog CSV remains the minimum Search indexing source until a later phase defines a synchronization contract.
+* The OpenSearch `songs` index is derived data and may be recreated from the catalog CSV.
+* `title`, `artist`, `album`, `genre`, `bpm`, and `year` are sufficient indexed fields for the required song search and filters.
+* Query result ordering follows OpenSearch relevance by default because the source documents do not specify sorting.
+* The health and Prometheus Actuator endpoints are operational endpoints and remain public.

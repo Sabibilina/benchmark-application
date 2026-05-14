@@ -124,11 +124,20 @@ services:
     environment:
       SERVICE_NAME: search-service
       SERVER_PORT: 8080
-      OPENSEARCH_URL: http://search-opensearch:9200
       JWT_PUBLIC_KEY_PATH: ${JWT_PUBLIC_KEY_PATH:-/run/config/jwt/public.pem}
+      OPENSEARCH_URL: ${OPENSEARCH_URL:-http://search-opensearch:9200}
+      SEARCH_INDEX_NAME: ${SEARCH_INDEX_NAME:-songs}
+      SEARCH_CATALOG_DATASET_PATH: ${SEARCH_CATALOG_DATASET_PATH:-/app/data/catalog.csv}
+      SEARCH_INDEXING_ENABLED: ${SEARCH_INDEXING_ENABLED:-true}
+      SEARCH_INDEX_BATCH_SIZE: ${SEARCH_INDEX_BATCH_SIZE:-500}
+      SEARCH_DEFAULT_PAGE_SIZE: ${SEARCH_DEFAULT_PAGE_SIZE:-20}
+      SEARCH_MAX_PAGE_SIZE: ${SEARCH_MAX_PAGE_SIZE:-100}
+    volumes:
+      - ./config/jwt/public.pem:/run/config/jwt/public.pem:ro
+      - ./services/catalog-service/data/catalog.csv:/app/data/catalog.csv:ro
     depends_on:
       search-opensearch:
-        condition: service_started
+        condition: service_healthy
 
   analytics-service:
     <<: *placeholder-app
@@ -276,6 +285,11 @@ services:
       OPENSEARCH_JAVA_OPTS: -Xms512m -Xmx512m
     volumes:
       - search-opensearch-data:/usr/share/opensearch/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:9200 >/dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
 
   analytics-db:
     image: clickhouse/clickhouse-server:24.3-alpine
