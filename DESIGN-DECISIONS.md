@@ -3209,3 +3209,39 @@ Assumptions:
 | Exclude Notification inbox fetching from this plan. | Notification Service has no protected read interface in the implemented minimum version. | `ARCHITECTURE.md` Notification Service exposure; Phase 8 decisions. | `NotificationsPanel.tsx` optional UI only; no backend notification API call required. |
 | Use no frontend durable persistence. | JWT must not be stored in `localStorage`, and no frontend database is required. | `ARCHITECTURE.md` section 5.2; `TECH-STACK.md` frontend runtime choices. | Zustand stores, auth tests. |
 | Expose `/health` as the frontend health surface. | The frontend must expose a health route or equivalent static response. | `ARCHITECTURE.md` section 5.6; `PROGRESS.md` Phase 9 acceptance criteria. | `HealthPage.tsx`, router, e2e tests. |
+
+## Phase 9 Step 2 Generation - Frontend
+
+### Completed Generation
+
+Generated the frontend as a runnable React TypeScript Vite SPA under `frontend/`. The implementation includes routing, auth screens, protected app shell, Home, Search, Catalog, Playlists, Listening History, a persistent player bar, health route, centralized API client, Zustand stores, TanStack Query wiring, Tailwind styling, unit/component tests, Playwright spec files, Docker containerization, lockfile, and README.
+
+Updated Compose and env examples so the frontend builds and runs on the shared Docker network while using browser-reachable backend API base URLs.
+
+### Decisions Recorded
+
+| Decision | Why | Justification | Affected files/services |
+| --- | --- | --- | --- |
+| Replaced the placeholder frontend with a Vite React TypeScript SPA. | The frontend architecture requires a SPA with client-side routing and the tech stack selects React, TypeScript, and Vite. | `ARCHITECTURE.md` section 5.1; `TECH-STACK.md` Frontend Stack. | `frontend/src`, `package.json`, `vite.config.ts`, `index.html`. |
+| Used Nginx to serve the built static app on port `5173`. | The built app should run as a lightweight container through Docker Compose and remain reachable at the existing frontend host port. | `TECH-STACK.md` Docker Compose runtime choice; `PROGRESS.md` Phase 9 containerization acceptance criteria. | `frontend/Dockerfile`, `frontend/nginx.conf`, `docker-compose.yml`. |
+| Kept JWT session state only in a Zustand memory store. | The frontend must store JWTs in memory and not in `localStorage`. | `ARCHITECTURE.md` section 5.2; `TECH-STACK.md` frontend runtime choices. | `authStore.ts`, auth tests. |
+| Centralized backend HTTP calls through Axios service clients with JWT injection, retry, and normalized errors. | All backend calls need shared auth header handling, bounded retry, and error normalization. | `ARCHITECTURE.md` section 5.5; Phase 9 plan. | `src/api/client.ts`, `retry.ts`, `errors.ts`, API module files. |
+| Passed `VITE_` API URLs as Docker build args as well as Compose environment values. | Vite embeds environment variables at build time, so Compose rebuilds must be able to use overridden API base URLs. | Vite runtime behavior; `TECH-STACK.md` frontend stack. | `frontend/Dockerfile`, `docker-compose.yml`, `.env.example`, `frontend/.env.example`. |
+| Implemented the required playback state machine in a frontend Zustand store. | The frontend must transition through `idle`, `loading`, `playing`, `paused`, `ended`, and `skipped`, and initiate Streaming calls. | `ARCHITECTURE.md` section 5.4; `PROGRESS.md` Phase 9 acceptance criteria. | `playbackStore.ts`, `PlayerBar.tsx`, `PlaybackControls.tsx`, playback tests. |
+| Implemented playlist reorder helper logic and dnd-kit UI. | Playlist drag-and-drop reorder is required, and the stack selects dnd-kit. | `ARCHITECTURE.md` Playlists view; `TECH-STACK.md` Frontend Stack. | `PlaylistTrackList.tsx`, `playlistDnD.ts`, playlist reorder tests. |
+| Kept the notification inbox non-fetching. | Notification retrieval is optional and the current Notification Service has no protected read interface. | `ARCHITECTURE.md` Notification Service exposure; Phase 8 validation decision. | `NotificationsPanel.tsx`; no notification API module created. |
+| Used `package-lock.json` and `npm ci` in Docker builds. | Locked dependency installation makes frontend builds repeatable. | Repeatable benchmark runtime expectation; `TECH-STACK.md` Docker Compose runtime choice. | `frontend/package-lock.json`, `frontend/Dockerfile`. |
+
+### Validation Performed During Generation
+
+* `docker compose build frontend` passed with `npm ci`, `npm test`, TypeScript project build, and Vite production build.
+* Vitest passed: 5 test files, 7 tests.
+* `docker compose up -d --build frontend` started the Nginx frontend container.
+* `GET http://localhost:5173/health` returned HTTP `200`.
+
+### Assumptions and Notes
+
+* Backend response DTOs were derived from the implemented Java service DTOs where available.
+* Frontend API base URLs default to host-reachable local service ports because browser code runs outside the Docker network.
+* Playwright spec files were generated for browser-flow coverage, but the Docker build runs the faster Vitest/component suite; full Playwright execution can be part of the validation/fix step where browser availability is checked.
+* A browser plugin verification attempt could not complete because the local browser automation runtime failed to initialize its assets; HTTP/container validation still confirmed the app is served.

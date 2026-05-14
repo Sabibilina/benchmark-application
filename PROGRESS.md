@@ -292,16 +292,16 @@ Services are built **one at a time** in the order below. Each service goes throu
 
 ### Steps
 - [x] **Step 1 — Plan**: File tree for `frontend/`, routing strategy, global state shape (session, playback, queue), API client design (JWT injection, retry, error normalization), view inventory, env vars, build/containerization approach, validation steps
-- [ ] **Step 2 — Generate**: All source files, Dockerfile, `package.json`, `.env.example`, build config, unit/component tests, integration tests, README section covering build, run, and backend configuration
+- [x] **Step 2 — Generate**: All source files, Dockerfile, `package.json`, `.env.example`, build config, unit/component tests, integration tests, README section covering build, run, and backend configuration
 - [ ] **Step 3 — Validate/Fix**: Review against acceptance criteria; fix and return only changed files
 
 ### Views to Implement
-- [ ] **Home / Discovery** — Daily Mix cards and "Because you listened to…" rails; trending tracks from Analytics global charts if implemented
-- [ ] **Search** — Full-text search bar; optional real-time autocomplete; results filterable by genre, BPM range, and release year; song results with optional artist/album/playlist sections
-- [ ] **Catalog Browse** — Paginated song grid/list with sort controls (title, artist, BPM); artist detail/top tracks only if implemented
-- [ ] **Now Playing / Player Bar** — Persistent bottom bar with track title, artist, album art placeholder, play/pause/skip/previous controls, progress scrubber, and volume control; visible across all views
-- [ ] **Playlists** — Sidebar list of user's playlists including "Liked Songs"; playlist detail with drag-and-drop reordering, track removal, add-from-search/catalog; playlist creation and deletion
-- [ ] **Listening History** — Chronological log of play events from Analytics Service, grouped by date
+- [x] **Home / Discovery** — Daily Mix cards and "Because you listened to…" rails; trending tracks from Analytics global charts if implemented
+- [x] **Search** — Full-text search bar; optional real-time autocomplete; results filterable by genre, BPM range, and release year; song results with optional artist/album/playlist sections
+- [x] **Catalog Browse** — Paginated song grid/list with sort controls (title, artist, BPM); artist detail/top tracks only if implemented
+- [x] **Now Playing / Player Bar** — Persistent bottom bar with track title, artist, album art placeholder, play/pause/skip/previous controls, progress scrubber, and volume control; visible across all views
+- [x] **Playlists** — Sidebar list of user's playlists including "Liked Songs"; playlist detail with drag-and-drop reordering, track removal, add-from-search/catalog; playlist creation and deletion
+- [x] **Listening History** — Chronological log of play events from Analytics Service, grouped by date
 - [ ] **Notifications** — Optional inbox panel for in-app notifications if notification retrieval is exposed to the frontend in the implemented version
 
 ### Acceptance Criteria
