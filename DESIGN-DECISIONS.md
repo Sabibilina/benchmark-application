@@ -1882,3 +1882,242 @@ No repository file fixes were required during this review step. The generated Se
 * Assumption: Genre filters use the dataset's exact genre spelling/casing.
 * Assumption: OpenSearch relevance ordering is acceptable because the source documents do not define sorting.
 * No unresolved Search implementation or test issues remain for this phase.
+
+### Phase 6 Step 1 Plan - Analytics Service
+
+#### Source Document Check
+
+No conflict was found between `ARCHITECTURE.md`, `REQUIREMENTS.md`, and `TECH-STACK.md` for the Analytics Service planning step.
+
+`ARCHITECTURE.md` requires Analytics to store listening history, aggregate playback data into chart-oriented analytics, compute at least global play-count-based rankings, expose metrics, and use dedicated persistence. `REQUIREMENTS.md` makes `GET /analytics/me/history`, persistent listen history, playback-event aggregation, Prometheus metrics, JWT protection, and dedicated persistence mandatory. `TECH-STACK.md` selects Java 21, Spring Boot 3.x, Maven, Kafka consumer messaging, and ClickHouse as the dedicated analytics store.
+
+#### Assumptions
+
+* This step is planning only. No Analytics Service source code, Dockerfile, dependency manifest, Compose changes, or runtime configuration is generated in this step.
+* `GET /analytics/me/history` is a protected endpoint because `REQUIREMENTS.md` M-25 says all protected endpoints require JWT and only Auth register/login are public.
+* `/actuator/health` and `/actuator/prometheus` remain operational endpoints for health and metrics exposure, consistent with the existing service pattern and `REQUIREMENTS.md` M-24.
+* JWT validation will use the shared RSA public key mounted into the service, so Analytics can validate tokens locally without a per-request Auth Service call.
+* Analytics consumes the existing Streaming Service `PlaybackEvent` JSON shape: `eventId`, `type`, `userId`, `songId`, and `timestamp`.
+* Analytics consumes from the existing `playback-events` Kafka topic unless overridden by configuration.
+* Listen history is derived from consumed playback events and tied to the authenticated JWT subject for retrieval.
+* Global play-count rankings are computed from stored playback events. Only `play.started` events count toward global play counts unless later requirements define another counting rule.
+* The global chart endpoint `GET /analytics/charts/global` is included as a documented should-have endpoint from `REQUIREMENTS.md` S-02 and `ARCHITECTURE.md` optional Analytics behavior; it is not treated as an invented must-have.
+* Personal charts and listening statistics beyond history are not included because `REQUIREMENTS.md` C-03 marks them could-have.
+* No synchronous service-to-service HTTP call is planned for this minimum Analytics phase, so WebClient, retry, and circuit breaker are not required inside Analytics yet.
+
+#### Missing Details Not Defined by the Source Documents
+
+* Exact response JSON schema for listening history.
+* Exact paging defaults and maximum page size for history.
+* Whether listen history should include all playback event types or only started/ended/skipped subsets. The plan stores all consumed playback event types and exposes them chronologically.
+* Exact global ranking counting rule. The plan counts `play.started` events as plays.
+* Exact Kafka consumer group id.
+* Exact ClickHouse table engine and partitioning strategy.
+* Whether duplicate Kafka events should be ignored by `eventId` or allowed. The plan stores `eventId` and deduplicates at the ClickHouse table/query layer where practical.
+* Whether `GET /analytics/charts/global` should be part of the minimum acceptance criteria or only a should-have endpoint. The plan includes it because it is explicitly documented as should-have.
+
+#### Chosen Stack
+
+* Java 21.
+* Spring Boot 3.x.
+* Maven.
+* Spring Web MVC for HTTP endpoints.
+* Spring Security OAuth2 Resource Server for local JWT verification.
+* Spring Kafka as a Kafka consumer for playback events.
+* ClickHouse as the dedicated analytics persistence layer.
+* JDBC access to ClickHouse for schema creation, inserts, history queries, and aggregation queries.
+* Spring Boot Actuator with Micrometer Prometheus for metrics.
+* Docker and Docker Compose on the shared named network.
+
+#### Planned File Tree
+
+```text
+services/analytics-service/
+  Dockerfile
+  README.md
+  .env.example
+  pom.xml
+  src/
+    main/
+      java/
+        com/
+          benchmark/
+            analytics/
+              AnalyticsServiceApplication.java
+              config/
+                AnalyticsProperties.java
+                ClickHouseConfig.java
+                JwtProperties.java
+                KafkaConsumerConfig.java
+                KeyConfig.java
+                SecurityConfig.java
+              controller/
+                AnalyticsController.java
+                ApiError.java
+                ApiExceptionHandler.java
+              dto/
+                GlobalChartItemResponse.java
+                HistoryEventResponse.java
+                HistoryPageResponse.java
+              messaging/
+                PlaybackEvent.java
+                PlaybackEventConsumer.java
+              persistence/
+                AnalyticsEventRecord.java
+                AnalyticsSchemaInitializer.java
+                AnalyticsEventRepository.java
+              security/
+                AuthenticatedUser.java
+                PemKeyLoader.java
+                UserPrincipalResolver.java
+              service/
+                AnalyticsService.java
+                AnalyticsValidationException.java
+      resources/
+        application.yml
+    test/
+      java/
+        com/
+          benchmark/
+            analytics/
+              controller/
+                AnalyticsControllerIntegrationTest.java
+              messaging/
+                PlaybackEventConsumerTest.java
+              persistence/
+                AnalyticsSchemaInitializerTest.java
+                AnalyticsEventRepositoryTest.java
+              service/
+                AnalyticsServiceTest.java
+              support/
+                TestKeyFiles.java
+```
+
+Small helper classes may be added inside the listed package boundaries if implementation requires them, but no unrelated service modules should be modified in the Analytics implementation step.
+
+#### Dependencies
+
+Planned Maven dependencies:
+
+* `spring-boot-starter-web`
+* `spring-boot-starter-validation`
+* `spring-boot-starter-security`
+* `spring-boot-starter-oauth2-resource-server`
+* `spring-boot-starter-actuator`
+* `spring-kafka`
+* ClickHouse JDBC driver
+* `spring-boot-starter-jdbc`
+* `micrometer-registry-prometheus`
+* Test dependencies: `spring-boot-starter-test`, `spring-security-test`, `spring-kafka-test`, and Mockito support from Spring Boot test
+
+No JPA, Flyway, PostgreSQL driver, Redis, MongoDB, OpenSearch, object-storage, or WebClient/Resilience4j dependency is planned for this minimum Analytics phase.
+
+#### Endpoints and Exposed Interfaces
+
+Application endpoints, protected by JWT:
+
+* `GET /analytics/me/history`
+  * Returns chronological playback history for the authenticated JWT subject.
+  * Reads from Analytics-owned ClickHouse storage.
+  * Supports bounded pagination parameters such as `page` and `size` as implementation controls.
+
+* `GET /analytics/charts/global`
+  * Returns global play-count-based rankings computed from stored playback events.
+  * Included because `REQUIREMENTS.md` S-02 defines this should-have endpoint and `ARCHITECTURE.md` lists it as optional Analytics behavior.
+  * Supports a bounded `limit` parameter with a default of `50`.
+
+Messaging interface:
+
+* Kafka consumer on the configured playback events topic, default `playback-events`.
+* Consumes Streaming Service playback events with fields `eventId`, `type`, `userId`, `songId`, and `timestamp`.
+
+Operational endpoints:
+
+* `/actuator/health`
+* `/actuator/prometheus`
+
+No personal charts endpoint, listening-statistics endpoint, frontend metrics ingestion endpoint, or synchronous downstream service call is planned for this phase.
+
+#### Environment Variables
+
+Planned service variables:
+
+* `SERVER_PORT` - defaults to `8080` inside the container.
+* `JWT_PUBLIC_KEY_PATH` - path to the mounted shared public key.
+* `CLICKHOUSE_URL` - JDBC URL for Analytics ClickHouse.
+* `CLICKHOUSE_USER` - ClickHouse username.
+* `CLICKHOUSE_PASSWORD` - ClickHouse password.
+* `KAFKA_BOOTSTRAP_SERVERS` - Kafka bootstrap servers, default `kafka:9092`.
+* `ANALYTICS_PLAYBACK_EVENTS_TOPIC` - Kafka topic for playback events, default `playback-events`.
+* `ANALYTICS_KAFKA_CONSUMER_GROUP_ID` - Analytics consumer group id.
+* `ANALYTICS_DEFAULT_PAGE_SIZE` - default history page size.
+* `ANALYTICS_MAX_PAGE_SIZE` - maximum history page size.
+* `ANALYTICS_GLOBAL_CHART_LIMIT` - default global chart limit, default `50`.
+
+#### Persistence and Messaging Approach
+
+* Analytics Service will use its own ClickHouse database/table as the dedicated analytics persistence layer.
+* ClickHouse stores one row per consumed playback event, including `eventId`, event type, user id, song id, and timestamp.
+* Kafka consumption is asynchronous and decoupled from Streaming request latency.
+* The consumer persists `play.started`, `play.ended`, and `play.skipped` events because those are the event types emitted by Streaming.
+* `GET /analytics/me/history` queries ClickHouse by authenticated user id and returns events in reverse chronological order.
+* Global play-count rankings are computed by aggregating stored `play.started` events by `songId`.
+* Schema initialization can be handled by application startup with idempotent `CREATE TABLE IF NOT EXISTS` statements because no separate migration framework is specified for ClickHouse in the source documents.
+* No Analytics data is stored in Kafka, PostgreSQL, Catalog DB, or another service's database.
+
+#### Validation Steps
+
+* Confirm no source-document conflict before generation.
+* Build Analytics Service with Docker so Maven tests run during the build path.
+* Run `docker compose config --quiet`.
+* Run `docker compose build analytics-service`.
+* Run `docker compose up -d --build kafka analytics-db analytics-service`.
+* Confirm `kafka`, `analytics-db`, and `analytics-service` are running on the shared named Docker network.
+* Confirm startup logs show JWT public key loading, Kafka consumer startup, ClickHouse schema initialization, Actuator endpoint exposure, and Tomcat startup.
+* Use a valid RS256 JWT to call protected Analytics endpoints.
+* Verify unauthenticated and invalid-token requests to `GET /analytics/me/history` return `401`.
+* Produce or trigger playback events on the configured Kafka topic and verify Analytics consumes and persists them.
+* Verify `GET /analytics/me/history` returns only events for the authenticated user.
+* Verify persisted listen history remains available after Analytics Service restart when the ClickHouse volume persists.
+* Verify global play-count rankings are computable through the repository/service and, if implemented, `GET /analytics/charts/global`.
+* Verify `/actuator/health` returns healthy status and `/actuator/prometheus` exposes metrics.
+* Verify the Analytics README documents Kafka topic, ClickHouse persistence, history retrieval, and validation commands.
+
+#### Required Unit Tests
+
+* Playback event mapping from Kafka payload to persistence record includes event id, type, user id, song id, and timestamp.
+* Kafka consumer passes valid playback events to the repository/service for persistence.
+* Kafka consumer ignores or rejects malformed events according to the implemented error-handling strategy.
+* History request validation rejects invalid pagination values.
+* Global chart limit validation rejects invalid limits.
+* Analytics service returns only authenticated user's history records.
+* Analytics service maps persisted records to history response DTOs in chronological order.
+* Analytics service computes global play-count rankings from `play.started` records.
+* Schema initializer emits idempotent ClickHouse table creation SQL.
+
+#### Required Integration Tests
+
+* `GET /analytics/me/history` rejects missing JWT with `401`.
+* `GET /analytics/me/history` rejects invalid JWT with `401`.
+* `GET /analytics/me/history` with a valid JWT returns only that user's persisted playback events.
+* Integration persistence test verifies playback event rows can be inserted and queried from the Analytics repository.
+* Kafka consumer integration test verifies a consumed playback event is persisted.
+* Global chart integration test verifies play-count rankings are computed from persisted playback events.
+* If `GET /analytics/charts/global` is implemented, it is protected by JWT and returns ranked song play counts.
+* `/actuator/health` is reachable as an operational endpoint.
+
+#### Planning Decisions Recorded
+
+| Decision | Why | Justification | Expected affected files/services |
+| --- | --- | --- | --- |
+| Implement Analytics Service with Java 21, Spring Boot 3.x, and Maven. | All backend services must use the shared backend standard. | `TECH-STACK.md` Shared Backend Standard. | `services/analytics-service/pom.xml`, Java source tree, Dockerfile. |
+| Use ClickHouse as the dedicated Analytics persistence layer. | Analytics stores event-heavy listen history and aggregation data, and ClickHouse is selected for this service. | `TECH-STACK.md` Analytics database choice; `REQUIREMENTS.md` M-13, M-14, M-26. | `analytics-db`, `AnalyticsEventRepository`, `AnalyticsSchemaInitializer`, `docker-compose.yml`. |
+| Consume Streaming playback events from Kafka. | Analytics must aggregate playback events and `TECH-STACK.md` specifies Analytics as a Kafka consumer. | `REQUIREMENTS.md` M-14; `TECH-STACK.md` Analytics messaging choice. | `PlaybackEventConsumer`, Kafka config, tests, `docker-compose.yml`. |
+| Use the existing `playback-events` topic and Streaming `PlaybackEvent` shape. | Streaming already emits required playback events on this topic; Analytics should consume the existing contract rather than invent a new one. | Existing Streaming implementation; `REQUIREMENTS.md` M-06 and M-14. | `PlaybackEvent`, `PlaybackEventConsumer`, `.env.example`, tests. |
+| Protect Analytics application endpoints with local JWT validation using the shared public key. | All protected endpoints require JWT and only Auth register/login may be public. | `REQUIREMENTS.md` M-25. | `SecurityConfig`, `PemKeyLoader`, integration tests, Compose key mount. |
+| Use JWT subject as the user id for `/analytics/me/history`. | Listen history must be tied to authenticated users, and the JWT subject is the established user identity across existing services. | `REQUIREMENTS.md` M-13 and M-25; prior service pattern. | `UserPrincipalResolver`, `AnalyticsController`, `AnalyticsService`, tests. |
+| Include `GET /analytics/charts/global` as a should-have endpoint in the plan. | Global rankings are mandatory to compute, and the source documents explicitly define this endpoint as should-have/optional. | `REQUIREMENTS.md` M-14 and S-02; `ARCHITECTURE.md` optional Analytics behavior. | `AnalyticsController`, `AnalyticsService`, repository aggregation query, tests. |
+| Count `play.started` events for global play-count rankings. | The documents require play-count rankings but do not define the exact event type to count; started events are the clearest signal of a play attempt from Streaming. | `REQUIREMENTS.md` M-14; missing detail recorded above. | Aggregation query, service tests, README. |
+| Exclude personal charts and listening-statistics endpoints from this phase. | These are could-have extensions and not required for the minimum Analytics service. | `REQUIREMENTS.md` C-03. | No personal chart/statistics endpoints. |
+| Initialize ClickHouse schema at application startup with idempotent SQL. | The source documents require dedicated persistence but do not require a specific ClickHouse migration tool. | `REQUIREMENTS.md` M-13 and M-26; `TECH-STACK.md` ClickHouse choice. | `AnalyticsSchemaInitializer`, tests, README. |
+| Do not add synchronous WebClient/Resilience4j dependencies in this phase. | Analytics does not need a synchronous downstream service call for the planned minimum behavior. | `TECH-STACK.md` Cross-Cutting API rule applies to synchronous service-to-service HTTP traffic; no such traffic is planned. | `pom.xml`, no HTTP client config. |
