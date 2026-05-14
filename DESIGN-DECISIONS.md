@@ -2902,3 +2902,310 @@ Reviewed the Notification Service implementation against `ARCHITECTURE.md`, `REQ
 
 * Playlist Service event production remains outside this phase; Notification's contract and consumer are validated independently.
 * No protected read interface exists because the minimum architecture says no public client-facing API is required. If the frontend inbox is implemented later, that interface must be planned and validated in that phase.
+
+## Phase 9 Step 1 Plan - Frontend
+
+### Source Review
+
+Reviewed `ARCHITECTURE.md`, `REQUIREMENTS.md`, and `TECH-STACK.md` for the frontend phase. No conflicts were found.
+
+### Chosen Stack
+
+* React with TypeScript as a Vite SPA.
+* React Router for client-side routing.
+* Zustand for in-memory session, playback, queue, and UI state.
+* TanStack Query for server-state fetching and cache invalidation.
+* Axios for the centralized API client.
+* React Hook Form and Zod for form state and validation.
+* dnd-kit for playlist drag-and-drop reordering.
+* Tailwind CSS for styling.
+* Vitest, React Testing Library, MSW, and Playwright for unit, component, integration, and browser-level validation.
+* Docker for containerization through the existing Compose `frontend` service.
+
+### Planned File Tree
+
+```text
+frontend/
+  .env.example
+  Dockerfile
+  README.md
+  index.html
+  nginx.conf
+  package.json
+  package-lock.json
+  postcss.config.js
+  tailwind.config.ts
+  tsconfig.json
+  tsconfig.node.json
+  vite.config.ts
+  playwright.config.ts
+  src/
+    main.tsx
+    App.tsx
+    index.css
+    app/
+      providers.tsx
+      router.tsx
+    api/
+      client.ts
+      endpoints.ts
+      errors.ts
+      retry.ts
+      authApi.ts
+      catalogApi.ts
+      searchApi.ts
+      streamingApi.ts
+      playlistApi.ts
+      analyticsApi.ts
+      recommendationApi.ts
+    components/
+      layout/AppShell.tsx
+      layout/Sidebar.tsx
+      layout/TopBar.tsx
+      player/PlayerBar.tsx
+      player/PlaybackControls.tsx
+      songs/SongList.tsx
+      songs/SongCard.tsx
+      playlists/PlaylistTrackList.tsx
+      forms/AuthForm.tsx
+      common/LoadingState.tsx
+      common/ErrorState.tsx
+    features/
+      auth/
+        authStore.ts
+        LoginPage.tsx
+        RegisterPage.tsx
+        ProtectedRoute.tsx
+      home/
+        HomePage.tsx
+      search/
+        SearchPage.tsx
+        searchFilters.ts
+      catalog/
+        CatalogPage.tsx
+        SongDetailPage.tsx
+      playlists/
+        PlaylistsPage.tsx
+        PlaylistDetailPage.tsx
+        playlistDnD.ts
+      history/
+        ListeningHistoryPage.tsx
+      notifications/
+        NotificationsPanel.tsx
+      health/
+        HealthPage.tsx
+    stores/
+      playbackStore.ts
+      queueStore.ts
+      metricsStore.ts
+    types/
+      auth.ts
+      catalog.ts
+      playlist.ts
+      playback.ts
+      analytics.ts
+      recommendation.ts
+      notifications.ts
+    test/
+      setup.ts
+      server.ts
+      handlers.ts
+    __tests__/
+      apiClient.test.ts
+      authFlow.test.tsx
+      playbackStore.test.ts
+      searchFilters.test.tsx
+      playlistReorder.test.tsx
+  e2e/
+    auth.spec.ts
+    navigation.spec.ts
+    playback.spec.ts
+    search.spec.ts
+    playlists.spec.ts
+```
+
+### Dependencies
+
+Runtime dependencies:
+
+* `@vitejs/plugin-react`
+* `react`
+* `react-dom`
+* `react-router-dom`
+* `zustand`
+* `@tanstack/react-query`
+* `axios`
+* `react-hook-form`
+* `zod`
+* `@hookform/resolvers`
+* `@dnd-kit/core`
+* `@dnd-kit/sortable`
+* `@dnd-kit/utilities`
+* `lucide-react`
+
+Development and test dependencies:
+
+* `typescript`
+* `vite`
+* `tailwindcss`
+* `postcss`
+* `autoprefixer`
+* `vitest`
+* `@testing-library/react`
+* `@testing-library/user-event`
+* `@testing-library/jest-dom`
+* `jsdom`
+* `msw`
+* `@playwright/test`
+* `eslint` and TypeScript/React lint plugins if generation includes lint scripts.
+
+### Exposed Interfaces and Routes
+
+Frontend browser routes:
+
+* `/health` - static frontend health view or response.
+* `/login` - Auth Service login flow.
+* `/register` - Auth Service registration flow.
+* `/` - Home/Discovery.
+* `/search` - text search and filters.
+* `/catalog` - paginated catalog browse.
+* `/catalog/songs/:songId` - song metadata detail if needed by the UI.
+* `/playlists` - playlist list and creation.
+* `/playlists/:playlistId` - playlist detail, track management, and reorder.
+* `/history` - listening history.
+
+Backend interfaces called by the API client:
+
+* Auth: `POST /auth/register`, `POST /auth/login`.
+* Catalog: `GET /catalog/songs`, `GET /catalog/songs/:id`.
+* Search: `GET /search?q=&genre=&bpm_min=&bpm_max=&year=`.
+* Streaming: `GET /stream/:songId`.
+* Playlist: all Phase 3 playlist endpoints, including `PATCH /playlists/:id/tracks/reorder`.
+* Analytics: `GET /analytics/me/history`; use `GET /analytics/charts/global` only if available for trending tracks.
+* Recommendation: `GET /recommend/daily-mix`, `GET /recommend/similar/:songId`.
+
+Notifications:
+
+* Do not plan a frontend notification inbox API call in this phase because Notification Service currently has no protected read interface. Keep a disabled or empty optional panel only if useful for layout, without inventing backend endpoints.
+
+### Environment Variables
+
+Use Vite-prefixed variables only:
+
+```text
+VITE_AUTH_API_BASE_URL=http://localhost:8081
+VITE_CATALOG_API_BASE_URL=http://localhost:8082
+VITE_PLAYLIST_API_BASE_URL=http://localhost:8083
+VITE_STREAMING_API_BASE_URL=http://localhost:8084
+VITE_SEARCH_API_BASE_URL=http://localhost:8085
+VITE_ANALYTICS_API_BASE_URL=http://localhost:8086
+VITE_RECOMMENDATION_API_BASE_URL=http://localhost:8087
+VITE_NOTIFICATION_API_BASE_URL=
+VITE_API_RETRY_ATTEMPTS=3
+VITE_API_RETRY_BASE_DELAY_MS=250
+VITE_PLAYBACK_PROGRESS_INTERVAL_MS=1000
+```
+
+Compose generation should pass the same variables to the `frontend` service, using browser-reachable host URLs by default.
+
+### Persistence and Messaging Approach
+
+* No frontend database or durable browser persistence is planned.
+* JWT access tokens must stay in memory only and must not be written to `localStorage`.
+* Zustand stores hold transient session, playback, queue, and client-side metric state.
+* The frontend does not publish directly to Kafka or consume messaging topics.
+* Playback events are triggered indirectly by calling the Streaming Service; the backend handles event publishing.
+
+### API Client Strategy
+
+* One Axios client layer with per-service base URLs.
+* Attach `Authorization: Bearer <token>` to protected backend calls when a token exists in memory.
+* Centralize bounded exponential backoff retry for transient failures.
+* Centralize error normalization so screens and tests consume one error shape.
+* Do not attach JWTs to `POST /auth/register` or `POST /auth/login`.
+
+### Playback State Strategy
+
+The playback store should model:
+
+```text
+idle -> loading -> playing -> paused -> ended
+idle -> loading -> playing -> skipped
+```
+
+Expected actions:
+
+* `start(songId)` calls `GET /stream/:songId`.
+* `pause()` moves `playing` to `paused` locally.
+* `resume()` moves `paused` to `playing`.
+* `skip()` explicitly moves to `skipped`.
+* `complete()` explicitly moves to `ended`.
+
+### Validation Steps
+
+* Review generated files against `ARCHITECTURE.md`, `REQUIREMENTS.md`, `TECH-STACK.md`, and this plan.
+* Run `npm install` or equivalent package installation in `frontend`.
+* Run `npm run typecheck`.
+* Run `npm test`.
+* Run `npm run build`.
+* Run Playwright tests for key browser flows.
+* Run `docker compose build frontend`.
+* Run `docker compose up -d frontend`.
+* Confirm the frontend is reachable at the configured host port.
+* Confirm `/health` is reachable.
+* Confirm registration and login work against Auth with the JWT kept in memory.
+* Confirm protected API calls include `Authorization: Bearer`.
+* Confirm Search filters combine query, genre, BPM, and year.
+* Confirm playlist reorder calls `PATCH /playlists/:id/tracks/reorder`.
+* Confirm the player calls `GET /stream/:songId` and follows the required playback state transitions.
+
+### Required Unit Tests
+
+* API client injects JWT for protected requests and omits it for register/login.
+* API client applies bounded retry and normalizes errors.
+* Auth store keeps JWT in memory and does not use `localStorage`.
+* Playback state machine covers `idle`, `loading`, `playing`, `paused`, `ended`, and `skipped`.
+* Search filter builder combines text, genre, BPM min/max, and year.
+* Playlist reorder payload creation preserves intended track order.
+* Metrics store records page load time, API errors, and playback failures.
+
+### Required Integration and Component Tests
+
+* Registration and login flow renders and calls Auth endpoints.
+* Protected route redirects unauthenticated users to login.
+* Required routes render through React Router without full-page reload.
+* Player bar persists across route changes.
+* Search page submits combined filters and renders results.
+* Catalog page renders paginated songs.
+* Playlist page displays `Liked Songs` while hiding or disabling delete for it.
+* Playlist detail drag-and-drop/reorder interaction calls the required backend endpoint.
+* Listening history page fetches and renders grouped Analytics history.
+* `/health` route renders a healthy frontend response.
+
+### Assumptions and Missing Details
+
+Missing details:
+
+* Exact response DTOs are not specified in the source documents for every backend endpoint.
+* Exact visual design system, brand assets, album artwork, and copy are not specified.
+* Notification retrieval is not exposed by the current Notification Service.
+* The docs do not define a direct frontend endpoint for manually emitting `play.ended` or `play.skipped`; Streaming handles backend event publishing.
+
+Assumptions:
+
+* Generate TypeScript API types from the implemented backend response shapes where they are discoverable in existing service code.
+* Use text/initial-based artwork placeholders rather than real audio artwork because real media assets are not required.
+* Keep Notification UI optional and non-fetching unless a protected read interface is later planned.
+* Use browser-reachable service URLs in frontend env vars because frontend code runs in the browser, not inside the Docker network.
+
+### Decisions Recorded
+
+| Decision | Why | Justification | Affected files/services |
+| --- | --- | --- | --- |
+| Plan the frontend as a React TypeScript Vite SPA. | This matches the required frontend architecture and stack. | `ARCHITECTURE.md` section 5.1; `TECH-STACK.md` Frontend Stack. | `frontend/package.json`, Vite config, React source tree, Dockerfile. |
+| Use Zustand for memory-only session, playback, queue, and metrics state. | The docs require JWT in memory only and recommend Zustand for lightweight client state. | `ARCHITECTURE.md` section 5.2; `TECH-STACK.md` Frontend Stack. | `authStore.ts`, `playbackStore.ts`, `queueStore.ts`, `metricsStore.ts`. |
+| Use TanStack Query and Axios for backend communication. | The frontend talks to many backend services and needs centralized JWT injection, retry, and error handling. | `ARCHITECTURE.md` section 5.5; `TECH-STACK.md` Frontend Stack. | `api/client.ts`, feature API modules, tests. |
+| Include dnd-kit for playlist track reordering. | Playlist reorder is a required frontend workflow and the tech stack names dnd-kit for drag-and-drop. | `ARCHITECTURE.md` Playlists view; `PROGRESS.md` Phase 9 acceptance criteria; `TECH-STACK.md` Frontend Stack. | Playlist components and reorder tests. |
+| Exclude Notification inbox fetching from this plan. | Notification Service has no protected read interface in the implemented minimum version. | `ARCHITECTURE.md` Notification Service exposure; Phase 8 decisions. | `NotificationsPanel.tsx` optional UI only; no backend notification API call required. |
+| Use no frontend durable persistence. | JWT must not be stored in `localStorage`, and no frontend database is required. | `ARCHITECTURE.md` section 5.2; `TECH-STACK.md` frontend runtime choices. | Zustand stores, auth tests. |
+| Expose `/health` as the frontend health surface. | The frontend must expose a health route or equivalent static response. | `ARCHITECTURE.md` section 5.6; `PROGRESS.md` Phase 9 acceptance criteria. | `HealthPage.tsx`, router, e2e tests. |

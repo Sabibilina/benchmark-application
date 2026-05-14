@@ -291,7 +291,7 @@ Services are built **one at a time** in the order below. Each service goes throu
 ## Phase 9 — Frontend (React + TypeScript SPA)
 
 ### Steps
-- [ ] **Step 1 — Plan**: File tree for `frontend/`, routing strategy, global state shape (session, playback, queue), API client design (JWT injection, retry, error normalization), view inventory, env vars, build/containerization approach, validation steps
+- [x] **Step 1 — Plan**: File tree for `frontend/`, routing strategy, global state shape (session, playback, queue), API client design (JWT injection, retry, error normalization), view inventory, env vars, build/containerization approach, validation steps
 - [ ] **Step 2 — Generate**: All source files, Dockerfile, `package.json`, `.env.example`, build config, unit/component tests, integration tests, README section covering build, run, and backend configuration
 - [ ] **Step 3 — Validate/Fix**: Review against acceptance criteria; fix and return only changed files
 
