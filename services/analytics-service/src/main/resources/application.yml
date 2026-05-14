@@ -1,0 +1,38 @@
+server:
+  port: ${SERVER_PORT:8080}
+
+spring:
+  application:
+    name: analytics-service
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:kafka:9092}
+    consumer:
+      group-id: ${ANALYTICS_KAFKA_CONSUMER_GROUP_ID:analytics-service}
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      properties:
+        spring.json.trusted.packages: com.benchmark.analytics.messaging
+        spring.json.value.default.type: com.benchmark.analytics.messaging.PlaybackEvent
+      auto-offset-reset: earliest
+
+app:
+  jwt:
+    public-key-path: ${JWT_PUBLIC_KEY_PATH:/run/config/jwt/public.pem}
+  analytics:
+    clickhouse-url: ${CLICKHOUSE_URL:jdbc:clickhouse://analytics-db:8123/analytics}
+    clickhouse-user: ${CLICKHOUSE_USER:benchmark}
+    clickhouse-password: ${CLICKHOUSE_PASSWORD:benchmark}
+    playback-events-topic: ${ANALYTICS_PLAYBACK_EVENTS_TOPIC:playback-events}
+    default-page-size: ${ANALYTICS_DEFAULT_PAGE_SIZE:20}
+    max-page-size: ${ANALYTICS_MAX_PAGE_SIZE:100}
+    global-chart-limit: ${ANALYTICS_GLOBAL_CHART_LIMIT:50}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true

@@ -155,9 +155,14 @@ services:
       CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:-benchmark}
       KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-kafka:9092}
       JWT_PUBLIC_KEY_PATH: ${JWT_PUBLIC_KEY_PATH:-/run/config/jwt/public.pem}
+      ANALYTICS_PLAYBACK_EVENTS_TOPIC: ${ANALYTICS_PLAYBACK_EVENTS_TOPIC:-playback-events}
+      ANALYTICS_KAFKA_CONSUMER_GROUP_ID: ${ANALYTICS_KAFKA_CONSUMER_GROUP_ID:-analytics-service}
+      ANALYTICS_DEFAULT_PAGE_SIZE: ${ANALYTICS_DEFAULT_PAGE_SIZE:-20}
+      ANALYTICS_MAX_PAGE_SIZE: ${ANALYTICS_MAX_PAGE_SIZE:-100}
+      ANALYTICS_GLOBAL_CHART_LIMIT: ${ANALYTICS_GLOBAL_CHART_LIMIT:-50}
     depends_on:
       analytics-db:
-        condition: service_started
+        condition: service_healthy
       kafka:
         condition: service_started
 
@@ -307,6 +312,11 @@ services:
       CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:-benchmark}
     volumes:
       - analytics-db-data:/var/lib/clickhouse
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- \"http://127.0.0.1:8123/?user=$${CLICKHOUSE_USER}&password=$${CLICKHOUSE_PASSWORD}&query=SELECT%201\" | grep -q 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
 
   notification-db:
     image: mongo:7

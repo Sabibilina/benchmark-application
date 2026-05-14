@@ -2121,3 +2121,62 @@ Planned service variables:
 | Exclude personal charts and listening-statistics endpoints from this phase. | These are could-have extensions and not required for the minimum Analytics service. | `REQUIREMENTS.md` C-03. | No personal chart/statistics endpoints. |
 | Initialize ClickHouse schema at application startup with idempotent SQL. | The source documents require dedicated persistence but do not require a specific ClickHouse migration tool. | `REQUIREMENTS.md` M-13 and M-26; `TECH-STACK.md` ClickHouse choice. | `AnalyticsSchemaInitializer`, tests, README. |
 | Do not add synchronous WebClient/Resilience4j dependencies in this phase. | Analytics does not need a synchronous downstream service call for the planned minimum behavior. | `TECH-STACK.md` Cross-Cutting API rule applies to synchronous service-to-service HTTP traffic; no such traffic is planned. | `pom.xml`, no HTTP client config. |
+
+### Phase 6 Step 2 Generation - Analytics Service
+
+#### Completed Artifacts
+
+* Replaced the Phase 0 Analytics placeholder with a runnable Java 21 Spring Boot service.
+* Added Analytics Service `pom.xml`, Dockerfile, `.env.example`, `application.yml`, and README.
+* Added local JWT validation through the shared public key configuration.
+* Added protected `GET /analytics/me/history` for authenticated user playback history.
+* Added protected `GET /analytics/charts/global` for global play-count rankings.
+* Added Kafka playback event consumption for the existing Streaming `PlaybackEvent` shape.
+* Added ClickHouse JDBC persistence with idempotent startup schema creation.
+* Added Actuator health and Prometheus metrics exposure.
+* Updated `docker-compose.yml` with Analytics env vars and a ClickHouse readiness check before Analytics startup.
+* Added root `.env.example` Analytics configuration defaults.
+* Added unit tests for service validation/mapping, global ranking mapping, Kafka consumer persistence behavior, schema SQL, and repository SQL.
+* Added integration tests for protected endpoint access, history response behavior, global chart behavior, validation errors, and health.
+
+#### Generation Validation Run
+
+* Initial `docker compose build analytics-service` failed because `clickhouse-jdbc` needed its matching `clickhouse-client` dependency on the runtime/test classpath. The dependency was added to `pom.xml`.
+* The next build failed only in the controller health test because the test environment intentionally did not provide a live ClickHouse instance while Spring Boot's DB health indicator was enabled. The MockMvc test was corrected to disable `management.health.db.enabled` only for that test context.
+* `docker compose build analytics-service` then passed and executed the Maven package/test path.
+* `docker compose config --quiet` passed. Docker emitted the known sandbox warning about `C:\Users\thele\.docker\config.json` access, but the command exited successfully.
+* `docker compose up -d --build kafka analytics-db analytics-service` initially timed out because the ClickHouse healthcheck used unauthenticated `/ping` against a non-default ClickHouse user.
+* The ClickHouse healthcheck was corrected to use an authenticated `SELECT 1` HTTP query against `127.0.0.1`.
+* Runtime startup then exposed that ClickHouse JDBC expected Apache HttpClient 5 classes at runtime. `httpclient5` was added explicitly to `pom.xml`.
+* `docker compose build analytics-service` passed again after the dependency fix.
+* `docker compose up -d --build kafka analytics-db analytics-service` passed.
+* `docker compose ps kafka analytics-db analytics-service` confirmed Kafka is running, ClickHouse is healthy, and Analytics Service is running.
+* Analytics logs confirmed the Kafka consumer subscribed to the `playback-events` topic and the application started successfully.
+* Live smoke validation confirmed unauthenticated and malformed Bearer token requests to `GET /analytics/me/history` return `401`.
+* Live smoke validation inserted two `play.started` rows into ClickHouse through `clickhouse-client` and confirmed:
+  * `/actuator/health` returns `UP`;
+  * authenticated `GET /analytics/me/history?size=5` returns the persisted events for `analytics-smoke-user`;
+  * authenticated `GET /analytics/charts/global?limit=5` returns `song-smoke-1` with a play count of `2`.
+
+#### Generation Decisions Recorded
+
+| Decision | Why | Justification | Affected files/services |
+| --- | --- | --- | --- |
+| Implement Analytics Service as a Spring Boot Maven service using the same service pattern as prior backend services. | The backend stack must remain consistent across services. | `TECH-STACK.md` Shared Backend Standard; user instruction for complete runnable implementation. | `services/analytics-service/pom.xml`, Java source tree, Dockerfile. |
+| Use ClickHouse JDBC with Spring `JdbcTemplate` instead of JPA. | Analytics uses ClickHouse as a specialized columnar store, and JPA is not a good fit for this persistence model. | `TECH-STACK.md` Analytics database choice. | `ClickHouseConfig`, `AnalyticsEventRepository`, `pom.xml`. |
+| Add `clickhouse-client` and `httpclient5` dependencies explicitly. | Runtime and test validation showed the ClickHouse JDBC driver requires these classes for stable operation in the executable jar. | Runtime validation finding; `TECH-STACK.md` ClickHouse choice. | `services/analytics-service/pom.xml`. |
+| Initialize the `playback_events` ClickHouse table at application startup. | The source documents require dedicated persistence but do not mandate a migration tool for ClickHouse. | `REQUIREMENTS.md` M-13 and M-26. | `AnalyticsSchemaInitializer`, tests. |
+| Store all supported playback event types but count only `play.started` for global play counts. | History should preserve started, ended, and skipped events, while play-count rankings need one consistent play signal. | `REQUIREMENTS.md` M-13 and M-14; Phase 6 Step 1 assumption. | `AnalyticsEventRepository`, `AnalyticsService`, tests, README. |
+| Implement `GET /analytics/charts/global` during generation. | The requirement table defines this endpoint as should-have, and global rankings must be computable. | `REQUIREMENTS.md` M-14 and S-02; `ARCHITECTURE.md` optional Analytics behavior. | `AnalyticsController`, `AnalyticsService`, repository query, tests. |
+| Protect both Analytics application endpoints with JWT and leave Actuator health/prometheus public. | All protected endpoints require JWT, and metrics/health are operational endpoints used by the monitoring stack. | `REQUIREMENTS.md` M-24 and M-25. | `SecurityConfig`, controller integration tests. |
+| Use JWT subject as the `/analytics/me/history` user id. | Listen history must be tied to authenticated users, and this matches the existing service identity pattern. | `REQUIREMENTS.md` M-13 and M-25; existing Auth/Playlist/Streaming pattern. | `UserPrincipalResolver`, `AnalyticsController`, tests. |
+| Add an authenticated ClickHouse SQL healthcheck in Compose. | Analytics should not start until ClickHouse can accept authenticated queries; unauthenticated `/ping` did not work with the configured non-default user. | `PROGRESS.md` validation expectations; runtime validation finding. | `docker-compose.yml`, `analytics-db`, `analytics-service`. |
+| Disable DB health only in the MockMvc controller test context. | Controller integration tests mock persistence and should not require a live ClickHouse service, while production health should still reflect database availability. | Backend testing requirements; runtime behavior unchanged. | `AnalyticsControllerIntegrationTest`. |
+
+#### Assumptions Made During Generation
+
+* Analytics consumes the existing `playback-events` topic and Streaming playback event shape.
+* ClickHouse `playback_events` rows are the Analytics source of truth for listen history and global rankings.
+* `play.started` is the event type counted for global play-count rankings.
+* The should-have global chart endpoint is included because it is explicitly documented, but personal charts/statistics remain out of scope.
+* The controller integration tests use mocked persistence; live ClickHouse behavior was validated through Docker Compose smoke checks.

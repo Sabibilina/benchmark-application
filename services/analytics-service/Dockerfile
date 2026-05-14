@@ -1,8 +1,12 @@
+FROM maven:3.9.9-eclipse-temurin-21 AS build
+WORKDIR /workspace
+COPY pom.xml .
+RUN mvn -q -DskipTests dependency:go-offline
+COPY src ./src
+RUN mvn -q package
+
 FROM eclipse-temurin:21-jre-alpine
-
-ARG SERVICE_NAME=analytics-service
-ENV SERVICE_NAME=${SERVICE_NAME}
-
+WORKDIR /app
+COPY --from=build /workspace/target/analytics-service-*.jar /app/analytics-service.jar
 EXPOSE 8080
-
-CMD ["sh", "-c", "echo \"$SERVICE_NAME Phase 0 placeholder container. Service implementation is generated in a later phase.\"; tail -f /dev/null"]
+ENTRYPOINT ["java", "-jar", "/app/analytics-service.jar"]
