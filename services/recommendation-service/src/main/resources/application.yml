@@ -4,6 +4,49 @@ server:
 spring:
   application:
     name: recommendation-service
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5435/recommendationdb}
+    username: ${SPRING_DATASOURCE_USERNAME:recommendationuser}
+    password: ${SPRING_DATASOURCE_PASSWORD:recommendationpass}
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+  flyway:
+    locations: classpath:db/migration
+    baseline-on-migrate: false
+  data:
+    redis:
+      host: ${SPRING_DATA_REDIS_HOST:localhost}
+      port: ${SPRING_DATA_REDIS_PORT:6379}
+  kafka:
+    bootstrap-servers: ${SPRING_KAFKA_BOOTSTRAP_SERVERS:localhost:29092}
+    consumer:
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      auto-offset-reset: earliest
+
+jwt:
+  public-key-path: ${JWT_PUBLIC_KEY_PATH:/jwt-keys/public.pem}
+
+kafka:
+  topic:
+    playback-events: ${KAFKA_TOPIC_PLAYBACK_EVENTS:playback-events}
+  consumer:
+    group-id: ${KAFKA_CONSUMER_GROUP_ID:recommendation-service}
+
+recommendation:
+  daily-mix-size: ${RECOMMENDATION_DAILY_MIX_SIZE:20}
+  similar-size: ${RECOMMENDATION_SIMILAR_SIZE:10}
+  cache:
+    ttl-seconds: ${RECOMMENDATION_CACHE_TTL_SECONDS:3600}
+  seed:
+    enabled: ${RECOMMENDATION_SEED_ENABLED:true}
+    batch-size: 500
 
 management:
   endpoints:

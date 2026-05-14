@@ -1,0 +1,20 @@
+jwt:
+  public-key-path: /tmp/recommendation-service-test-keys/public.pem
+
+kafka:
+  topic:
+    playback-events: playback-events-test
+  consumer:
+    group-id: recommendation-service-test
+
+spring:
+  kafka:
+    bootstrap-servers: ${spring.embedded.kafka.brokers}
+
+recommendation:
+  seed:
+    enabled: false
+  daily-mix-size: 5
+  similar-size: 3
+  cache:
+    ttl-seconds: 60
