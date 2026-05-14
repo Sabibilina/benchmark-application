@@ -219,8 +219,17 @@ Services are built **one at a time** in the order below. Each service goes throu
 - [x] No requirements from the brief are missing; no extra requirements added
 - [x] Unit tests cover the core business logic of the service
 - [x] Integration tests cover the required endpoints and persistence behavior where applicable
-- [ ] Protected endpoint behavior is tested for valid and invalid JWT access where applicable
-- [ ] Test suite passes successfully
+
+### Latest Validation
+- [x] Source documents reviewed against Analytics implementation
+- [x] Analytics Docker image rebuilt with tests
+- [x] Analytics, Kafka, and ClickHouse started through Docker Compose
+- [x] Health endpoint returned `UP`
+- [x] Unauthenticated protected endpoint request returned `401`
+- [x] Authenticated history and global chart smoke checks passed
+- [x] Kafka deserialization robustness regression test passed
+- [x] Protected endpoint behavior is tested for valid and invalid JWT access where applicable
+- [x] Test suite passes successfully
 
 ---
 

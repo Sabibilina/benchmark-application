@@ -2237,3 +2237,50 @@ Planned service variables:
 * `GET /actuator/health` returned `UP`.
 * Analytics logs showed `value.deserializer = class org.springframework.kafka.support.serializer.ErrorHandlingDeserializer`.
 * Analytics logs confirmed subscription to `playback-events`.
+
+### Phase 6 Step 3 Revalidation - Analytics Service
+
+#### Validation Recorded
+
+* Reviewed the Analytics implementation against `ARCHITECTURE.md`, `REQUIREMENTS.md`, and `TECH-STACK.md`.
+* Confirmed required Analytics endpoint `GET /analytics/me/history` exists and is JWT-protected.
+* Confirmed should-have endpoint `GET /analytics/charts/global` exists and is JWT-protected.
+* Confirmed operational endpoints `/actuator/health` and `/actuator/prometheus` are exposed without JWT for health and Prometheus scraping.
+* Confirmed Analytics uses Java 21, Spring Boot 3.x, Maven, Kafka consumer messaging, and ClickHouse persistence as required by `TECH-STACK.md`.
+* Confirmed Analytics stores playback events in its own ClickHouse-backed `playback_events` table.
+* Confirmed global rankings are computed from `play.started` events.
+* Confirmed history returns stored playback events for the authenticated UUID user id from JWT `sub`.
+* Confirmed Kafka deserialization robustness remains in place through `ErrorHandlingDeserializer`, ignored producer type headers, and the embedded-Kafka regression test.
+
+#### Validation Commands Recorded
+
+* `docker compose build analytics-service`
+* `docker compose build --no-cache analytics-service`
+* `docker compose up -d --build kafka analytics-db analytics-service`
+* `docker compose ps kafka analytics-db analytics-service`
+* `GET http://localhost:8086/actuator/health`
+* `GET http://localhost:8086/analytics/me/history` without JWT
+* Live authenticated smoke against `GET /analytics/me/history?size=10` and `GET /analytics/charts/global?limit=10`
+
+#### Results Recorded
+
+* Forced Analytics Docker build passed and reran the Maven test suite.
+* Embedded-Kafka deserialization robustness test passed by skipping a malformed record and consuming the later valid playback event.
+* Docker Compose started Kafka, ClickHouse, and Analytics Service successfully.
+* `/actuator/health` returned `UP`.
+* Unauthenticated `GET /analytics/me/history` returned `401`.
+* Authenticated smoke data using matching JWT `sub` and ClickHouse `user_id` returned two history events: `play.ended` and `play.started`.
+* Global chart smoke confirmed the inserted `play.started` event contributed to chart rankings.
+
+#### Corrections and Deviations
+
+* No implementation corrections were required during this revalidation pass.
+* No conflicts were found between `ARCHITECTURE.md`, `REQUIREMENTS.md`, and `TECH-STACK.md` for the Analytics Service.
+* No extra requirements were identified in the Analytics implementation beyond the documented must-have and should-have Analytics scope.
+
+#### Assumptions Confirmed
+
+* The Auth-issued UUID in JWT `sub` remains the canonical user identity for Analytics history.
+* Listen history includes stored `play.started`, `play.ended`, and `play.skipped` events.
+* Global play-count rankings count `play.started` events.
+* The should-have global chart endpoint remains included because `REQUIREMENTS.md` documents it as S-02.
