@@ -1,0 +1,10 @@
+jwt:
+  public-key-path: /tmp/search-service-test-keys/public.pem
+
+opensearch:
+  index-name: songs-test
+
+search:
+  seed:
+    enabled: false
+  max-results: 50

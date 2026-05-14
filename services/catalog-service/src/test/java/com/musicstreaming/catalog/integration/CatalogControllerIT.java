@@ -48,7 +48,6 @@ class CatalogControllerIT {
         for (int i = 1; i <= 10; i++) {
             songRepository.save(buildSong("TRK-TEST%06d".formatted(i), "Song " + i, "Artist " + i));
         }
-        // Two extra songs with the same artist for top-tracks test
         songRepository.save(buildSong("TRK-ARTIST001", "Hit 1", "Shared Artist"));
         songRepository.save(buildSong("TRK-ARTIST002", "Hit 2", "Shared Artist"));
     }
@@ -57,8 +56,6 @@ class CatalogControllerIT {
     void tearDown() {
         songRepository.deleteAll();
     }
-
-    // --- Unauthenticated / bad-token cases ---
 
     @Test
     void getSongs_noToken_returns401() {
@@ -87,8 +84,6 @@ class CatalogControllerIT {
         ResponseEntity<String> response = restTemplate.getForEntity("/catalog/songs/1", String.class);
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
     }
-
-    // --- Authenticated happy paths ---
 
     @Test
     void getSongs_validToken_returns200WithPage() {
@@ -128,7 +123,6 @@ class CatalogControllerIT {
 
         assertThat(content0).hasSize(5);
         assertThat(content1).hasSize(5);
-        // Pages must be disjoint — verify by comparing first element IDs
         @SuppressWarnings("unchecked")
         Number firstId0 = (Number) ((java.util.Map<String, Object>) content0.get(0)).get("id");
         @SuppressWarnings("unchecked")
@@ -204,8 +198,6 @@ class CatalogControllerIT {
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(response.getBody()).isEmpty();
     }
-
-    // --- Helpers ---
 
     private HttpHeaders validHeaders() {
         return bearerHeaders(TestKeys.generateToken("1"));

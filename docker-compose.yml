@@ -431,7 +431,11 @@ services:
     environment:
       OPENSEARCH_HOST: opensearch
       OPENSEARCH_PORT: 9200
+      OPENSEARCH_INDEX_NAME: songs
       JWT_PUBLIC_KEY_PATH: /jwt-keys/public.pem
+      SEARCH_MAX_RESULTS: ${SEARCH_MAX_RESULTS:-20}
+      SEARCH_SEED_ENABLED: "true"
+      SEARCH_SEED_BATCH_SIZE: ${SEARCH_SEED_BATCH_SIZE:-500}
     ports:
       - "${SEARCH_SERVICE_HOST_PORT:-8085}:8080"
     deploy:

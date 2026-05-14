@@ -5,6 +5,20 @@ spring:
   application:
     name: search-service
 
+opensearch:
+  host: ${OPENSEARCH_HOST:localhost}
+  port: ${OPENSEARCH_PORT:9200}
+  index-name: ${OPENSEARCH_INDEX_NAME:songs}
+
+search:
+  max-results: ${SEARCH_MAX_RESULTS:20}
+  seed:
+    enabled: ${SEARCH_SEED_ENABLED:true}
+    batch-size: ${SEARCH_SEED_BATCH_SIZE:500}
+
+jwt:
+  public-key-path: ${JWT_PUBLIC_KEY_PATH:/jwt-keys/public.pem}
+
 management:
   endpoints:
     web:

@@ -14,11 +14,6 @@ import java.security.spec.X509EncodedKeySpec;
 import java.util.Base64;
 import java.util.Date;
 
-/**
- * Generates a test RSA key pair once per JVM. The public key is written to a fixed temp path.
- * Test classes set jwt.public-key-path to PUBLIC_KEY_PATH via @DynamicPropertySource so the
- * Spring context picks it up before JwtPublicKeyConfig.init() runs.
- */
 public final class TestKeys {
 
     public static final String PUBLIC_KEY_PATH;
