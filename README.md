@@ -159,6 +159,51 @@ docker compose down -v
 
 ---
 
+## Phase 6 — Analytics Service
+
+Consumes `playback-events` from Kafka and stores them in ClickHouse. Exposes two protected endpoints:
+
+| Endpoint | Description |
+|---|---|
+| `GET /analytics/me/history` | Authenticated user's listening history (newest first, capped by `ANALYTICS_HISTORY_LIMIT`) |
+| `GET /analytics/charts/global` | Global top-50 chart ranked by `play.started` event count |
+
+### Running the tests
+
+```bash
+# From the project root — requires Docker socket mounted for ClickHouse Testcontainer
+docker run --rm \
+  -v /var/run/docker.sock:/var/run/docker.sock \
+  -v "$PWD/services/analytics-service":/app \
+  -w /app \
+  -e TESTCONTAINERS_HOST_OVERRIDE=host.docker.internal \
+  maven:3.9-eclipse-temurin-21-alpine \
+  mvn test
+```
+
+### Building the Docker image
+
+```bash
+cd services/analytics-service
+docker build -t analytics-service .
+```
+
+### Configuration
+
+| Variable | Default | Description |
+|---|---|---|
+| `CLICKHOUSE_HOST` | `clickhouse` | ClickHouse hostname |
+| `CLICKHOUSE_HTTP_PORT` | `8123` | ClickHouse HTTP port |
+| `CLICKHOUSE_DB` | `analyticsdb` | Target database |
+| `CLICKHOUSE_USER` | `analyticsuser` | ClickHouse user |
+| `CLICKHOUSE_PASSWORD` | `analyticspass` | ClickHouse password |
+| `KAFKA_TOPIC_PLAYBACK_EVENTS` | `playback-events` | Topic consumed from Streaming Service |
+| `KAFKA_CONSUMER_GROUP_ID` | `analytics-service` | Kafka consumer group |
+| `ANALYTICS_HISTORY_LIMIT` | `100` | Max history entries per response |
+| `JWT_PUBLIC_KEY_PATH` | `/jwt-keys/public.pem` | RSA public key for JWT verification |
+
+---
+
 ## Implementation status
 
 | Phase | Scope | Status |
@@ -169,7 +214,7 @@ docker compose down -v
 | 3 | Playlist Service | Pending |
 | 4 | Streaming Service | Pending |
 | 5 | Search Service | Pending |
-| 6 | Analytics Service | Pending |
+| 6 | Analytics Service | **Complete** |
 | 7 | Recommendation Service | Pending |
 | 8 | Notification Service | Pending |
 | 9 | Frontend | Pending |

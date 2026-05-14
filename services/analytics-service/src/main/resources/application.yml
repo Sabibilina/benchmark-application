@@ -4,6 +4,30 @@ server:
 spring:
   application:
     name: analytics-service
+  kafka:
+    bootstrap-servers: ${SPRING_KAFKA_BOOTSTRAP_SERVERS:localhost:29092}
+    consumer:
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      auto-offset-reset: earliest
+
+jwt:
+  public-key-path: ${JWT_PUBLIC_KEY_PATH:/jwt-keys/public.pem}
+
+clickhouse:
+  jdbc-url: jdbc:clickhouse://${CLICKHOUSE_HOST:localhost}:${CLICKHOUSE_HTTP_PORT:8123}/${CLICKHOUSE_DB:analyticsdb}
+  username: ${CLICKHOUSE_USER:analyticsuser}
+  password: ${CLICKHOUSE_PASSWORD:analyticspass}
+
+kafka:
+  topic:
+    playback-events: ${KAFKA_TOPIC_PLAYBACK_EVENTS:playback-events}
+  consumer:
+    group-id: ${KAFKA_CONSUMER_GROUP_ID:analytics-service}
+
+analytics:
+  history:
+    limit: ${ANALYTICS_HISTORY_LIMIT:100}
 
 management:
   endpoints:
