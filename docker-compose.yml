@@ -44,6 +44,7 @@ services:
       JWT_PRIVATE_KEY_PATH: ${JWT_PRIVATE_KEY_PATH:-/run/secrets/jwt/private.pem}
       JWT_ISSUER: ${JWT_ISSUER:-benchmark-auth}
       JWT_ACCESS_TOKEN_TTL: ${JWT_ACCESS_TOKEN_TTL:-PT1H}
+      FRONTEND_ALLOWED_ORIGINS: ${FRONTEND_ALLOWED_ORIGINS:-http://localhost:5173,http://127.0.0.1:5173}
     volumes:
       - ./config/jwt/public.pem:/run/config/jwt/public.pem:ro
       - ./config/jwt/private.pem:/run/secrets/jwt/private.pem:ro
@@ -70,6 +71,7 @@ services:
       CATALOG_INGESTION_ENABLED: ${CATALOG_INGESTION_ENABLED:-true}
       CATALOG_DEFAULT_PAGE_SIZE: ${CATALOG_DEFAULT_PAGE_SIZE:-20}
       CATALOG_MAX_PAGE_SIZE: ${CATALOG_MAX_PAGE_SIZE:-100}
+      FRONTEND_ALLOWED_ORIGINS: ${FRONTEND_ALLOWED_ORIGINS:-http://localhost:5173,http://127.0.0.1:5173}
     depends_on:
       catalog-db:
         condition: service_healthy
@@ -90,6 +92,7 @@ services:
       STREAMING_PLAYBACK_EVENTS_TOPIC: ${STREAMING_PLAYBACK_EVENTS_TOPIC:-playback-events}
       STREAMING_SEGMENT_COUNT: ${STREAMING_SEGMENT_COUNT:-5}
       STREAMING_SEGMENT_SIZE_BYTES: ${STREAMING_SEGMENT_SIZE_BYTES:-65536}
+      FRONTEND_ALLOWED_ORIGINS: ${FRONTEND_ALLOWED_ORIGINS:-http://localhost:5173,http://127.0.0.1:5173}
     depends_on:
       kafka:
         condition: service_started
@@ -109,6 +112,7 @@ services:
       SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-benchmark}
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-benchmark}
       JWT_PUBLIC_KEY_PATH: ${JWT_PUBLIC_KEY_PATH:-/run/config/jwt/public.pem}
+      FRONTEND_ALLOWED_ORIGINS: ${FRONTEND_ALLOWED_ORIGINS:-http://localhost:5173,http://127.0.0.1:5173}
     depends_on:
       playlist-db:
         condition: service_healthy
@@ -132,6 +136,7 @@ services:
       SEARCH_INDEX_BATCH_SIZE: ${SEARCH_INDEX_BATCH_SIZE:-500}
       SEARCH_DEFAULT_PAGE_SIZE: ${SEARCH_DEFAULT_PAGE_SIZE:-20}
       SEARCH_MAX_PAGE_SIZE: ${SEARCH_MAX_PAGE_SIZE:-100}
+      FRONTEND_ALLOWED_ORIGINS: ${FRONTEND_ALLOWED_ORIGINS:-http://localhost:5173,http://127.0.0.1:5173}
     volumes:
       - ./config/jwt/public.pem:/run/config/jwt/public.pem:ro
       - ./services/catalog-service/data/catalog.csv:/app/data/catalog.csv:ro
@@ -160,6 +165,7 @@ services:
       ANALYTICS_DEFAULT_PAGE_SIZE: ${ANALYTICS_DEFAULT_PAGE_SIZE:-20}
       ANALYTICS_MAX_PAGE_SIZE: ${ANALYTICS_MAX_PAGE_SIZE:-100}
       ANALYTICS_GLOBAL_CHART_LIMIT: ${ANALYTICS_GLOBAL_CHART_LIMIT:-50}
+      FRONTEND_ALLOWED_ORIGINS: ${FRONTEND_ALLOWED_ORIGINS:-http://localhost:5173,http://127.0.0.1:5173}
     depends_on:
       analytics-db:
         condition: service_healthy
@@ -188,6 +194,7 @@ services:
       RECOMMENDATION_DEFAULT_LIMIT: ${RECOMMENDATION_DEFAULT_LIMIT:-10}
       RECOMMENDATION_MAX_LIMIT: ${RECOMMENDATION_MAX_LIMIT:-50}
       RECOMMENDATION_CACHE_TTL: ${RECOMMENDATION_CACHE_TTL:-PT5M}
+      FRONTEND_ALLOWED_ORIGINS: ${FRONTEND_ALLOWED_ORIGINS:-http://localhost:5173,http://127.0.0.1:5173}
     depends_on:
       recommendation-db:
         condition: service_healthy

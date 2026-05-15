@@ -140,3 +140,58 @@ docker compose logs --no-color --tail=100 analytics-service
 * `services/analytics-service/src/test/java/com/benchmark/analytics/messaging/PlaybackEventKafkaRobustnessIntegrationTest.java`
 * `services/analytics-service/README.md`
 * `BUGS.md`
+
+## Frontend CORS blocked browser API calls
+
+### What the bug was
+
+The frontend could render in the browser, but login and register failed with a generic `Network Error`. The backend Auth endpoints were reachable from non-browser clients, so the failure was specific to browser-enforced cross-origin requests from `http://localhost:5173` to backend service ports such as `http://localhost:8081`.
+
+The same missing CORS support affected the other browser-facing backend services: Catalog, Playlist, Streaming, Search, Analytics, and Recommendation. Notification was not changed because the current Notification Service does not expose a browser-facing HTTP API.
+
+### How it was found
+
+The issue was reported after trying login/register from the frontend in a browser. Inspecting the Spring Security configuration across services showed that CSRF was disabled and JWT/public endpoint authorization was configured, but no service enabled a CORS configuration source. Browser preflight requests would therefore fail before the frontend could call protected or public endpoints successfully.
+
+### How it was fixed
+
+Each browser-facing Spring service now defines a local `CorsConfigurationSource` and enables CORS in its `SecurityFilterChain`.
+
+The CORS policy is shared by convention:
+
+* allowed origins come from `FRONTEND_ALLOWED_ORIGINS`;
+* the default origins are `http://localhost:5173` and `http://127.0.0.1:5173`;
+* allowed methods are `GET`, `POST`, `PATCH`, `DELETE`, and `OPTIONS`;
+* allowed headers are `Authorization` and `Content-Type`;
+* credentials are not enabled because authentication uses bearer JWT headers, not cookies.
+
+Docker Compose and `.env.example` now expose `FRONTEND_ALLOWED_ORIGINS` so local browser origins can be configured without code changes.
+
+### Validation
+
+Validation performed after the fix:
+
+* `docker compose build auth-service catalog-service playlist-service streaming-service search-service analytics-service recommendation-service`
+* `docker compose up -d auth-db auth-service catalog-db catalog-service playlist-db playlist-service kafka streaming-service search-opensearch search-service analytics-db analytics-service recommendation-db recommendation-redis recommendation-service frontend`
+* CORS preflight requests from `Origin: http://localhost:5173` returned HTTP `200` and `Access-Control-Allow-Origin: http://localhost:5173` for Auth, Catalog, Streaming, Playlist, Search, Analytics, and Recommendation.
+* A browser-style `POST /auth/register` request from `Origin: http://localhost:5173` returned HTTP `201` with `Access-Control-Allow-Origin: http://localhost:5173`.
+
+### Files affected
+
+* `.env.example`
+* `docker-compose.yml`
+* `services/auth-service/src/main/java/com/benchmark/auth/config/CorsConfig.java`
+* `services/auth-service/src/main/java/com/benchmark/auth/config/SecurityConfig.java`
+* `services/catalog-service/src/main/java/com/benchmark/catalog/config/CorsConfig.java`
+* `services/catalog-service/src/main/java/com/benchmark/catalog/config/SecurityConfig.java`
+* `services/playlist-service/src/main/java/com/benchmark/playlist/config/CorsConfig.java`
+* `services/playlist-service/src/main/java/com/benchmark/playlist/config/SecurityConfig.java`
+* `services/streaming-service/src/main/java/com/benchmark/streaming/config/CorsConfig.java`
+* `services/streaming-service/src/main/java/com/benchmark/streaming/config/SecurityConfig.java`
+* `services/search-service/src/main/java/com/benchmark/search/config/CorsConfig.java`
+* `services/search-service/src/main/java/com/benchmark/search/config/SecurityConfig.java`
+* `services/analytics-service/src/main/java/com/benchmark/analytics/config/CorsConfig.java`
+* `services/analytics-service/src/main/java/com/benchmark/analytics/config/SecurityConfig.java`
+* `services/recommendation-service/src/main/java/com/benchmark/recommendation/config/CorsConfig.java`
+* `services/recommendation-service/src/main/java/com/benchmark/recommendation/config/SecurityConfig.java`
+* `BUGS.md`

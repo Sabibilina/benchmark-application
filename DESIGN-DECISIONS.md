@@ -3245,3 +3245,36 @@ Updated Compose and env examples so the frontend builds and runs on the shared D
 * Frontend API base URLs default to host-reachable local service ports because browser code runs outside the Docker network.
 * Playwright spec files were generated for browser-flow coverage, but the Docker build runs the faster Vitest/component suite; full Playwright execution can be part of the validation/fix step where browser availability is checked.
 * A browser plugin verification attempt could not complete because the local browser automation runtime failed to initialize its assets; HTTP/container validation still confirmed the app is served.
+
+## Frontend Browser CORS Fix
+
+### Issue
+
+The frontend could reach the app shell in the browser, but login/register calls failed with `Network Error`. Auth worked from non-browser clients, which pointed to browser CORS handling rather than endpoint or credential behavior.
+
+Reviewing the backend services showed that all browser-facing Spring Security configurations were missing explicit CORS enablement and a CORS configuration source. The same browser-origin issue applied to Auth, Catalog, Playlist, Streaming, Search, Analytics, and Recommendation. Notification was left unchanged because the implemented service does not expose a browser-facing HTTP API.
+
+### Decisions Recorded
+
+| Decision | Why | Justification | Affected files/services |
+| --- | --- | --- | --- |
+| Add explicit CORS configuration to every browser-facing Spring service. | The frontend runs in the browser on `localhost:5173` and calls backend services on separate host ports, so browsers require successful preflight/actual CORS responses. | `ARCHITECTURE.md` frontend-to-backend API interaction; `TECH-STACK.md` Spring Boot backend services and React/Vite frontend. | Auth, Catalog, Playlist, Streaming, Search, Analytics, Recommendation service config packages. |
+| Configure CORS at the backend security layer instead of adding a frontend proxy. | Backend APIs are directly configured through `VITE_` service URLs and must be independently callable from the browser. | Existing frontend env strategy from Phase 9; Docker Compose exposes backend service ports to the host. | `SecurityConfig.java`, `CorsConfig.java`, `docker-compose.yml`, `.env.example`. |
+| Use `FRONTEND_ALLOWED_ORIGINS` instead of a wildcard origin. | The local frontend origin must be configurable while avoiding unnecessary broad CORS trust. | Requirement to avoid inventing broader behavior than the documents require; JWT bearer auth does not require cookie credentials. | `.env.example`, `docker-compose.yml`, all service `CorsConfig.java` files. |
+| Default allowed frontend origins to `http://localhost:5173` and `http://127.0.0.1:5173`. | These are the host/browser origins used by the Dockerized Vite/Nginx frontend during local development. | `TECH-STACK.md` React/Vite frontend; Phase 9 frontend container port mapping. | `.env.example`, `docker-compose.yml`, all service `CorsConfig.java` files. |
+| Allow `GET`, `POST`, `PATCH`, `DELETE`, and `OPTIONS` with `Authorization` and `Content-Type` headers. | Existing frontend workflows need reads, creates, playlist reorder updates, deletes, bearer JWTs, and JSON bodies. | Implemented backend endpoints and Phase 9 frontend API client behavior. | All service `CorsConfig.java` files. |
+| Do not enable CORS credentials. | Authentication uses bearer JWTs in the `Authorization` header rather than browser cookies. | `ARCHITECTURE.md` JWT-in-memory frontend session design. | All service `CorsConfig.java` files. |
+
+### Validation
+
+Validation performed after the fix:
+
+* `docker compose build auth-service catalog-service playlist-service streaming-service search-service analytics-service recommendation-service`
+* `docker compose up -d auth-db auth-service catalog-db catalog-service playlist-db playlist-service kafka streaming-service search-opensearch search-service analytics-db analytics-service recommendation-db recommendation-redis recommendation-service frontend`
+* CORS preflight requests from `Origin: http://localhost:5173` returned HTTP `200` and `Access-Control-Allow-Origin: http://localhost:5173` for Auth, Catalog, Streaming, Playlist, Search, Analytics, and Recommendation.
+* A browser-style `POST /auth/register` request from `Origin: http://localhost:5173` returned HTTP `201` with `Access-Control-Allow-Origin: http://localhost:5173`.
+
+### Assumptions
+
+* Local frontend browser access uses `http://localhost:5173` or `http://127.0.0.1:5173` unless overridden through `FRONTEND_ALLOWED_ORIGINS`.
+* Notification still has no browser-facing read API in this baseline, so no Notification CORS change was required.
