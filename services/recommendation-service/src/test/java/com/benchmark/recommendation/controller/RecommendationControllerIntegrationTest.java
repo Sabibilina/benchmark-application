@@ -4,6 +4,8 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.options;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -100,5 +102,15 @@ class RecommendationControllerIntegrationTest {
                         .with(jwt().jwt(token -> token.subject("not-a-uuid"))))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.message").value("JWT subject must be a UUID"));
+    }
+
+    @Test
+    void corsPreflightAllowsFrontendOriginForRecommendationEndpoints() throws Exception {
+        mockMvc.perform(options("/recommend/daily-mix")
+                        .header("Origin", "http://localhost:5173")
+                        .header("Access-Control-Request-Method", "GET")
+                        .header("Access-Control-Request-Headers", "authorization"))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Access-Control-Allow-Origin", "http://localhost:5173"));
     }
 }

@@ -58,4 +58,13 @@ class StreamingServiceTest {
         assertThat(ended.type()).isEqualTo("play.ended");
         assertThat(skipped.type()).isEqualTo("play.skipped");
     }
+
+    @Test
+    void streamingPropertiesApplySafeDefaultsForMissingOrInvalidValues() {
+        StreamingProperties properties = new StreamingProperties("  ", 0, -1);
+
+        assertThat(properties.playbackEventsTopic()).isEqualTo("playback-events");
+        assertThat(properties.segmentCount()).isEqualTo(5);
+        assertThat(properties.segmentSizeBytes()).isEqualTo(65536);
+    }
 }

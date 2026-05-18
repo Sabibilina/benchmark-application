@@ -33,7 +33,13 @@ public class OpenSearchIndexClient {
 
     public void ensureIndex(String indexName) {
         try {
-            restClient.performRequest(new Request("HEAD", "/" + indexName));
+            Response response = restClient.performRequest(new Request("HEAD", "/" + indexName));
+            int statusCode = response.getStatusLine().getStatusCode();
+            if (statusCode == 404) {
+                createIndex(indexName);
+            } else if (statusCode >= 400) {
+                throw unavailable("Unable to check OpenSearch index " + indexName, null);
+            }
         } catch (ResponseException ex) {
             if (ex.getResponse().getStatusLine().getStatusCode() != 404) {
                 throw unavailable("Unable to check OpenSearch index " + indexName, ex);
