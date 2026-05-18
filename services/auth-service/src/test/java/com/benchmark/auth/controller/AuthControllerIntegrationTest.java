@@ -3,7 +3,9 @@ package com.benchmark.auth.controller;
 import static org.hamcrest.Matchers.not;
 import static org.hamcrest.Matchers.blankOrNullString;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.options;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -88,6 +90,21 @@ class AuthControllerIntegrationTest {
     }
 
     @Test
+    void registerRejectsInvalidPayloadWithValidationDetails() throws Exception {
+        mockMvc.perform(post("/auth/register")
+                        .contentType("application/json")
+                        .content("""
+                                {
+                                  "email": "not-an-email",
+                                  "password": "short"
+                                }
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value("validation_failed"))
+                .andExpect(jsonPath("$.details").isArray());
+    }
+
+    @Test
     void loginReturnsTokenForValidCredentialsAndRejectsInvalidCredentials() throws Exception {
         mockMvc.perform(post("/auth/register")
                         .contentType("application/json")
@@ -135,5 +152,15 @@ class AuthControllerIntegrationTest {
 
         mockMvc.perform(get("/actuator/health")).andExpect(status().isOk());
         mockMvc.perform(get("/not-public")).andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void corsPreflightAllowsFrontendOriginForAuthEndpoints() throws Exception {
+        mockMvc.perform(options("/auth/login")
+                        .header("Origin", "http://localhost:5173")
+                        .header("Access-Control-Request-Method", "POST")
+                        .header("Access-Control-Request-Headers", "content-type"))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Access-Control-Allow-Origin", "http://localhost:5173"));
     }
 }

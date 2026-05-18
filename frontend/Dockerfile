@@ -26,8 +26,11 @@ ENV VITE_PLAYBACK_PROGRESS_INTERVAL_MS=${VITE_PLAYBACK_PROGRESS_INTERVAL_MS}
 COPY package.json package-lock.json ./
 RUN npm ci
 COPY . .
-RUN npm test
+RUN npm run test:coverage
 RUN npm run build
+
+FROM scratch AS coverage
+COPY --from=build /app/coverage /coverage
 
 FROM nginx:1.27-alpine
 COPY nginx.conf /etc/nginx/conf.d/default.conf

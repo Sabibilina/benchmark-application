@@ -109,6 +109,48 @@ class PlaylistServiceTest {
     }
 
     @Test
+    void reorderRejectsBlankAndDuplicateSongIds() {
+        UUID playlistId = UUID.randomUUID();
+        Playlist playlist = new Playlist("user-1", "Mix", null, false, Instant.now(clock));
+        playlist.addTrack(new PlaylistTrack(playlist, "song-1", 0, Instant.now(clock)), Instant.now(clock));
+        playlist.addTrack(new PlaylistTrack(playlist, "song-2", 1, Instant.now(clock)), Instant.now(clock));
+        when(playlistRepository.findWithTracksByIdAndOwnerUserId(playlistId, "user-1"))
+                .thenReturn(Optional.of(playlist));
+
+        assertThatThrownBy(() -> playlistService.reorderTracks(
+                new AuthenticatedUser("user-1"),
+                playlistId,
+                new ReorderTracksRequest(List.of("song-1", " "))))
+                .isInstanceOf(PlaylistOperationException.class)
+                .hasMessageContaining("must not be blank");
+
+        assertThatThrownBy(() -> playlistService.reorderTracks(
+                new AuthenticatedUser("user-1"),
+                playlistId,
+                new ReorderTracksRequest(List.of("song-1", "song-1"))))
+                .isInstanceOf(PlaylistOperationException.class)
+                .hasMessageContaining("duplicates");
+    }
+
+    @Test
+    void addTrackReturnsExistingTrackWithoutCreatingDuplicate() {
+        UUID playlistId = UUID.randomUUID();
+        Playlist playlist = new Playlist("user-1", "Mix", null, false, Instant.now(clock));
+        playlist.addTrack(new PlaylistTrack(playlist, "song-1", 0, Instant.now(clock)), Instant.now(clock));
+        when(playlistRepository.findWithTracksByIdAndOwnerUserId(playlistId, "user-1"))
+                .thenReturn(Optional.of(playlist));
+
+        var result = playlistService.addTrack(
+                new AuthenticatedUser("user-1"),
+                playlistId,
+                new AddTrackRequest(" song-1 "));
+
+        assertThat(result.created()).isFalse();
+        assertThat(result.track().songId()).isEqualTo("song-1");
+        Mockito.verifyNoInteractions(playlistTrackRepository);
+    }
+
+    @Test
     void updateRejectsCrossUserMissingPlaylist() {
         UUID playlistId = UUID.randomUUID();
         when(playlistRepository.findWithTracksByIdAndOwnerUserId(playlistId, "other-user")).thenReturn(Optional.empty());
