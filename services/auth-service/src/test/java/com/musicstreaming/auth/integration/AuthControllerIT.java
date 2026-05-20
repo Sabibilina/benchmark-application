@@ -109,7 +109,7 @@ class AuthControllerIT {
     void login_validCredentials_returns200WithToken() {
         register("alice", "alice@example.com", "password123");
 
-        ResponseEntity<AuthResponse> response = login("alice", "password123");
+        ResponseEntity<AuthResponse> response = login("alice@example.com", "password123");
 
         assertEquals(HttpStatus.OK, response.getStatusCode());
         assertNotNull(response.getBody());
@@ -128,7 +128,7 @@ class AuthControllerIT {
                 .getPayload()
                 .getSubject();
 
-        ResponseEntity<AuthResponse> loginResponse = login("alice2", "password123");
+        ResponseEntity<AuthResponse> loginResponse = login("alice2@example.com", "password123");
         Claims claims = Jwts.parser()
                 .verifyWith(jwtConfig.getPublicKey())
                 .build()
@@ -145,7 +145,7 @@ class AuthControllerIT {
 
         ResponseEntity<ErrorResponse> response = restTemplate.postForEntity(
                 "/auth/login",
-                Map.of("username", "alice", "password", "wrongpassword"),
+                Map.of("email", "alice@example.com", "password", "wrongpassword"),
                 ErrorResponse.class);
 
         assertEquals(HttpStatus.UNAUTHORIZED, response.getStatusCode());
@@ -155,7 +155,7 @@ class AuthControllerIT {
     void login_unknownUser_returns401() {
         ResponseEntity<ErrorResponse> response = restTemplate.postForEntity(
                 "/auth/login",
-                Map.of("username", "nobody", "password", "password123"),
+                Map.of("email", "nobody@example.com", "password", "password123"),
                 ErrorResponse.class);
 
         assertEquals(HttpStatus.UNAUTHORIZED, response.getStatusCode());
@@ -178,10 +178,10 @@ class AuthControllerIT {
                 AuthResponse.class);
     }
 
-    private ResponseEntity<AuthResponse> login(String username, String password) {
+    private ResponseEntity<AuthResponse> login(String email, String password) {
         return restTemplate.postForEntity(
                 "/auth/login",
-                Map.of("username", username, "password", password),
+                Map.of("email", email, "password", password),
                 AuthResponse.class);
     }
 }

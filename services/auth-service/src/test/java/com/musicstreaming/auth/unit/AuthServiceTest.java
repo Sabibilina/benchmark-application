@@ -107,10 +107,10 @@ class AuthServiceTest {
         User user = userWithId("alice", "alice@example.com");
         user.setPasswordHash("$2a$hashed");
 
-        when(userRepository.findByUsername("alice")).thenReturn(Optional.of(user));
+        when(userRepository.findByEmail("alice@example.com")).thenReturn(Optional.of(user));
         when(passwordEncoder.matches("password123", "$2a$hashed")).thenReturn(true);
 
-        AuthResponse response = authService.login(new LoginRequest("alice", "password123"));
+        AuthResponse response = authService.login(new LoginRequest("alice@example.com", "password123"));
 
         assertNotNull(response.token());
     }
@@ -120,19 +120,19 @@ class AuthServiceTest {
         User user = userWithId("alice", "alice@example.com");
         user.setPasswordHash("$2a$hashed");
 
-        when(userRepository.findByUsername("alice")).thenReturn(Optional.of(user));
+        when(userRepository.findByEmail("alice@example.com")).thenReturn(Optional.of(user));
         when(passwordEncoder.matches("wrongpass", "$2a$hashed")).thenReturn(false);
 
         assertThrows(InvalidCredentialsException.class, () ->
-                authService.login(new LoginRequest("alice", "wrongpass")));
+                authService.login(new LoginRequest("alice@example.com", "wrongpass")));
     }
 
     @Test
     void login_unknownUser_throwsInvalidCredentials() {
-        when(userRepository.findByUsername("nobody")).thenReturn(Optional.empty());
+        when(userRepository.findByEmail("nobody@example.com")).thenReturn(Optional.empty());
 
         assertThrows(InvalidCredentialsException.class, () ->
-                authService.login(new LoginRequest("nobody", "password123")));
+                authService.login(new LoginRequest("nobody@example.com", "password123")));
     }
 
     private static User userWithId(String username, String email) {
