@@ -4,9 +4,9 @@ Backend microservices and Docker Compose deployment for a music streaming benchm
 
 ## Branch Scope
 
-This branch contains the backend implementation of the eight microservices plus the shared Docker Compose deployment environment. It does not include the scalability branch or cost-efficiency work.
+## Current status
 
-The implemented backend services are:
+This repository contains the Docker Compose runtime for the benchmark application, including implemented backend services, persistence components, messaging, observability, and load-generation support.
 
 | Service | Purpose | Host port |
 | --- | --- | ---: |
@@ -36,6 +36,9 @@ Use these documents for project decisions and validation:
 ```text
 benchmark-application/
   docker-compose.yml
+  docker-compose.scale-baseline.yml
+  docker-compose.scale-100k.yml
+  docker-compose.scale-1m.yml
   .env.example
   config/
     grafana/
@@ -160,6 +163,7 @@ docker compose ps
 
 Useful URLs:
 
+* Gateway: http://localhost:8080/health
 * Prometheus: http://localhost:9090
 * Grafana: http://localhost:3001
 * OpenSearch: http://localhost:9200

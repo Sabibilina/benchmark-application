@@ -14,6 +14,61 @@ The deployment must remain centered on:
 
 Kubernetes, Helm, Nomad, Swarm, and other orchestrators are out of scope.
 
+## Implemented First Version
+
+The first serious scalability implementation keeps the system Docker Compose-only and adds benchmark-oriented infrastructure without changing the service boundaries.
+
+Implemented files:
+
+- `config/nginx/gateway.conf`
+- `config/nginx/proxy_params`
+- `docker-compose.scale-baseline.yml`
+- `docker-compose.scale-100k.yml`
+- `docker-compose.scale-1m.yml`
+- `load-generator/k6/smoke.js`
+- `load-generator/k6/mixed-user-journey.js`
+- `config/grafana/dashboards/backend-scalability.json`
+- `config/prometheus/prometheus.yml`
+- `docker-compose.yml`
+- database scaling index migrations for Catalog, Playlist, and Recommendation
+
+Decisions:
+
+- **Nginx gateway was added as the Docker-only traffic entrypoint.** This is necessary because scaled Compose replicas cannot all bind the same host ports. The gateway exposes one stable port, routes by path to the existing services, and lets app replicas stay internal on `benchmark-network`.
+- **Direct service ports remain in the base Compose file for development.** The scale override files remove app host ports with Compose `!reset []`, so benchmark runs can use `docker compose up --scale` safely without breaking the simpler developer path.
+- **Different scale profiles were encoded as Compose overrides.** Baseline, 100k, and 1M profiles express different resource and replica expectations for services instead of scaling all services equally.
+- **Streaming receives the highest replica count.** It is stateless and expected to carry the heaviest request volume from stream starts, segment fetches, and playback event publishing.
+- **Search, Catalog, Recommendation, and Analytics receive medium/high replica counts.** These are read-heavy or event-heavy services with backend-specific bottlenecks, so replicas are useful but must be paired with OpenSearch, PostgreSQL, Redis, Kafka, and ClickHouse tuning.
+- **Auth and Notification are scaled more modestly.** Auth is not on every request because JWT validation is local, and Notification is internal and can tolerate lag.
+- **Kafka topic initialization was added.** The `kafka-init` service creates playback and playlist topics with configurable partitions, making consumer parallelism repeatable across benchmark runs.
+- **Bounded DB and Kafka client tuning was added through environment variables.** Hikari pool sizes, connection timeouts, Kafka producer batching, listener concurrency, and JVM memory percentages are now profile-tunable without code changes.
+- **Redis max-memory and eviction policy are now explicit.** This makes recommendation cache behavior repeatable and prevents hidden memory growth during long benchmark runs.
+- **Prometheus now scrapes gateway, Kafka, Redis, and container metrics in addition to Spring Boot metrics.** This gives the minimum signal needed to decide whether the next bottleneck is request routing, service code, Kafka lag, Redis cache pressure, or container saturation.
+- **A Grafana backend scalability dashboard was provisioned.** It focuses on request rate, p95 latency, container CPU, JVM heap, Kafka lag, Redis hit/miss behavior, gateway connections, and Hikari active connections.
+- **k6 scripts now target the gateway by default.** This keeps load-test traffic on the same path real users and the frontend should use during scaled benchmark runs.
+- **Database index migrations were added only for existing hot paths.** Catalog gets filter/sort indexes, Playlist gets owner/track lookup indexes, and Recommendation gets positive interaction lookup indexes. No new behavior was invented.
+
+Validation performed:
+
+- `docker compose config --quiet`
+- `docker compose -f docker-compose.yml -f docker-compose.scale-baseline.yml config --quiet`
+- `docker compose -f docker-compose.yml -f docker-compose.scale-100k.yml config --quiet`
+- `docker compose -f docker-compose.yml -f docker-compose.scale-1m.yml config --quiet`
+
+Recommended first benchmark command:
+
+```powershell
+docker compose -f docker-compose.yml -f docker-compose.scale-baseline.yml up -d --build
+docker compose run --rm k6 run /scripts/smoke.js
+```
+
+Recommended scaled benchmark command shape:
+
+```powershell
+docker compose -f docker-compose.yml -f docker-compose.scale-100k.yml up -d --build --scale streaming-service=6 --scale catalog-service=3 --scale search-service=3 --scale recommendation-service=3 --scale analytics-service=2 --scale auth-service=2 --scale playlist-service=2
+docker compose run --rm -e K6_TARGET_RATE=50 -e K6_HOLD_DURATION=10m k6 run /scripts/mixed-user-journey.js
+```
+
 ## Assumptions
 
 - "1,000,000 users" means registered users with a smaller concurrent active population during a benchmark window.
