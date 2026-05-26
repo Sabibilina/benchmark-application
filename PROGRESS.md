@@ -373,3 +373,40 @@ Services are built **one at a time** in the order below. Each service goes throu
 - [ ] Load generator can execute the main application flows end-to-end
 - [ ] Integrated system tests show that all services run correctly together in the shared deployment environment
 - [ ] Cross-service authentication, persistence, and messaging behavior are verified end-to-end
+---
+
+## Phase S1 — Scaling Implementation (2026-05-21)
+
+### Goal
+Transform the single-instance Docker Compose deployment into a horizontally scalable benchmark
+configuration capable of driving 1,000,000-user load tests, without leaving Docker Compose.
+
+### Changes delivered
+
+| Category | What changed |
+|---|---|
+| **Kafka** | `init-kafka` one-shot service creates `playback-events` (12 partitions) and `playlist-events` (6 partitions). `KAFKA_AUTO_CREATE_TOPICS_ENABLE=false` prevents accidental 1-partition auto-creation. |
+| **nginx-lb** | New `nginx-lb` compose service (port 80) with `resolver 127.0.0.11 valid=5s` for dynamic replica discovery. Per-path rate limiting. |
+| **Frontend proxy** | `frontend/nginx.conf` now routes all `/api/*` through nginx-lb instead of directly to service names. |
+| **Service replicas** | `deploy.replicas` set per service in `docker-compose.yml`: streaming=3, catalog=2, search=2, playlist=2, analytics=2, recommendation=2, notification=1. Auth stays at 1 (JWT key race constraint on fresh volumes). |
+| **`container_name` removed** | All 8 application services; enables `docker compose up --scale <service>=N`. |
+| **Host ports removed** | Application services (8081–8088) removed; nginx-lb:80 is the single API entry point. |
+| **JWT dependency** | All `jwt-keys:ro` services depend on `auth-service: service_healthy`. |
+| **Resource limits** | All infrastructure containers (Kafka, Zookeeper, ClickHouse, Redis, MongoDB, OpenSearch, nginx-lb, Prometheus, Grafana, PostgreSQL) now have explicit `deploy.resources.limits`. |
+| **PostgreSQL tuning** | `shared_buffers`, `work_mem`, `max_connections`, `effective_cache_size` set via `-c` args per instance workload. |
+| **HikariCP tuning** | `MAXIMUM_POOL_SIZE=20`, `MINIMUM_IDLE=5`, `CONNECTION_TIMEOUT=30000` on all DB services. |
+| **OpenSearch heap** | Increased from 512 m to 1 g (tunable via `OPENSEARCH_JAVA_OPTS`). |
+| **Redis** | `maxmemory 512mb`, `maxmemory-policy allkeys-lru`, `appendfsync everysec`. |
+| **ClickHouse batch insert** | `BatchEventBuffer` flushes Kafka events to ClickHouse in batches of 500 or every 5 s. `@EnableScheduling` added. |
+| **Prometheus exporters** | `postgres-exporter` ×4, `redis-exporter`, `kafka-exporter` added. DNS-SD configured for scaled services. |
+| **Grafana dashboard** | `scaling.json` dashboard with 19 panels: request rate, error rate, latency, JVM, CPU, HikariCP, PG connections, Kafka lag, Redis hit rate/memory, OpenSearch heap. |
+| **k6 script** | Full user journey implemented across 6 selectable scenarios (`smoke`, `catalog_stream`, `kafka_pipeline`, `ramp`, `stress`, `soak`). Routes through nginx-lb. |
+
+### Acceptance criteria
+
+- [ ] `docker compose up` starts all services without port conflicts
+- [ ] `docker compose up --scale streaming-service=6` works without errors
+- [ ] Grafana shows data from all 6 exporters (4 PG, 1 Redis, 1 Kafka)
+- [ ] `docker compose --profile load-test up` runs k6 `ramp` scenario to completion
+- [ ] Kafka consumer lag stays < 10 K during `ramp` scenario with default replicas
+- [ ] No "Too many parts" errors in ClickHouse logs during `kafka_pipeline` scenario

@@ -1,0 +1,2469 @@
+╭─── Claude Code v2.1.126 ─────────────────────────────────────────────────────╮
+│                                                    │ Tips for getting        │
+│                Welcome back Diddler!               │ started                 │
+│                                                    │ Run /init to create a … │
+│                       ▐▛███▜▌                      │ ─────────────────────── │
+│                      ▝▜█████▛▘                     │ What's new              │
+│                        ▘▘ ▝▝                       │ Internal fixes          │
+│ Sonnet 4.6 · Claude Pro · andrei.lentu@gmail.com's │ [VSCode] Fixed extensi… │
+│  Organization                                      │ Added `CLAUDE_CODE_ENA… │
+│ ~/Desktop/Thesis/Iteration01/benchmark-application │ /release-notes for more │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+❯ The system already runs fully in Docker Compose and must stay fully in Docker 
+   Compose. Do not introduce Kubernetes, Helm, Nomad, or any other              
+  orchestrator. Keep the whole solution centered on Dockerfiles,                
+  docker-compose.yml, Compose overrides/profiles, and container-level tuning    
+  only.                                                                         
+                                                                                
+  Your task in this step is ONLY to produce a scaling plan for reaching         
+  1,000,000 users. Do not generate implementation code yet unless it is         
+  absolutely necessary to illustrate the plan, and if you include any code,     
+  keep it minimal and clearly marked as non-final.                              
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+  I want a concrete, engineering-focused scale plan for 1 million users that    
+  stays realistic for Docker-based benchmarking.                                
+                                                                                
+  You must think about:                                                         
+  1. Which services should scale horizontally and which should mostly scale     
+  vertically.                                                                   
+  2. Different instance counts for different services, for example x auth       
+  instances, y search instances, z streaming instances, based on expected       
+  traffic shape rather than treating all services equally.                      
+  3. Database lookup pressure, index strategy, query hotspots, pagination,      
+  caching opportunities, read/write split opportunities where relevant, and how 
+   to reduce unnecessary cross-service calls.                                   
+  4. Bottlenecks in OpenSearch, ClickHouse, PostgreSQL, Redis, MongoDB, and     
+  Kafka.                                                                        
+  5. Which services are stateless and easy to scale with docker compose up      
+  --scale, and which services need more careful handling because of state,      
+  partitions, or storage.                                                       
+  6. Backpressure, retries, circuit breakers, queue buildup, and graceful       
+  degradation.                                                                  
+  7. Metrics and dashboards needed to decide scaling thresholds using           
+  Prometheus and Grafana.                                                       
+  8. Load-test phases using k6, including what to test first and in what order. 
+  9. A recommended scaling order, so we do not optimize low-impact services     
+  first.                                                                        
+  10. Risks, assumptions, and trade-offs.                                       
+  11. Consider whether a load balancer or reverse proxy layer is needed, what   
+  role it should play, and how it fits into a Docker-only setup.                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+  Important constraints:                                                        
+  - Stay inside the current architecture unless a change is clearly justified.  
+  - Do not say “use Kubernetes.”                                                
+  - Do not give generic advice; tie every recommendation to one of the actual   
+  services in this system.                                                      
+  - Explicitly explain why each service may need different scaling patterns.    
+  - Explicitly discuss database lookup optimization and caching strategy.       
+                                                                                
+                                                                                
+  Document this in a new document called SCALABILITY.md                         
+
+⏺ Let me explore the current architecture before writing the plan.
+
+⏺ Explore(Architecture survey for scaling plan)
+  ⎿  Done (52 tool uses · 81.5k tokens · 1m 54s)
+  (ctrl+o to expand)
+
+⏺ Now I have a thorough picture of the entire system. Let me write the scaling
+  plan document.
+
+⏺ Write(SCALABILITY.md)
+  ⎿  Wrote 999 lines to SCALABILITY.md
+      2 ## Docker Compose — Engineering Reference
+      3 
+      4 > **Scope:** This document covers how to scale the existing eight
+      5 > application to support 1 million registered users (target: ~100
+         K DAU, ~20 K peak-concurrent
+      6 > users). Every recommendation is anchored to a concrete service,
+      7 > this repository. No Kubernetes, Helm, or external orchestrators
+         are introduced.
+      8 
+      9 ---
+     … +1335 lines (ctrl+o to expand)
+
+⏺ Now let me save a project memory about this document so future sessions can
+  pick up where this left off.
+
+⏺ claude(Save project memory for scaling plan)
+  ⎿  Done (4 tool uses · 11.9k tokens · 19s)
+  (ctrl+o to expand)
+
+⏺ SCALABILITY.md is written at the repo root. Here is a quick orientation:
+
+  What the document covers
+
+  - §2 — Why a dedicated nginx-lb container is required (the frontend nginx does
+   a one-shot DNS lookup and will not discover new replicas) and what its config
+   must include (resolver 127.0.0.11 valid=10s, least_conn for
+  streaming/recommendation).
+  - §3–4 — Each service's scaling pattern and why, with specific replica counts:
+   streaming-service at 8–10 (stateless, highest load), auth-service at 4–6
+  (BCrypt is expensive), consumers capped at Kafka partition count.
+  - §5–9 — Per-database optimization: keyset pagination for catalog, composite
+  indexes for all four PostgreSQL DBs, OpenSearch shard/heap sizing, ClickHouse
+  batch-insert requirement, Redis maxmemory + LRU policy.
+  - §10 — The single most critical prerequisite: pre-creating playback-events
+  with 12 partitions and playlist-events with 6. Without this, every consumer
+  replica you add is idle.
+  - §12 — Resilience4j circuit breakers, nginx rate limiting, ClickHouse
+  dead-letter pattern.
+  - §13 — Four Prometheus/Grafana panel groups with exact metric names and alert
+   thresholds.
+  - §14 — Six k6 phases from 5 VU smoke to 10 K VU peak, with explicit "do not
+  skip" ordering.
+  - §15 — A 15-step sequenced scaling order so low-impact services are not
+  optimized before high-impact prerequisites.
+  - §16 — Seven concrete risks (JWT race, Kafka partition immutability, nginx
+  DNS caching, host RAM budget, ClickHouse part explosion, etc.).
+
+  The next logical step when you are ready to implement is Step 1 in §15: the
+  init-kafka container that pre-creates topics before any service starts.
+
+✻ Brewed for 9m 9s
+
+※ recap: Created SCALABILITY.md with a 15-step Docker Compose scaling plan for 1 million users. Next action is implementing Step 1: an init-kafka container that pre-creates the playback-events and playlist-events topics with the correct partition counts. (disable recaps in /config)
+
+❯ Now take the scaling plan and implement the first serious version of it in    
+  this repository.                                                              
+                                                                                
+  Important constraints:                                                        
+  - Keep everything in Docker and Docker Compose.                               
+  - Do not use Kubernetes, Helm, or any external orchestrator.                  
+  - Stay aligned with the current architecture as much as possible.             
+  - make the engineering decisions yourself and justify them in                 
+  [SCALABILITY.md](SCALABILITY.md)                                              
+  - If you believe a load balancer or reverse proxy is needed for proper        
+  horizontal scaling in Docker, decide that yourself and implement it           
+  appropriately.                                                                
+                                                                                
+  Your task:                                                                    
+  - Make the repository more capable of being benchmarked toward 1,000,000      
+  users.                                                                        
+  - Make practical, incremental changes that improve scalability, tunability,   
+  observability, and repeatability.                                             
+  - Decide how scaling should be expressed in Docker Compose and related        
+  config.                                                                       
+  - Decide whether different services should be prepared for different instance 
+   counts.                                                                      
+  - Decide what should be changed in configs, infra wiring, resource settings,  
+  service communication, and any code paths that clearly block scaling.         
+  - Consider database lookup efficiency, caching opportunities, query/index     
+  pressure, messaging throughput, and request routing.                          
+  - Consider how traffic should enter the system and how it should be           
+  distributed across replicas.                                                  
+  - Consider Prometheus, Grafana, and k6 as part of the solution.               
+                                                                                
+  Expected behavior:                                                            
+  - Do not rewrite the project from scratch.                                    
+  - Do not add unnecessary complexity.                                          
+  - Keep the whole solution runnable with Docker Compose.                       
+
+⏺ Let me read all the key files before implementing anything.
+
+  Searched for 5 patterns, read 17 files (ctrl+o to expand)
+
+❯ Document decisions in PROGRESS.md, FINIDNGS.md, and DECISIONS.md 
+
+  Searched for 2 patterns, read 5 files (ctrl+o to expand)
+
+⏺ Bash(find /Users/Sabina/Desktop/Thesis/Iteration01/benchmark-application/servi
+      ces/analytics-service -name "pom.xml" | xargs grep -A2 "clickhouse"
+      2>/dev/null | head…)
+  ⎿          <clickhouse.version>0.6.3</clickhouse.version>
+             <testcontainers.version>1.19.8</testcontainers.version>
+         </properties>
+     … +6 lines (ctrl+o to expand)
+
+  Searched for 5 patterns (ctrl+o to expand)
+
+⏺ Now I have everything I need. Let me implement all changes in parallel
+  batches. This is a substantial build — I'll work across all files
+  systematically.
+
+  Read 3 files (ctrl+o to expand)
+
+⏺ I have a complete picture of the system. Now implementing everything in
+  parallel batches. Starting with the highest-impact files first.
+⏺ Bash(mkdir -p /Users/Sabina/Desktop/Thesis/Iteration01/benchmark-application/i
+      nfra/nginx-lb)
+  ⎿  Done
+
+⏺ Write(infra/nginx-lb/nginx.conf)
+  ⎿  Wrote 154 lines to infra/nginx-lb/nginx.conf
+      1 worker_processes auto;
+      2 error_log /var/log/nginx/error.log warn;
+      3 pid /tmp/nginx.pid;
+      4 
+      5 events {
+      6     worker_connections 4096;
+      7     multi_accept on;
+      8     use epoll;
+      9 }
+     … +171 lines (ctrl+o to expand)
+
+⏺ Write(frontend/nginx.conf)
+  ⎿  Added 20 lines, removed 9 lines
+       5      root /usr/share/nginx/html;
+       6      index index.html;
+       7  
+       8 -    # Proxy /api/* to backend services (mirrors the Vite dev pr
+         -oxy)                                                           
+       8 +    # ── API routing through the dedicated load balancer ──────
+         +─────────────────                                              
+       9 +    # All /api/* traffic is forwarded to nginx-lb, which handle
+         +s replica                                                      
+      10 +    # distribution, rate limiting, and access logging for all b
+         +ackend services.                                               
+      11 +    # Path rewriting matches the original direct-service mappin
+         +g so the frontend                                              
+      12 +    # React app needs no changes.                              
+      13 +    #                                                          
+      14 +    # Pattern: strip the /api/<service-prefix>/ location, then 
+         +prepend the                                                    
+      15 +    # service's internal root path on nginx-lb.  nginx-lb uses 
+         +Docker DNS with                                                
+      16 +    # resolver 127.0.0.11 and per-request re-resolution to dist
+         +ribute across                                                  
+      17 +    # all running replicas of each service.                    
+      18 +                                                               
+      19      location /api/auth/ {
+      10 -        proxy_pass http://auth-service:8080/auth/;             
+      20 +        proxy_pass http://nginx-lb/auth/;                      
+      21          proxy_set_header Host $host;
+      22          proxy_set_header X-Real-IP $remote_addr;
+      23      }
+      24  
+      25      location /api/catalog/ {
+      16 -        proxy_pass http://catalog-service:8080/;               
+      26 +        proxy_pass http://nginx-lb/;                           
+      27          proxy_set_header Host $host;
+      28          proxy_set_header X-Real-IP $remote_addr;
+      29      }
+      30  
+      31      location /api/stream/ {
+      22 -        proxy_pass http://streaming-service:8080/;             
+      32 +        proxy_pass http://nginx-lb/;                           
+      33          proxy_set_header Host $host;
+      34          proxy_set_header X-Real-IP $remote_addr;
+      35      }
+      36  
+      37      location /api/playlists/ {
+      28 -        proxy_pass http://playlist-service:8080/;              
+      38 +        proxy_pass http://nginx-lb/;                           
+      39          proxy_set_header Host $host;
+      40          proxy_set_header X-Real-IP $remote_addr;
+      41      }
+      42  
+      43      location /api/search/ {
+      34 -        proxy_pass http://search-service:8080/;                
+      44 +        proxy_pass http://nginx-lb/;                           
+      45          proxy_set_header Host $host;
+      46          proxy_set_header X-Real-IP $remote_addr;
+      47      }
+      48  
+      49      location /api/analytics/ {
+      40 -        proxy_pass http://analytics-service:8080/;             
+      50 +        proxy_pass http://nginx-lb/;                           
+      51          proxy_set_header Host $host;
+      52          proxy_set_header X-Real-IP $remote_addr;
+      53      }
+      54  
+      55      location /api/recommend/ {
+      46 -        proxy_pass http://recommendation-service:8080/;        
+      56 +        proxy_pass http://nginx-lb/;                           
+      57          proxy_set_header Host $host;
+      58          proxy_set_header X-Real-IP $remote_addr;
+      59      }
+      60  
+      61      location /api/notifications/ {
+      52 -        proxy_pass http://notification-service:8080/;          
+      62 +        proxy_pass http://nginx-lb/;                           
+      63          proxy_set_header Host $host;
+      64          proxy_set_header X-Real-IP $remote_addr;
+      65      }
+      66  
+      67 +    # ── SPA fallback ─────────────────────────────────────────
+         +─────────────────                                              
+      68      location / {
+      69          try_files $uri $uri/ /index.html;
+      70      }
+
+⏺ Now the big docker-compose.yml rewrite and the analytics batch insert,
+  Prometheus config, and k6 script all in parallel:
+
+⏺ Write(docker-compose.yml)
+  ⎿  Added 337 lines, removed 29 lines
+      35        ZOOKEEPER_4LW_COMMANDS_WHITELIST: "*"
+      36      ports:
+      37        - "${ZOOKEEPER_HOST_PORT:-2181}:2181"
+      38 +    deploy:                                                    
+      39 +      resources:                                               
+      40 +        limits:                                                
+      41 +          cpus: "0.5"                                          
+      42 +          memory: 512m                                         
+      43      healthcheck:
+      44        test: ["CMD-SHELL", "echo srvr | nc -w 2 localhost 2181 |
+           grep -q 'Zookeeper version' || exit 1"]
+      45        interval: 10s
+     ...
+      68        KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      69        KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      70        KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      66 -      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"                  
+      71 +      # Disable auto-creation so init-kafka controls partition 
+         +counts precisely.                                              
+      72 +      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"                 
+      73        KAFKA_LOG_RETENTION_HOURS: 24
+      74 +      KAFKA_MESSAGE_MAX_BYTES: 1048576                         
+      75 +      KAFKA_REPLICA_FETCH_MAX_BYTES: 1048576                   
+      76      ports:
+      77        - "${KAFKA_HOST_PORT:-29092}:29092"
+      78 +    deploy:                                                    
+      79 +      resources:                                               
+      80 +        limits:                                                
+      81 +          cpus: "1.0"                                          
+      82 +          memory: 1g                                           
+      83      healthcheck:
+      84        test: ["CMD-SHELL", "kafka-broker-api-versions --bootstra
+          p-server localhost:9092 > /dev/null 2>&1 || exit 1"]
+      85        interval: 30s
+     ...
+       87        retries: 10
+       88        start_period: 30s
+       89  
+       90 +  # ── Kafka topic initialiser (one-shot) ────────────────────
+          +────────────────                                              
+       91 +  # Creates topics with production-appropriate partition count
+          +s before any                                                  
+       92 +  # producer or consumer starts.  Partition counts are sized f
+          +or the target                                                 
+       93 +  # replica counts:                                           
+       94 +  #   playback-events  → 12 partitions  (analytics × 4  + reco
+          +mmendation × 3)                                               
+       95 +  #   playlist-events  →  6 partitions  (notification × 2, hea
+          +droom to 6)                                                   
+       96 +  # Services that produce/consume Kafka MUST depend on init-ka
+          +fka completing.                                               
+       97 +                                                              
+       98 +  init-kafka:                                                 
+       99 +    image: confluentinc/cp-kafka:${CONFLUENT_VERSION:-7.6.0}  
+      100 +    container_name: init-kafka                                
+      101 +    networks: [music-net]                                     
+      102 +    depends_on:                                               
+      103 +      kafka:                                                  
+      104 +        condition: service_healthy                            
+      105 +    command: >                                                
+      106 +      bash -c "                                               
+      107 +        kafka-topics.sh --bootstrap-server kafka:9092 --create
+          + --if-not-exists                                              
+      108 +          --topic ${KAFKA_TOPIC_PLAYBACK_EVENTS:-playback-even
+          +ts}                                                           
+      109 +          --partitions ${PLAYBACK_EVENTS_PARTITIONS:-12}      
+      110 +          --replication-factor 1 &&                           
+      111 +        kafka-topics.sh --bootstrap-server kafka:9092 --create
+          + --if-not-exists                                              
+      112 +          --topic ${KAFKA_TOPIC_PLAYLIST_EVENTS:-playlist-even
+          +ts}                                                           
+      113 +          --partitions ${PLAYLIST_EVENTS_PARTITIONS:-6}       
+      114 +          --replication-factor 1 &&                           
+      115 +        echo 'Kafka topics initialised.' &&                   
+      116 +        kafka-topics.sh --bootstrap-server kafka:9092 --list  
+      117 +      "                                                       
+      118 +    restart: "no"                                             
+      119 +                                                              
+      120    # ── PostgreSQL databases (one per service) ────────────────
+           ────────────────
+      121  
+      122    auth-db:
+     ...
+      129        POSTGRES_DB: ${AUTH_DB_NAME:-authdb}
+      130        POSTGRES_USER: ${AUTH_DB_USER:-authuser}
+      131        POSTGRES_PASSWORD: ${AUTH_DB_PASSWORD:-authpass}
+      132 +    command: >                                                
+      133 +      postgres                                                
+      134 +        -c shared_buffers=256MB                               
+      135 +        -c work_mem=16MB                                      
+      136 +        -c max_connections=200                                
+      137 +        -c effective_cache_size=512MB                         
+      138      ports:
+      139        - "${AUTH_DB_HOST_PORT:-5432}:5432"
+      140 +    deploy:                                                   
+      141 +      resources:                                              
+      142 +        limits:                                               
+      143 +          cpus: "1.0"                                         
+      144 +          memory: 1g                                          
+      145      healthcheck:
+      146        test: ["CMD-SHELL", "pg_isready -U ${AUTH_DB_USER:-authu
+           ser} -d ${AUTH_DB_NAME:-authdb}"]
+      147        interval: 10s
+     ...
+      159        POSTGRES_DB: ${CATALOG_DB_NAME:-catalogdb}
+      160        POSTGRES_USER: ${CATALOG_DB_USER:-cataloguser}
+      161        POSTGRES_PASSWORD: ${CATALOG_DB_PASSWORD:-catalogpass}
+      162 +    command: >                                                
+      163 +      postgres                                                
+      164 +        -c shared_buffers=512MB                               
+      165 +        -c work_mem=32MB                                      
+      166 +        -c max_connections=200                                
+      167 +        -c effective_cache_size=1GB                           
+      168 +        -c random_page_cost=1.1                               
+      169      ports:
+      170        - "${CATALOG_DB_HOST_PORT:-5433}:5432"
+      171 +    deploy:                                                   
+      172 +      resources:                                              
+      173 +        limits:                                               
+      174 +          cpus: "1.0"                                         
+      175 +          memory: 2g                                          
+      176      healthcheck:
+      177        test: ["CMD-SHELL", "pg_isready -U ${CATALOG_DB_USER:-ca
+           taloguser} -d ${CATALOG_DB_NAME:-catalogdb}"]
+      178        interval: 10s
+     ...
+      190        POSTGRES_DB: ${PLAYLIST_DB_NAME:-playlistdb}
+      191        POSTGRES_USER: ${PLAYLIST_DB_USER:-playlistuser}
+      192        POSTGRES_PASSWORD: ${PLAYLIST_DB_PASSWORD:-playlistpass}
+      193 +    command: >                                                
+      194 +      postgres                                                
+      195 +        -c shared_buffers=256MB                               
+      196 +        -c work_mem=16MB                                      
+      197 +        -c max_connections=200                                
+      198 +        -c effective_cache_size=512MB                         
+      199      ports:
+      200        - "${PLAYLIST_DB_HOST_PORT:-5434}:5432"
+      201 +    deploy:                                                   
+      202 +      resources:                                              
+      203 +        limits:                                               
+      204 +          cpus: "0.5"                                         
+      205 +          memory: 1g                                          
+      206      healthcheck:
+      207        test: ["CMD-SHELL", "pg_isready -U ${PLAYLIST_DB_USER:-p
+           laylistuser} -d ${PLAYLIST_DB_NAME:-playlistdb}"]
+      208        interval: 10s
+     ...
+      220        POSTGRES_DB: ${RECOMMENDATION_DB_NAME:-recommendationdb}
+      221        POSTGRES_USER: ${RECOMMENDATION_DB_USER:-recommendationu
+           ser}
+      222        POSTGRES_PASSWORD: ${RECOMMENDATION_DB_PASSWORD:-recomme
+           ndationpass}
+      223 +    command: >                                                
+      224 +      postgres                                                
+      225 +        -c shared_buffers=256MB                               
+      226 +        -c work_mem=16MB                                      
+      227 +        -c max_connections=200                                
+      228 +        -c effective_cache_size=512MB                         
+      229      ports:
+      230        - "${RECOMMENDATION_DB_HOST_PORT:-5435}:5432"
+      231 +    deploy:                                                   
+      232 +      resources:                                              
+      233 +        limits:                                               
+      234 +          cpus: "0.5"                                         
+      235 +          memory: 1g                                          
+      236      healthcheck:
+      237        test: ["CMD-SHELL", "pg_isready -U ${RECOMMENDATION_DB_U
+           SER:-recommendationuser} -d ${RECOMMENDATION_DB_NAME:-recommen
+           dationdb}"]
+      238        interval: 10s
+     ...
+      241        start_period: 10s
+      242  
+      243    # ── OpenSearch ────────────────────────────────────────────
+           ────────────────
+      244 +  # Heap increased from 512 m to 1 g.  Rule: heap = min(half R
+          +AM on node, 31 g).                                            
+      245 +  # At 1 g the JVM stays well below compressed-OOP threshold (
+          +~31 g) and has                                                
+      246 +  # enough room for field-data caches and segment buffers at s
+          +cale.                                                         
+      247  
+      248    opensearch:
+      249      image: opensearchproject/opensearch:${OPENSEARCH_VERSION:-
+           2.13.0}
+     ...
+      253        - opensearch-data:/usr/share/opensearch/data
+      254      environment:
+      255        discovery.type: single-node
+      165 -      OPENSEARCH_JAVA_OPTS: "-Xms512m -Xmx512m"               
+      256 +      OPENSEARCH_JAVA_OPTS: "${OPENSEARCH_JAVA_OPTS:--Xms1g -X
+          +mx1g}"                                                        
+      257        DISABLE_SECURITY_PLUGIN: "true"
+      258        DISABLE_INSTALL_DEMO_CONFIG: "true"
+      259      ulimits:
+     ...
+      265          hard: 65536
+      266      ports:
+      267        - "${OPENSEARCH_HOST_PORT:-9200}:9200"
+      268 +    deploy:                                                   
+      269 +      resources:                                              
+      270 +        limits:                                               
+      271 +          cpus: "2.0"                                         
+      272 +          memory: 3g                                          
+      273      healthcheck:
+      274        test: ["CMD-SHELL", "curl -sf http://localhost:9200/_clu
+           ster/health | grep -qE '\"status\":\"(green|yellow)\"' || exit
+            1"]
+      275        interval: 15s
+     ...
+      278        start_period: 45s
+      279  
+      280    # ── ClickHouse ────────────────────────────────────────────
+           ────────────────
+      281 +  # Resource limits added.  Without limits ClickHouse can clai
+          +m all host RAM                                                
+      282 +  # during a write-heavy load test.                           
+      283  
+      284    clickhouse:
+      285      image: clickhouse/clickhouse-server:${CLICKHOUSE_VERSION:-
+           24.3}
+     ...
+      294      ports:
+      295        - "${CLICKHOUSE_HTTP_HOST_PORT:-8123}:8123"
+      296        - "${CLICKHOUSE_NATIVE_HOST_PORT:-9000}:9000"
+      297 +    deploy:                                                   
+      298 +      resources:                                              
+      299 +        limits:                                               
+      300 +          cpus: "2.0"                                         
+      301 +          memory: 4g                                          
+      302 +        reservations:                                         
+      303 +          memory: 1g                                          
+      304      healthcheck:
+      305        test: ["CMD-SHELL", "wget -qO- http://localhost:8123/pin
+           g | grep -q 'Ok.' || exit 1"]
+      306        interval: 10s
+     ...
+      309        start_period: 20s
+      310  
+      311    # ── Redis ─────────────────────────────────────────────────
+           ────────────────
+      312 +  # maxmemory: recommendation cache peaks at ~200 MB for 100 K
+          + active users;                                                
+      313 +  #   512 MB gives 2.5× headroom before eviction kicks in.    
+      314 +  # allkeys-lru: evict least-recently-used keys when full, mat
+          +ching TTL workload.                                           
+      315 +  # appendfsync everysec: 1-second durability window is accept
+          +able for a cache;                                             
+      316 +  #   avoids blocking 1-2 ms per write that 'always' would imp
+          +ose.                                                          
+      317  
+      318    redis:
+      319      image: redis:${REDIS_VERSION:-7.2-alpine}
+     ...
+      321      networks: [music-net]
+      322      volumes:
+      323        - redis-data:/data
+      214 -    command: redis-server --appendonly yes                    
+      324 +    command: >                                                
+      325 +      redis-server                                            
+      326 +        --appendonly yes                                      
+      327 +        --appendfsync everysec                                
+      328 +        --maxmemory ${REDIS_MAXMEMORY:-512mb}                 
+      329 +        --maxmemory-policy allkeys-lru                        
+      330 +        --save ""                                             
+      331      ports:
+      332        - "${REDIS_HOST_PORT:-6379}:6379"
+      333 +    deploy:                                                   
+      334 +      resources:                                              
+      335 +        limits:                                               
+      336 +          cpus: "0.5"                                         
+      337 +          memory: 768m                                        
+      338      healthcheck:
+      339        test: ["CMD", "redis-cli", "ping"]
+      340        interval: 10s
+     ...
+      356        MONGO_INITDB_DATABASE: ${MONGO_DB:-notificationdb}
+      357      ports:
+      358        - "${MONGO_HOST_PORT:-27017}:27017"
+      359 +    deploy:                                                   
+      360 +      resources:                                              
+      361 +        limits:                                               
+      362 +          cpus: "0.5"                                         
+      363 +          memory: 1g                                          
+      364      healthcheck:
+      365        test: ["CMD-SHELL", "mongosh --username \"$$MONGO_INITDB
+           _ROOT_USERNAME\" --password \"$$MONGO_INITDB_ROOT_PASSWORD\" -
+           -authenticationDatabase admin --eval 'db.runCommand({ ping: 1 
+           })' --quiet || exit 1"]
+      366        interval: 10s
+     ...
+      368        retries: 5
+      369        start_period: 30s
+      370  
+      371 +  # ── nginx load balancer ───────────────────────────────────
+          +────────────────                                              
+      372 +  # Single entry point for all backend API traffic (both brows
+          +er via the                                                    
+      373 +  # frontend nginx, and k6 direct).  Uses Docker's embedded DN
+          +S resolver                                                    
+      374 +  # (127.0.0.11) with a 5-second TTL so newly scaled replicas 
+          +are picked up                                                 
+      375 +  # without an nginx reload.  Rate limiting and access logging
+          + are applied here.                                            
+      376 +                                                              
+      377 +  nginx-lb:                                                   
+      378 +    image: nginx:1.25-alpine                                  
+      379 +    container_name: nginx-lb                                  
+      380 +    networks: [music-net]                                     
+      381 +    volumes:                                                  
+      382 +      - ./infra/nginx-lb/nginx.conf:/etc/nginx/nginx.conf:ro  
+      383 +    ports:                                                    
+      384 +      - "${NGINX_LB_HOST_PORT:-80}:80"                        
+      385 +    deploy:                                                   
+      386 +      resources:                                              
+      387 +        limits:                                               
+      388 +          cpus: "1.0"                                         
+      389 +          memory: 256m                                        
+      390 +    healthcheck:                                              
+      391 +      test: ["CMD-SHELL", "wget -qO- http://localhost/health |
+          + grep -q UP || exit 1"]                                       
+      392 +      interval: 10s                                           
+      393 +      timeout: 3s                                             
+      394 +      retries: 5                                              
+      395 +      start_period: 5s                                        
+      396 +                                                              
+      397    # ── Prometheus ────────────────────────────────────────────
+           ────────────────
+      398  
+      399    prometheus:
+     ...
+      410        - '--web.enable-lifecycle'
+      411      ports:
+      412        - "${PROMETHEUS_HOST_PORT:-9090}:9090"
+      413 +    deploy:                                                   
+      414 +      resources:                                              
+      415 +        limits:                                               
+      416 +          cpus: "0.5"                                         
+      417 +          memory: 512m                                        
+      418      healthcheck:
+      419        test: ["CMD", "wget", "-qO-", "http://localhost:9090/-/h
+           ealthy"]
+      420        interval: 10s
+     ...
+      441        GF_USERS_ALLOW_SIGN_UP: "false"
+      442      ports:
+      443        - "${GRAFANA_HOST_PORT:-3001}:3000"
+      444 +    deploy:                                                   
+      445 +      resources:                                              
+      446 +        limits:                                               
+      447 +          cpus: "0.5"                                         
+      448 +          memory: 512m                                        
+      449      healthcheck:
+      450        test: ["CMD-SHELL", "wget -qO- http://localhost:3000/api
+           /health | grep -q ok || exit 1"]
+      451        interval: 10s
+     ...
+      453        retries: 5
+      454        start_period: 20s
+      455  
+      456 +  # ── Prometheus exporters ──────────────────────────────────
+          +────────────────                                              
+      457 +  # These expose database and infrastructure metrics for Grafa
+          +na dashboards.                                                
+      458 +  # They are lightweight and have no hard dependencies beyond 
+          +the target service.                                           
+      459 +                                                              
+      460 +  postgres-exporter-auth:                                     
+      461 +    image: prometheuscommunity/postgres-exporter:v0.15.0      
+      462 +    container_name: postgres-exporter-auth                    
+      463 +    networks: [music-net]                                     
+      464 +    environment:                                              
+      465 +      DATA_SOURCE_NAME: "postgresql://${AUTH_DB_USER:-authuser
+          +}:${AUTH_DB_PASSWORD:-authpass}@auth-db:5432/${AUTH_DB_NAME:-a
+          +uthdb}?sslmode=disable"                                       
+      466 +    depends_on:                                               
+      467 +      auth-db:                                                
+      468 +        condition: service_healthy                            
+      469 +    deploy:                                                   
+      470 +      resources:                                              
+      471 +        limits:                                               
+      472 +          cpus: "0.1"                                         
+      473 +          memory: 64m                                         
+      474 +                                                              
+      475 +  postgres-exporter-catalog:                                  
+      476 +    image: prometheuscommunity/postgres-exporter:v0.15.0      
+      477 +    container_name: postgres-exporter-catalog                 
+      478 +    networks: [music-net]                                     
+      479 +    environment:                                              
+      480 +      DATA_SOURCE_NAME: "postgresql://${CATALOG_DB_USER:-catal
+          +oguser}:${CATALOG_DB_PASSWORD:-catalogpass}@catalog-db:5432/${
+          +CATALOG_DB_NAME:-catalogdb}?sslmode=disable"                  
+      481 +    depends_on:                                               
+      482 +      catalog-db:                                             
+      483 +        condition: service_healthy                            
+      484 +    deploy:                                                   
+      485 +      resources:                                              
+      486 +        limits:                                               
+      487 +          cpus: "0.1"                                         
+      488 +          memory: 64m                                         
+      489 +                                                              
+      490 +  postgres-exporter-playlist:                                 
+      491 +    image: prometheuscommunity/postgres-exporter:v0.15.0      
+      492 +    container_name: postgres-exporter-playlist                
+      493 +    networks: [music-net]                                     
+      494 +    environment:                                              
+      495 +      DATA_SOURCE_NAME: "postgresql://${PLAYLIST_DB_USER:-play
+          +listuser}:${PLAYLIST_DB_PASSWORD:-playlistpass}@playlist-db:54
+          +32/${PLAYLIST_DB_NAME:-playlistdb}?sslmode=disable"           
+      496 +    depends_on:                                               
+      497 +      playlist-db:                                            
+      498 +        condition: service_healthy                            
+      499 +    deploy:                                                   
+      500 +      resources:                                              
+      501 +        limits:                                               
+      502 +          cpus: "0.1"                                         
+      503 +          memory: 64m                                         
+      504 +                                                              
+      505 +  postgres-exporter-recommendation:                           
+      506 +    image: prometheuscommunity/postgres-exporter:v0.15.0      
+      507 +    container_name: postgres-exporter-recommendation          
+      508 +    networks: [music-net]                                     
+      509 +    environment:                                              
+      510 +      DATA_SOURCE_NAME: "postgresql://${RECOMMENDATION_DB_USER
+          +:-recommendationuser}:${RECOMMENDATION_DB_PASSWORD:-recommenda
+          +tionpass}@recommendation-db:5432/${RECOMMENDATION_DB_NAME:-rec
+          +ommendationdb}?sslmode=disable"                               
+      511 +    depends_on:                                               
+      512 +      recommendation-db:                                      
+      513 +        condition: service_healthy                            
+      514 +    deploy:                                                   
+      515 +      resources:                                              
+      516 +        limits:                                               
+      517 +          cpus: "0.1"                                         
+      518 +          memory: 64m                                         
+      519 +                                                              
+      520 +  redis-exporter:                                             
+      521 +    image: oliver006/redis_exporter:v1.60.0                   
+      522 +    container_name: redis-exporter                            
+      523 +    networks: [music-net]                                     
+      524 +    environment:                                              
+      525 +      REDIS_ADDR: "redis://redis:6379"                        
+      526 +    depends_on:                                               
+      527 +      redis:                                                  
+      528 +        condition: service_healthy                            
+      529 +    deploy:                                                   
+      530 +      resources:                                              
+      531 +        limits:                                               
+      532 +          cpus: "0.1"                                         
+      533 +          memory: 64m                                         
+      534 +                                                              
+      535 +  kafka-exporter:                                             
+      536 +    image: danielqsj/kafka-exporter:v1.7.0                    
+      537 +    container_name: kafka-exporter                            
+      538 +    networks: [music-net]                                     
+      539 +    command:                                                  
+      540 +      - "--kafka.server=kafka:9092"                           
+      541 +      - "--web.listen-address=:9308"                          
+      542 +    depends_on:                                               
+      543 +      kafka:                                                  
+      544 +        condition: service_healthy                            
+      545 +    deploy:                                                   
+      546 +      resources:                                              
+      547 +        limits:                                               
+      548 +          cpus: "0.1"                                         
+      549 +          memory: 128m                                        
+      550 +                                                              
+      551    # ── Application services ──────────────────────────────────
+           ────────────────
+      552 +  # container_name is intentionally omitted from all applicati
+          +on services so                                                
+      553 +  # that `docker compose up --scale <service>=N` works without
+          + conflicts.                                                   
+      554 +  #                                                           
+      555 +  # Ports are intentionally omitted; all API traffic enters vi
+          +a nginx-lb:80.                                                
+      556 +  # To inspect a specific replica directly, use `docker compos
+          +e exec <service>`.                                            
+      557 +  #                                                           
+      558 +  # HikariCP pool is tuned so that (replicas × pool_size) stay
+          +s well below                                                  
+      559 +  # PostgreSQL max_connections (200).  At 4 replicas × 20 conn
+          +ections = 80,                                                 
+      560 +  # leaving room for DBA queries and exporter connections.    
+      561 +  #                                                           
+      562 +  # All services that mount jwt-keys:ro depend on auth-service
+          + being healthy                                                
+      563 +  # so that RSA key files are guaranteed to exist before they 
+          +are read.                                                     
+      564  
+      565    auth-service:
+      566      build:
+     ...
+      577        SPRING_DATASOURCE_URL: jdbc:postgresql://auth-db:5432/${
+           AUTH_DB_NAME:-authdb}
+      578        SPRING_DATASOURCE_USERNAME: ${AUTH_DB_USER:-authuser}
+      579        SPRING_DATASOURCE_PASSWORD: ${AUTH_DB_PASSWORD:-authpass
+           }
+      580 +      SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: ${AUTH_DB_PO
+          +OL_SIZE:-20}                                                  
+      581 +      SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE: 5                
+      582 +      SPRING_DATASOURCE_HIKARI_CONNECTION_TIMEOUT: 30000      
+      583        JWT_KEY_DIR: /jwt-keys
+      584        JWT_EXPIRATION_MS: ${JWT_EXPIRATION_MS:-3600000}
+      313 -    ports:                                                    
+      314 -      - "${AUTH_SERVICE_HOST_PORT:-8081}:8080"                
+      585      deploy:
+      586        resources:
+      587          limits:
+      318 -          cpus: "${AUTH_SERVICE_CPU_LIMIT:-1.0}"              
+      588 +          cpus: "${AUTH_SERVICE_CPU_LIMIT:-1.5}"              
+      589            memory: "${AUTH_SERVICE_MEMORY_LIMIT:-512m}"
+      590      healthcheck:
+      591        test: ["CMD-SHELL", "curl -fs http://localhost:8080/actu
+           ator/health || exit 1"]
+     ...
+      598      build:
+      599        context: ./services/catalog-service
+      600        dockerfile: Dockerfile
+      331 -    container_name: catalog-service                           
+      601      networks: [music-net]
+      602      depends_on:
+      603        catalog-db:
+      604          condition: service_healthy
+      605 +      auth-service:                                           
+      606 +        condition: service_healthy                            
+      607      volumes:
+      608        - jwt-keys:/jwt-keys:ro
+      609      environment:
+      610        SPRING_DATASOURCE_URL: jdbc:postgresql://catalog-db:5432
+           /${CATALOG_DB_NAME:-catalogdb}
+      611        SPRING_DATASOURCE_USERNAME: ${CATALOG_DB_USER:-catalogus
+           er}
+      612        SPRING_DATASOURCE_PASSWORD: ${CATALOG_DB_PASSWORD:-catal
+           ogpass}
+      613 +      SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: ${CATALOG_DB
+          +_POOL_SIZE:-20}                                               
+      614 +      SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE: 5                
+      615 +      SPRING_DATASOURCE_HIKARI_CONNECTION_TIMEOUT: 30000      
+      616        JWT_PUBLIC_KEY_PATH: /jwt-keys/public.pem
+      343 -    ports:                                                    
+      344 -      - "${CATALOG_SERVICE_HOST_PORT:-8082}:8080"             
+      617      deploy:
+      618 +      replicas: ${CATALOG_SERVICE_REPLICAS:-2}                
+      619        resources:
+      620          limits:
+      621            cpus: "${CATALOG_SERVICE_CPU_LIMIT:-1.0}"
+     ...
+      631      build:
+      632        context: ./services/streaming-service
+      633        dockerfile: Dockerfile
+      361 -    container_name: streaming-service                         
+      634      networks: [music-net]
+      635      depends_on:
+      636        kafka:
+      637          condition: service_healthy
+      638 +      init-kafka:                                             
+      639 +        condition: service_completed_successfully             
+      640 +      auth-service:                                           
+      641 +        condition: service_healthy                            
+      642      volumes:
+      643        - jwt-keys:/jwt-keys:ro
+      644      environment:
+     ...
+      647        STREAM_SEGMENT_SIZE_BYTES: ${STREAM_SEGMENT_SIZE_BYTES:-
+           65536}
+      648        STREAM_SEGMENT_COUNT: ${STREAM_SEGMENT_COUNT:-10}
+      649        KAFKA_TOPIC_PLAYBACK_EVENTS: ${KAFKA_TOPIC_PLAYBACK_EVEN
+           TS:-playback-events}
+      374 -    ports:                                                    
+      375 -      - "${STREAMING_SERVICE_HOST_PORT:-8083}:8080"           
+      650      deploy:
+      651 +      replicas: ${STREAMING_SERVICE_REPLICAS:-3}              
+      652        resources:
+      653          limits:
+      654            cpus: "${STREAMING_SERVICE_CPU_LIMIT:-1.0}"
+     ...
+      664      build:
+      665        context: ./services/playlist-service
+      666        dockerfile: Dockerfile
+      392 -    container_name: playlist-service                          
+      667      networks: [music-net]
+      668      depends_on:
+      669        playlist-db:
+      670          condition: service_healthy
+      671        kafka:
+      672          condition: service_healthy
+      673 +      init-kafka:                                             
+      674 +        condition: service_completed_successfully             
+      675 +      auth-service:                                           
+      676 +        condition: service_healthy                            
+      677      volumes:
+      678        - jwt-keys:/jwt-keys:ro
+      679      environment:
+      680        SPRING_DATASOURCE_URL: jdbc:postgresql://playlist-db:543
+           2/${PLAYLIST_DB_NAME:-playlistdb}
+      681        SPRING_DATASOURCE_USERNAME: ${PLAYLIST_DB_USER:-playlist
+           user}
+      682        SPRING_DATASOURCE_PASSWORD: ${PLAYLIST_DB_PASSWORD:-play
+           listpass}
+      683 +      SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: ${PLAYLIST_D
+          +B_POOL_SIZE:-20}                                              
+      684 +      SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE: 5                
+      685 +      SPRING_DATASOURCE_HIKARI_CONNECTION_TIMEOUT: 30000      
+      686        SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      687        JWT_PUBLIC_KEY_PATH: /jwt-keys/public.pem
+      407 -    ports:                                                    
+      408 -      - "${PLAYLIST_SERVICE_HOST_PORT:-8084}:8080"            
+      688      deploy:
+      689 +      replicas: ${PLAYLIST_SERVICE_REPLICAS:-2}               
+      690        resources:
+      691          limits:
+      692            cpus: "${PLAYLIST_SERVICE_CPU_LIMIT:-1.0}"
+     ...
+      702      build:
+      703        context: ./services/search-service
+      704        dockerfile: Dockerfile
+      425 -    container_name: search-service                            
+      705      networks: [music-net]
+      706      depends_on:
+      707        opensearch:
+      708          condition: service_healthy
+      709 +      auth-service:                                           
+      710 +        condition: service_healthy                            
+      711      volumes:
+      712        - jwt-keys:/jwt-keys:ro
+      713      environment:
+     ...
+      718        SEARCH_MAX_RESULTS: ${SEARCH_MAX_RESULTS:-20}
+      719        SEARCH_SEED_ENABLED: "true"
+      720        SEARCH_SEED_BATCH_SIZE: ${SEARCH_SEED_BATCH_SIZE:-500}
+      440 -    ports:                                                    
+      441 -      - "${SEARCH_SERVICE_HOST_PORT:-8085}:8080"              
+      721      deploy:
+      722 +      replicas: ${SEARCH_SERVICE_REPLICAS:-2}                 
+      723        resources:
+      724          limits:
+      725            cpus: "${SEARCH_SERVICE_CPU_LIMIT:-1.0}"
+     ...
+      735      build:
+      736        context: ./services/analytics-service
+      737        dockerfile: Dockerfile
+      458 -    container_name: analytics-service                         
+      738      networks: [music-net]
+      739      depends_on:
+      740        clickhouse:
+      741          condition: service_healthy
+      742        kafka:
+      743          condition: service_healthy
+      744 +      init-kafka:                                             
+      745 +        condition: service_completed_successfully             
+      746 +      auth-service:                                           
+      747 +        condition: service_healthy                            
+      748      volumes:
+      749        - jwt-keys:/jwt-keys:ro
+      750      environment:
+     ...
+      757        KAFKA_TOPIC_PLAYBACK_EVENTS: ${KAFKA_TOPIC_PLAYBACK_EVEN
+           TS:-playback-events}
+      758        KAFKA_CONSUMER_GROUP_ID: ${KAFKA_CONSUMER_GROUP_ID:-anal
+           ytics-service}
+      759        ANALYTICS_HISTORY_LIMIT: ${ANALYTICS_HISTORY_LIMIT:-100}
+      760 +      ANALYTICS_BATCH_SIZE: ${ANALYTICS_BATCH_SIZE:-500}      
+      761 +      ANALYTICS_BATCH_FLUSH_INTERVAL_MS: ${ANALYTICS_BATCH_FLU
+          +SH_INTERVAL_MS:-5000}                                         
+      762        JWT_PUBLIC_KEY_PATH: /jwt-keys/public.pem
+      478 -    ports:                                                    
+      479 -      - "${ANALYTICS_SERVICE_HOST_PORT:-8086}:8080"           
+      763      deploy:
+      764 +      replicas: ${ANALYTICS_SERVICE_REPLICAS:-2}              
+      765        resources:
+      766          limits:
+      767            cpus: "${ANALYTICS_SERVICE_CPU_LIMIT:-1.0}"
+     ...
+      777      build:
+      778        context: ./services/recommendation-service
+      779        dockerfile: Dockerfile
+      496 -    container_name: recommendation-service                    
+      780      networks: [music-net]
+      781      depends_on:
+      782        recommendation-db:
+     ...
+      785          condition: service_healthy
+      786        kafka:
+      787          condition: service_healthy
+      788 +      init-kafka:                                             
+      789 +        condition: service_completed_successfully             
+      790 +      auth-service:                                           
+      791 +        condition: service_healthy                            
+      792      volumes:
+      793        - jwt-keys:/jwt-keys:ro
+      794      environment:
+      795        SPRING_DATASOURCE_URL: jdbc:postgresql://recommendation-
+           db:5432/${RECOMMENDATION_DB_NAME:-recommendationdb}
+      796        SPRING_DATASOURCE_USERNAME: ${RECOMMENDATION_DB_USER:-re
+           commendationuser}
+      797        SPRING_DATASOURCE_PASSWORD: ${RECOMMENDATION_DB_PASSWORD
+           :-recommendationpass}
+      798 +      SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: ${RECOMMENDA
+          +TION_DB_POOL_SIZE:-20}                                        
+      799 +      SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE: 5                
+      800 +      SPRING_DATASOURCE_HIKARI_CONNECTION_TIMEOUT: 30000      
+      801        SPRING_DATA_REDIS_HOST: redis
+      802        SPRING_DATA_REDIS_PORT: 6379
+      803        SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+     ...
+      807        RECOMMENDATION_DAILY_MIX_SIZE: ${RECOMMENDATION_DAILY_MI
+           X_SIZE:-20}
+      808        RECOMMENDATION_SIMILAR_SIZE: ${RECOMMENDATION_SIMILAR_SI
+           ZE:-10}
+      809        RECOMMENDATION_CACHE_TTL_SECONDS: ${RECOMMENDATION_CACHE
+           _TTL_SECONDS:-3600}
+      520 -    ports:                                                    
+      521 -      - "${RECOMMENDATION_SERVICE_HOST_PORT:-8087}:8080"      
+      810      deploy:
+      811 +      replicas: ${RECOMMENDATION_SERVICE_REPLICAS:-2}         
+      812        resources:
+      813          limits:
+      814            cpus: "${RECOMMENDATION_SERVICE_CPU_LIMIT:-1.0}"
+     ...
+      824      build:
+      825        context: ./services/notification-service
+      826        dockerfile: Dockerfile
+      538 -    container_name: notification-service                      
+      827      networks: [music-net]
+      828      depends_on:
+      829        mongodb:
+      830          condition: service_healthy
+      831        kafka:
+      832          condition: service_healthy
+      833 +      init-kafka:                                             
+      834 +        condition: service_completed_successfully             
+      835 +      auth-service:                                           
+      836 +        condition: service_healthy                            
+      837      volumes:
+      838        - jwt-keys:/jwt-keys:ro
+      839      environment:
+     ...
+      842        KAFKA_TOPIC_PLAYLIST_EVENTS: ${KAFKA_TOPIC_PLAYLIST_EVEN
+           TS:-playlist-events}
+      843        KAFKA_CONSUMER_GROUP_ID: ${NOTIFICATION_KAFKA_CONSUMER_G
+           ROUP_ID:-notification-service}
+      844        JWT_PUBLIC_KEY_PATH: /jwt-keys/public.pem
+      553 -    ports:                                                    
+      554 -      - "${NOTIFICATION_SERVICE_HOST_PORT:-8088}:8080"        
+      845      deploy:
+      846 +      replicas: ${NOTIFICATION_SERVICE_REPLICAS:-1}           
+      847        resources:
+      848          limits:
+      849            cpus: "${NOTIFICATION_SERVICE_CPU_LIMIT:-1.0}"
+     ...
+      856        start_period: 60s
+      857  
+      858    # ── Frontend ──────────────────────────────────────────────
+           ────────────────
+      859 +  # Depends on nginx-lb so that the baked-in nginx.conf can re
+          +solve `nginx-lb`                                              
+      860 +  # at startup (nginx resolves static proxy_pass hostnames onc
+          +e on start).                                                  
+      861  
+      862    frontend:
+      863      build:
+     ...
+      865        dockerfile: Dockerfile
+      866      container_name: frontend
+      867      networks: [music-net]
+      868 +    depends_on:                                               
+      869 +      nginx-lb:                                               
+      870 +        condition: service_healthy                            
+      871      ports:
+      872        - "${FRONTEND_HOST_PORT:-3000}:80"
+      873      deploy:
+     ...
+      883        start_period: 10s
+      884  
+      885    # ── Load generator (opt-in profile) ───────────────────────
+           ───────────────
+      886 +  # Routes all benchmark traffic through nginx-lb (NGINX_LB_UR
+          +L) to measure                                                 
+      887 +  # realistic system performance including proxy overhead and 
+          +rate limiting.                                                
+      888 +  # Individual service URLs are retained for targeted debuggin
+          +g runs.                                                       
+      889 +  # K6_SCENARIO selects the test phase: smoke | catalog_stream
+          + | kafka_pipeline                                             
+      890 +  #   | ramp | stress | soak  (default: ramp)                 
+      891  
+      892    load-generator:
+      893      build:
+     ...
+      896      container_name: load-generator
+      897      networks: [music-net]
+      898      depends_on:
+      899 +      nginx-lb:                                               
+      900 +        condition: service_healthy                            
+      901        auth-service:
+      902          condition: service_healthy
+      903        catalog-service:
+     ...
+      913        recommendation-service:
+      914          condition: service_healthy
+      915      environment:
+      916 +      # Primary entry point — routes through nginx-lb for real
+          +istic load distribution                                       
+      917 +      NGINX_LB_URL: http://nginx-lb                           
+      918 +      # Direct service URLs for targeted health checks and byp
+          +ass scenarios                                                 
+      919        AUTH_SERVICE_URL: http://auth-service:8080
+      920        CATALOG_SERVICE_URL: http://catalog-service:8080
+      921        STREAMING_SERVICE_URL: http://streaming-service:8080
+     ...
+      923        SEARCH_SERVICE_URL: http://search-service:8080
+      924        ANALYTICS_SERVICE_URL: http://analytics-service:8080
+      925        RECOMMENDATION_SERVICE_URL: http://recommendation-servic
+           e:8080
+      620 -      K6_VUS: ${K6_VUS:-10}                                   
+      621 -      K6_DURATION: ${K6_DURATION:-60s}                        
+      926 +      # k6 scenario selector                                  
+      927 +      K6_SCENARIO: ${K6_SCENARIO:-ramp}                       
+      928 +      K6_VUS: ${K6_VUS:-50}                                   
+      929 +      K6_DURATION: ${K6_DURATION:-5m}                         
+      930      profiles:
+      931        - load-test
+      932      deploy:
+
+⏺ Write(infra/prometheus/prometheus.yml)
+  ⎿  Added 84 lines, removed 13 lines
+       8      static_configs:
+       9        - targets: [localhost:9090]
+      10  
+      11 +  # ── Application services (Spring Boot Actuator) ────────────
+         +───────────────                                                
+      12 +  # All services expose /actuator/prometheus via Micrometer.   
+      13 +  # When a service is scaled to N replicas, Prometheus scrapes 
+         +each replica                                                   
+      14 +  # because Docker DNS returns all IPs for the service name in 
+         +round-robin.                                                   
+      15 +  # The `application` label (set in each service's management.m
+         +etrics.tags)                                                   
+      16 +  # distinguishes replicas in Grafana queries.                 
+      17 +                                                               
+      18    - job_name: auth-service
+      19      metrics_path: /actuator/prometheus
+      20      static_configs:
+     ...
+       22  
+       23    - job_name: catalog-service
+       24      metrics_path: /actuator/prometheus
+       18 -    static_configs:                                           
+       19 -      - targets: [catalog-service:8080]                       
+       25 +    dns_sd_configs:                                           
+       26 +      - names: [catalog-service]                              
+       27 +        type: A                                               
+       28 +        port: 8080                                            
+       29 +        refresh_interval: 30s                                 
+       30  
+       31    - job_name: streaming-service
+       32      metrics_path: /actuator/prometheus
+       23 -    static_configs:                                           
+       24 -      - targets: [streaming-service:8080]                     
+       33 +    dns_sd_configs:                                           
+       34 +      - names: [streaming-service]                            
+       35 +        type: A                                               
+       36 +        port: 8080                                            
+       37 +        refresh_interval: 30s                                 
+       38  
+       39    - job_name: playlist-service
+       40      metrics_path: /actuator/prometheus
+       28 -    static_configs:                                           
+       29 -      - targets: [playlist-service:8080]                      
+       41 +    dns_sd_configs:                                           
+       42 +      - names: [playlist-service]                             
+       43 +        type: A                                               
+       44 +        port: 8080                                            
+       45 +        refresh_interval: 30s                                 
+       46  
+       47    - job_name: search-service
+       48      metrics_path: /actuator/prometheus
+       33 -    static_configs:                                           
+       34 -      - targets: [search-service:8080]                        
+       49 +    dns_sd_configs:                                           
+       50 +      - names: [search-service]                               
+       51 +        type: A                                               
+       52 +        port: 8080                                            
+       53 +        refresh_interval: 30s                                 
+       54  
+       55    - job_name: analytics-service
+       56      metrics_path: /actuator/prometheus
+       38 -    static_configs:                                           
+       39 -      - targets: [analytics-service:8080]                     
+       57 +    dns_sd_configs:                                           
+       58 +      - names: [analytics-service]                            
+       59 +        type: A                                               
+       60 +        port: 8080                                            
+       61 +        refresh_interval: 30s                                 
+       62  
+       63    - job_name: recommendation-service
+       64      metrics_path: /actuator/prometheus
+       43 -    static_configs:                                           
+       44 -      - targets: [recommendation-service:8080]                
+       65 +    dns_sd_configs:                                           
+       66 +      - names: [recommendation-service]                       
+       67 +        type: A                                               
+       68 +        port: 8080                                            
+       69 +        refresh_interval: 30s                                 
+       70  
+       71    - job_name: notification-service
+       72      metrics_path: /actuator/prometheus
+       73 +    dns_sd_configs:                                           
+       74 +      - names: [notification-service]                         
+       75 +        type: A                                               
+       76 +        port: 8080                                            
+       77 +        refresh_interval: 30s                                 
+       78 +                                                              
+       79 +  # ── PostgreSQL exporters ──────────────────────────────────
+          +─────────────────                                             
+       80 +  # One exporter per database instance.  Key metrics: active c
+          +onnections,                                                   
+       81 +  # sequential scans (missing index indicator), lock waits.   
+       82 +                                                              
+       83 +  - job_name: postgres-auth                                   
+       84      static_configs:
+       49 -      - targets: [notification-service:8080]                  
+       85 +      - targets: [postgres-exporter-auth:9187]                
+       86 +        labels:                                               
+       87 +          db: auth-db                                         
+       88 +                                                              
+       89 +  - job_name: postgres-catalog                                
+       90 +    static_configs:                                           
+       91 +      - targets: [postgres-exporter-catalog:9187]             
+       92 +        labels:                                               
+       93 +          db: catalog-db                                      
+       94 +                                                              
+       95 +  - job_name: postgres-playlist                               
+       96 +    static_configs:                                           
+       97 +      - targets: [postgres-exporter-playlist:9187]            
+       98 +        labels:                                               
+       99 +          db: playlist-db                                     
+      100 +                                                              
+      101 +  - job_name: postgres-recommendation                         
+      102 +    static_configs:                                           
+      103 +      - targets: [postgres-exporter-recommendation:9187]      
+      104 +        labels:                                               
+      105 +          db: recommendation-db                               
+      106 +                                                              
+      107 +  # ── Redis exporter ────────────────────────────────────────
+          +────────────────                                              
+      108 +  # Key metrics: hit rate, used memory, connected clients, evi
+          +ctions.                                                       
+      109 +                                                              
+      110 +  - job_name: redis                                           
+      111 +    static_configs:                                           
+      112 +      - targets: [redis-exporter:9121]                        
+      113 +                                                              
+      114 +  # ── Kafka exporter ────────────────────────────────────────
+          +────────────────                                              
+      115 +  # Key metric: kafka_consumergroup_lag — the primary signal f
+          +or whether                                                    
+      116 +  # analytics-service or recommendation-service needs more rep
+          +licas.                                                        
+      117 +                                                              
+      118 +  - job_name: kafka                                           
+      119 +    static_configs:                                           
+      120 +      - targets: [kafka-exporter:9308]                        
+
+⏺ Now the analytics batch insert — three files in parallel:
+
+⏺ Write(services/analytics-service/src/main/java/com/musicstreaming/analytics/An
+       alyticsServiceApplication.java)
+  ⎿  Added 2 lines
+       4  import org.springframework.boot.autoconfigure.SpringBootApplica
+          tion;
+       5  import org.springframework.boot.autoconfigure.jdbc.DataSourceAu
+          toConfiguration;
+       6  import org.springframework.boot.autoconfigure.security.servlet.
+          UserDetailsServiceAutoConfiguration;
+       7 +import org.springframework.scheduling.annotation.EnableScheduli
+         +ng;                                                            
+       8  
+       9  @SpringBootApplication(exclude = {
+      10      DataSourceAutoConfiguration.class,
+      11      UserDetailsServiceAutoConfiguration.class
+      12  })
+      13 +@EnableScheduling                                              
+      14  public class AnalyticsServiceApplication {
+      15      public static void main(String[] args) {
+      16          SpringApplication.run(AnalyticsServiceApplication.class
+          , args);
+
+⏺ Write(services/analytics-service/src/main/java/com/musicstreaming/analytics/me
+       ssaging/BatchEventBuffer.java)
+  ⎿  Wrote 66 lines to services/analytics-service/src/main/java/com/musicst
+     reaming/analytics/messaging/BatchEventBuffer.java
+      1 package com.musicstreaming.analytics.messaging;
+      2 
+      3 import com.musicstreaming.analytics.model.PlaybackEventRecord;
+      4 import com.musicstreaming.analytics.service.AnalyticsService;
+      5 import org.slf4j.Logger;
+      6 import org.slf4j.LoggerFactory;
+      7 import org.springframework.beans.factory.annotation.Value;
+      8 import org.springframework.scheduling.annotation.Scheduled;
+      9 import org.springframework.stereotype.Component;
+     … +68 lines (ctrl+o to expand)
+
+⏺ Update(services/analytics-service/src/main/java/com/musicstreaming/analytics/m
+        essaging/PlaybackEventConsumer.java)
+  ⎿  Added 4 lines, removed 4 lines
+      14      private static final Logger log = LoggerFactory.getLogger(P
+          laybackEventConsumer.class);
+      15  
+      16      private final ObjectMapper objectMapper;
+      17 -    private final AnalyticsService analyticsService;           
+      17 +    private final BatchEventBuffer batchEventBuffer;           
+      18  
+      19 -    public PlaybackEventConsumer(ObjectMapper objectMapper, Ana
+         -lyticsService analyticsService) {                              
+      19 +    public PlaybackEventConsumer(ObjectMapper objectMapper, Bat
+         +chEventBuffer batchEventBuffer) {                              
+      20          this.objectMapper = objectMapper;
+      21 -        this.analyticsService = analyticsService;              
+      21 +        this.batchEventBuffer = batchEventBuffer;              
+      22      }
+      23  
+      24      @KafkaListener(
+     ...
+      28      public void consume(String message) {
+      29          try {
+      30              PlaybackEventRecord event = objectMapper.readValue(
+          message, PlaybackEventRecord.class);
+      31 -            analyticsService.recordEvent(event);               
+      31 +            batchEventBuffer.add(event);                       
+      32          } catch (Exception e) {
+      33              log.warn("Failed to process playback event, skippin
+          g: {}", e.getMessage());
+      34          }
+
+⏺ Update(services/analytics-service/src/main/java/com/musicstreaming/analytics/r
+        epository/AnalyticsRepository.java)
+  ⎿  Added 12 lines
+      26                  event.type(), event.userId(), event.songId(), T
+          imestamp.from(ts));
+      27      }
+      28  
+      29 +    public void insertBatch(List<PlaybackEventRecord> events) {
+      30 +        if (events.isEmpty()) return;                          
+      31 +        String sql = "INSERT INTO playback_events (event_type, 
+         +user_id, song_id, occurred_at) VALUES (?, ?, ?, ?)";           
+      32 +        jdbcTemplate.batchUpdate(sql, events, events.size(), (p
+         +s, event) -> {                                                 
+      33 +            Instant ts = event.timestamp() != null ? event.time
+         +stamp() : Instant.now();                                       
+      34 +            ps.setString(1, event.type());                     
+      35 +            ps.setString(2, event.userId());                   
+      36 +            ps.setString(3, event.songId());                   
+      37 +            ps.setTimestamp(4, Timestamp.from(ts));            
+      38 +        });                                                    
+      39 +    }                                                          
+      40 +                                                               
+      41      public List<HistoryEntry> findHistoryForUser(String userId,
+           int limit) {
+      42          return jdbcTemplate.query(
+      43                  "SELECT song_id, event_type, occurred_at " +
+
+⏺ Update(services/analytics-service/src/main/java/com/musicstreaming/analytics/r
+        epository/AnalyticsRepository.java)
+  ⎿  Added 1 line
+       9  import java.sql.Timestamp;
+      10  import java.time.Instant;
+      11  import java.util.List;
+      12 +import java.util.ArrayList;                                    
+      13  
+      14  @Repository
+      15  public class AnalyticsRepository {
+
+⏺ Update(services/analytics-service/src/main/java/com/musicstreaming/analytics/s
+        ervice/AnalyticsService.java)
+  ⎿  Added 12 lines
+      34          repository.insert(event);
+      35      }
+      36  
+      37 +    public void recordEvents(List<PlaybackEventRecord> events) 
+         +{                                                              
+      38 +        List<PlaybackEventRecord> valid = events.stream()      
+      39 +                .filter(e -> e.userId() != null && e.songId() !
+         += null)                                                        
+      40 +                .toList();                                     
+      41 +        if (valid.size() < events.size()) {                    
+      42 +            log.warn("Dropped {} events with null userId or son
+         +gId", events.size() - valid.size());                           
+      43 +        }                                                      
+      44 +        if (!valid.isEmpty()) {                                
+      45 +            repository.insertBatch(valid);                     
+      46 +        }                                                      
+      47 +    }                                                          
+      48 +                                                               
+      49      public List<HistoryEntry> getHistory(String userId) {
+      50          return repository.findHistoryForUser(userId, historyLim
+          it);
+      51      }
+
+⏺ Update(services/analytics-service/src/main/java/com/musicstreaming/analytics/s
+        ervice/AnalyticsService.java)
+  ⎿  Added 1 line
+      10  import org.springframework.stereotype.Service;
+      11  
+      12  import java.util.List;
+      13 +import java.util.stream.Collectors;                            
+      14  
+      15  @Service
+      16  public class AnalyticsService {
+
+⏺ Now add the batch config keys to analytics-service application.yml:
+
+⏺ Update(services/analytics-service/src/main/resources/application.yml)
+  ⎿  Added 3 lines
+      28  analytics:
+      29    history:
+      30      limit: ${ANALYTICS_HISTORY_LIMIT:100}
+      31 +  batch:                                                       
+      32 +    size: ${ANALYTICS_BATCH_SIZE:500}                          
+      33 +    flush-interval-ms: ${ANALYTICS_BATCH_FLUSH_INTERVAL_MS:5000
+         +}                                                              
+      34  
+      35  management:
+      36    endpoints:
+
+⏺ Now the k6 load test script and the Grafana dashboard in parallel:
+
+⏺ Write(load-generator/scripts/main.js)
+  ⎿  Added 354 lines, removed 32 lines
+        1 +/**                                                           
+        2 + * Music Streaming Benchmark — k6 load test                   
+        3 + *                                                            
+        4 + * All traffic routes through nginx-lb (NGINX_LB_URL) to measu
+          +re realistic                                                  
+        5 + * system throughput including reverse-proxy overhead and rate
+          + limiting.                                                    
+        6 + *                                                            
+        7 + * Scenario selection via K6_SCENARIO environment variable:   
+        8 + *   smoke          —   5 VUs, 2 min  — quick sanity check, ba
+          +seline latencies                                              
+        9 + *   catalog_stream —  50 VUs, 5 min  — auth + browse + stream
+          +; reveals first                                               
+       10 + *                                       service bottleneck   
+       11 + *   kafka_pipeline — 200 VUs, 10 min — adds playlist + playli
+          +st events;                                                    
+       12 + *                                       validates Kafka consu
+          +mer pipeline                                                  
+       13 + *   ramp           — 0→500 VUs ramp  — finds the knee of the 
+          +throughput curve                                              
+       14 + *   stress         — 0→2000 VUs ramp — drives services past c
+          +omfortable limits                                             
+       15 + *   soak           — 100 VUs, 2 h    — catches memory leaks a
+          +nd Kafka lag                                                  
+       16 + *                                       accumulation over tim
+          +e                                                             
+       17 + */                                                           
+       18 +                                                              
+       19  import http from 'k6/http';
+        2 -import { sleep, check } from 'k6';                            
+       20 +import { sleep, check, group } from 'k6';                     
+       21 +import { Counter, Rate, Trend } from 'k6/metrics';            
+       22  
+        4 -// Service base URLs — injected from docker-compose environmen
+          -t                                                             
+        5 -const AUTH_URL      = __ENV.AUTH_SERVICE_URL      || 'http://a
+          -uth-service:8080';                                            
+        6 -const CATALOG_URL   = __ENV.CATALOG_SERVICE_URL   || 'http://c
+          -atalog-service:8080';                                         
+        7 -const STREAMING_URL = __ENV.STREAMING_SERVICE_URL || 'http://s
+          -treaming-service:8080';                                       
+        8 -const PLAYLIST_URL  = __ENV.PLAYLIST_SERVICE_URL  || 'http://p
+          -laylist-service:8080';                                        
+        9 -const SEARCH_URL    = __ENV.SEARCH_SERVICE_URL    || 'http://s
+          -earch-service:8080';                                          
+       10 -const ANALYTICS_URL = __ENV.ANALYTICS_SERVICE_URL || 'http://a
+          -nalytics-service:8080';                                       
+       11 -const RECOMMEND_URL = __ENV.RECOMMENDATION_SERVICE_URL || 'htt
+          -p://recommendation-service:8080';                             
+       23 +// ── Service entry points ───────────────────────────────────
+          +────────────────                                              
+       24 +// Primary: all requests through the nginx load balancer.     
+       25 +const LB = __ENV.NGINX_LB_URL || 'http://nginx-lb';           
+       26  
+       13 -// k6 reads K6_VUS and K6_DURATION directly from the process e
+          -nvironment and                                                
+       14 -// overrides these defaults, so the values here are fallbacks 
+          -only.                                                         
+       27 +// ── Custom metrics ─────────────────────────────────────────
+          +────────────────                                              
+       28 +const streamingErrors  = new Counter('streaming_errors');     
+       29 +const kafkaEventsSent  = new Counter('kafka_events_sent');    
+       30 +const cacheHintHits    = new Counter('recommendation_requests'
+          +);                                                            
+       31 +const registrationFail = new Rate('registration_failures');   
+       32 +const streamLatency    = new Trend('stream_manifest_duration_m
+          +s');                                                          
+       33 +                                                              
+       34 +// ── Scenario definitions ───────────────────────────────────
+          +────────────────                                              
+       35 +const SCENARIO_CONFIGS = {                                    
+       36 +  smoke: {                                                    
+       37 +    executor: 'constant-vus',                                 
+       38 +    vus: 5,                                                   
+       39 +    duration: '2m',                                           
+       40 +  },                                                          
+       41 +  catalog_stream: {                                           
+       42 +    executor: 'constant-vus',                                 
+       43 +    vus: 50,                                                  
+       44 +    duration: '5m',                                           
+       45 +  },                                                          
+       46 +  kafka_pipeline: {                                           
+       47 +    executor: 'constant-vus',                                 
+       48 +    vus: 200,                                                 
+       49 +    duration: '10m',                                          
+       50 +  },                                                          
+       51 +  ramp: {                                                     
+       52 +    executor: 'ramping-vus',                                  
+       53 +    startVUs: 0,                                              
+       54 +    stages: [                                                 
+       55 +      { duration: '3m',  target: 100 },                       
+       56 +      { duration: '5m',  target: 500 },                       
+       57 +      { duration: '5m',  target: 500 },                       
+       58 +      { duration: '2m',  target: 0   },                       
+       59 +    ],                                                        
+       60 +  },                                                          
+       61 +  stress: {                                                   
+       62 +    executor: 'ramping-vus',                                  
+       63 +    startVUs: 0,                                              
+       64 +    stages: [                                                 
+       65 +      { duration: '5m',  target: 500  },                      
+       66 +      { duration: '10m', target: 2000 },                      
+       67 +      { duration: '5m',  target: 2000 },                      
+       68 +      { duration: '5m',  target: 0    },                      
+       69 +    ],                                                        
+       70 +  },                                                          
+       71 +  soak: {                                                     
+       72 +    executor: 'constant-vus',                                 
+       73 +    vus: 100,                                                 
+       74 +    duration: '2h',                                           
+       75 +  },                                                          
+       76 +};                                                            
+       77 +                                                              
+       78 +const selectedScenario = __ENV.K6_SCENARIO || 'ramp';         
+       79 +const scenarioCfg = SCENARIO_CONFIGS[selectedScenario] || SCEN
+          +ARIO_CONFIGS.ramp;                                            
+       80 +                                                              
+       81  export const options = {
+       16 -  vus: 10,                                                    
+       17 -  duration: '60s',                                            
+       82 +  scenarios: {                                                
+       83 +    benchmark: {                                              
+       84 +      ...scenarioCfg,                                         
+       85 +      exec: 'musicStreamingFlow',                             
+       86 +    },                                                        
+       87 +  },                                                          
+       88 +  thresholds: {                                               
+       89 +    // Overall error rate must stay below 5 %                 
+       90 +    http_req_failed:                        ['rate<0.05'],    
+       91 +    // Auth must respond within 3 s at p99                    
+       92 +    'http_req_duration{endpoint:login}':    ['p(99)<3000'],   
+       93 +    // Streaming manifest must respond within 5 s at p99      
+       94 +    'http_req_duration{endpoint:stream}':   ['p(99)<5000'],   
+       95 +    // Catalog browsing must respond within 2 s at p99        
+       96 +    'http_req_duration{endpoint:catalog}':  ['p(99)<2000'],   
+       97 +    // Search must respond within 3 s at p99                  
+       98 +    'http_req_duration{endpoint:search}':   ['p(99)<3000'],   
+       99 +  },                                                          
+      100  };
+      101  
+       20 -// Placeholder scenario — full implementation in Phase 10.    
+       21 -// Each virtual user runs through the main application flows: 
+       22 -//   register → login → browse catalog → search → stream → pla
+          -ylist ops → history                                           
+       23 -export default function () {                                  
+       24 -  // Health probe on all services (Phase 0 skeleton — flows ad
+          -ded in Phase 10)                                              
+       25 -  const services = [                                          
+       26 -    { name: 'auth',           url: AUTH_URL },                
+       27 -    { name: 'catalog',        url: CATALOG_URL },             
+       28 -    { name: 'streaming',      url: STREAMING_URL },           
+       29 -    { name: 'playlist',       url: PLAYLIST_URL },            
+       30 -    { name: 'search',         url: SEARCH_URL },              
+       31 -    { name: 'analytics',      url: ANALYTICS_URL },           
+       32 -    { name: 'recommendation', url: RECOMMEND_URL },           
+       33 -  ];                                                          
+      102 +// ── Per-VU state ───────────────────────────────────────────
+          +────────────────                                              
+      103 +// k6 preserves module-level variables across iterations withi
+          +n the same VU.                                                
+      104 +// We register once per VU and reuse the token for all subsequ
+          +ent iterations.                                               
+      105 +let vuToken    = null;                                        
+      106 +let vuUserId   = null;                                        
+      107 +let vuSongIds  = [];    // catalog song IDs discovered during 
+          +first iteration                                               
+      108 +let vuPlaylistId = null;                                      
+      109  
+       35 -  for (const svc of services) {                               
+       36 -    const res = http.get(`${svc.url}/actuator/health`);       
+       37 -    check(res, {                                              
+       38 -      [`${svc.name} health 200`]: (r) => r.status === 200,    
+      110 +// ── Helpers ────────────────────────────────────────────────
+          +────────────────                                              
+      111 +                                                              
+      112 +function makeAuthHeaders(token) {                             
+      113 +  return { Authorization: `Bearer ${token}`, 'Content-Type': '
+          +application/json' };                                          
+      114 +}                                                             
+      115 +                                                              
+      116 +function uniqueUser() {                                       
+      117 +  // Combine VU number + timestamp for uniqueness across runs 
+      118 +  const ts = Date.now();                                      
+      119 +  return {                                                    
+      120 +    username: `bench_${__VU}_${ts}`,                          
+      121 +    email:    `bench_${__VU}_${ts}@bench.local`,              
+      122 +    password: 'Bench1234!',                                   
+      123 +  };                                                          
+      124 +}                                                             
+      125 +                                                              
+      126 +function registerAndLogin() {                                 
+      127 +  const user = uniqueUser();                                  
+      128 +                                                              
+      129 +  const regRes = http.post(                                   
+      130 +    `${LB}/auth/register`,                                    
+      131 +    JSON.stringify(user),                                     
+      132 +    { headers: { 'Content-Type': 'application/json' }, tags: {
+          + endpoint: 'register' } },                                    
+      133 +  );                                                          
+      134 +  const regOk = check(regRes, { 'register 201': (r) => r.statu
+          +s === 201 });                                                 
+      135 +  registrationFail.add(!regOk);                               
+      136 +                                                              
+      137 +  const loginRes = http.post(                                 
+      138 +    `${LB}/auth/login`,                                       
+      139 +    JSON.stringify({ email: user.email, password: user.passwor
+          +d }),                                                         
+      140 +    { headers: { 'Content-Type': 'application/json' }, tags: {
+          + endpoint: 'login' } },                                       
+      141 +  );                                                          
+      142 +  check(loginRes, { 'login 200': (r) => r.status === 200 });  
+      143 +                                                              
+      144 +  if (loginRes.status !== 200) return null;                   
+      145 +                                                              
+      146 +  const body = JSON.parse(loginRes.body);                     
+      147 +  // Field name may be token or access_token depending on serv
+          +ice version                                                   
+      148 +  const token = body.token || body.access_token;              
+      149 +  return { token, userId: body.userId || body.id || user.email
+          + };                                                           
+      150 +}                                                             
+      151 +                                                              
+      152 +function browseCatalog(token) {                               
+      153 +  const page = Math.floor(Math.random() * 5); // pages 0-4    
+      154 +  const res = http.get(                                       
+      155 +    `${LB}/catalog/songs?page=${page}&size=20`,               
+      156 +    { headers: makeAuthHeaders(token), tags: { endpoint: 'cata
+          +log' } },                                                     
+      157 +  );                                                          
+      158 +  check(res, { 'catalog 200': (r) => r.status === 200 });     
+      159 +                                                              
+      160 +  if (res.status === 200) {                                   
+      161 +    try {                                                     
+      162 +      const data = JSON.parse(res.body);                      
+      163 +      const items = data.content || data || [];               
+      164 +      return items.slice(0, 5).map((s) => s.trackId || s.id ||
+          + s.songId).filter(Boolean);                                   
+      165 +    } catch (_) {}                                            
+      166 +  }                                                           
+      167 +  return [];                                                  
+      168 +}                                                             
+      169 +                                                              
+      170 +function searchSongs(token, query) {                          
+      171 +  const res = http.get(                                       
+      172 +    `${LB}/search?q=${encodeURIComponent(query)}`,            
+      173 +    { headers: makeAuthHeaders(token), tags: { endpoint: 'sear
+          +ch' } },                                                      
+      174 +  );                                                          
+      175 +  check(res, { 'search 200': (r) => r.status === 200 });      
+      176 +                                                              
+      177 +  if (res.status === 200) {                                   
+      178 +    try {                                                     
+      179 +      const items = JSON.parse(res.body);                     
+      180 +      return (Array.isArray(items) ? items : []).slice(0, 3)  
+      181 +        .map((s) => s.trackId || s.id).filter(Boolean);       
+      182 +    } catch (_) {}                                            
+      183 +  }                                                           
+      184 +  return [];                                                  
+      185 +}                                                             
+      186 +                                                              
+      187 +function streamSong(token, songId) {                          
+      188 +  const start = Date.now();                                   
+      189 +  const manifestRes = http.get(                               
+      190 +    `${LB}/stream/${songId}`,                                 
+      191 +    { headers: makeAuthHeaders(token), tags: { endpoint: 'stre
+          +am' } },                                                      
+      192 +  );                                                          
+      193 +  streamLatency.add(Date.now() - start);                      
+      194 +                                                              
+      195 +  const ok = check(manifestRes, { 'stream manifest 200': (r) =
+          +> r.status === 200 });                                        
+      196 +  if (!ok) { streamingErrors.add(1); return; }                
+      197 +                                                              
+      198 +  // Fetch first segment to generate realistic segment traffic
+      199 +  const segRes = http.get(                                    
+      200 +    `${LB}/stream/${songId}/segment/0`,                       
+      201 +    { headers: makeAuthHeaders(token), tags: { endpoint: 'stre
+          +am_segment' } },                                              
+      202 +  );                                                          
+      203 +  check(segRes, { 'stream segment 200': (r) => r.status === 20
+          +0 });                                                         
+      204 +                                                              
+      205 +  // Mark play as complete (triggers playback-events Kafka mes
+          +sage)                                                         
+      206 +  const completeRes = http.post(                              
+      207 +    `${LB}/stream/${songId}/complete`,                        
+      208 +    null,                                                     
+      209 +    { headers: makeAuthHeaders(token), tags: { endpoint: 'stre
+          +am_complete' } },                                             
+      210 +  );                                                          
+      211 +  if (completeRes.status === 200 || completeRes.status === 204
+          +) {                                                           
+      212 +    kafkaEventsSent.add(1);                                   
+      213 +  }                                                           
+      214 +}                                                             
+      215 +                                                              
+      216 +function ensurePlaylist(token) {                              
+      217 +  if (vuPlaylistId) return vuPlaylistId;                      
+      218 +                                                              
+      219 +  const listRes = http.get(                                   
+      220 +    `${LB}/playlists`,                                        
+      221 +    { headers: makeAuthHeaders(token), tags: { endpoint: 'play
+          +lists_list' } },                                              
+      222 +  );                                                          
+      223 +                                                              
+      224 +  if (listRes.status === 200) {                               
+      225 +    try {                                                     
+      226 +      const playlists = JSON.parse(listRes.body);             
+      227 +      const arr = Array.isArray(playlists) ? playlists : [];  
+      228 +      if (arr.length > 0) {                                   
+      229 +        vuPlaylistId = arr[0].id;                             
+      230 +        return vuPlaylistId;                                  
+      231 +      }                                                       
+      232 +    } catch (_) {}                                            
+      233 +  }                                                           
+      234 +                                                              
+      235 +  // Create one if none exist                                 
+      236 +  const createRes = http.post(                                
+      237 +    `${LB}/playlists`,                                        
+      238 +    JSON.stringify({ name: `bench_list_${__VU}` }),           
+      239 +    { headers: makeAuthHeaders(token), tags: { endpoint: 'play
+          +list_create' } },                                             
+      240 +  );                                                          
+      241 +  check(createRes, { 'playlist created': (r) => r.status === 2
+          +01 || r.status === 200 });                                    
+      242 +                                                              
+      243 +  if (createRes.status === 200 || createRes.status === 201) { 
+      244 +    try {                                                     
+      245 +      vuPlaylistId = JSON.parse(createRes.body).id;           
+      246 +    } catch (_) {}                                            
+      247 +  }                                                           
+      248 +  return vuPlaylistId;                                        
+      249 +}                                                             
+      250 +                                                              
+      251 +function addToPlaylist(token, playlistId, songId) {           
+      252 +  if (!playlistId || !songId) return;                         
+      253 +  const res = http.post(                                      
+      254 +    `${LB}/playlists/${playlistId}/tracks`,                   
+      255 +    JSON.stringify({ songId }),                               
+      256 +    { headers: makeAuthHeaders(token), tags: { endpoint: 'play
+          +list_add_track' } },                                          
+      257 +  );                                                          
+      258 +  check(res, { 'track added': (r) => r.status === 200 || r.sta
+          +tus === 201 });                                               
+      259 +}                                                             
+      260 +                                                              
+      261 +function getRecommendations(token) {                          
+      262 +  const res = http.get(                                       
+      263 +    `${LB}/recommend/daily-mix`,                              
+      264 +    { headers: makeAuthHeaders(token), tags: { endpoint: 'reco
+          +mmend' } },                                                   
+      265 +  );                                                          
+      266 +  check(res, { 'recommend 200': (r) => r.status === 200 });   
+      267 +  cacheHintHits.add(1);                                       
+      268 +}                                                             
+      269 +                                                              
+      270 +function getAnalyticsHistory(token) {                         
+      271 +  const res = http.get(                                       
+      272 +    `${LB}/analytics/me/history`,                             
+      273 +    { headers: makeAuthHeaders(token), tags: { endpoint: 'anal
+          +ytics' } },                                                   
+      274 +  );                                                          
+      275 +  check(res, { 'analytics 200': (r) => r.status === 200 });   
+      276 +}                                                             
+      277 +                                                              
+      278 +function getNotifications(token) {                            
+      279 +  const res = http.get(                                       
+      280 +    `${LB}/notifications`,                                    
+      281 +    { headers: makeAuthHeaders(token), tags: { endpoint: 'noti
+          +fications' } },                                               
+      282 +  );                                                          
+      283 +  check(res, { 'notifications 200': (r) => r.status === 200 })
+          +;                                                             
+      284 +}                                                             
+      285 +                                                              
+      286 +// ── Main scenario ──────────────────────────────────────────
+          +────────────────                                              
+      287 +                                                              
+      288 +export function musicStreamingFlow() {                        
+      289 +  // ── Step 1: auth (once per VU lifetime) ──────────────────
+          +─────────────────                                             
+      290 +  if (!vuToken) {                                             
+      291 +    group('auth', () => {                                     
+      292 +      const creds = registerAndLogin();                       
+      293 +      if (creds) {                                            
+      294 +        vuToken  = creds.token;                               
+      295 +        vuUserId = creds.userId;                              
+      296 +      }                                                       
+      297      });
+      298 +    if (!vuToken) {                                           
+      299 +      sleep(2);                                               
+      300 +      return; // skip iteration if auth failed                
+      301 +    }                                                         
+      302    }
+      303  
+       42 -  sleep(1);                                                   
+      304 +  // ── Step 2: browse catalog (and cache song IDs for streami
+          +ng) ─────────────                                             
+      305 +  group('browse', () => {                                     
+      306 +    const ids = browseCatalog(vuToken);                       
+      307 +    if (ids.length > 0 && vuSongIds.length < 20) {            
+      308 +      vuSongIds = [...new Set([...vuSongIds, ...ids])];       
+      309 +    }                                                         
+      310 +  });                                                         
+      311 +                                                              
+      312 +  // ── Step 3: search (varies query to exercise OpenSearch) ─
+          +─────────────────                                             
+      313 +  const QUERIES = ['rock', 'pop', 'jazz', 'classical', 'electr
+          +onic', 'hip hop'];                                            
+      314 +  group('search', () => {                                     
+      315 +    const q = QUERIES[__VU % QUERIES.length];                 
+      316 +    const searchIds = searchSongs(vuToken, q);                
+      317 +    if (searchIds.length > 0 && vuSongIds.length < 20) {      
+      318 +      vuSongIds = [...new Set([...vuSongIds, ...searchIds])]; 
+      319 +    }                                                         
+      320 +  });                                                         
+      321 +                                                              
+      322 +  // ── Step 4: stream a song ────────────────────────────────
+          +─────────────────                                             
+      323 +  if (vuSongIds.length > 0) {                                 
+      324 +    group('stream', () => {                                   
+      325 +      const songId = vuSongIds[Math.floor(Math.random() * vuSo
+          +ngIds.length)];                                               
+      326 +      streamSong(vuToken, songId);                            
+      327 +    });                                                       
+      328 +  }                                                           
+      329 +                                                              
+      330 +  // ── Step 5: playlist operation (every 3rd iteration) ─────
+          +─────────────────                                             
+      331 +  if (__ITER % 3 === 0) {                                     
+      332 +    group('playlists', () => {                                
+      333 +      const pid = ensurePlaylist(vuToken);                    
+      334 +      if (pid && vuSongIds.length > 0) {                      
+      335 +        const songId = vuSongIds[Math.floor(Math.random() * vu
+          +SongIds.length)];                                             
+      336 +        addToPlaylist(vuToken, pid, songId);                  
+      337 +      }                                                       
+      338 +    });                                                       
+      339 +  }                                                           
+      340 +                                                              
+      341 +  // ── Step 6: recommendations (every 5th iteration to limit 
+          +Redis load) ─────                                             
+      342 +  if (__ITER % 5 === 0) {                                     
+      343 +    group('recommend', () => {                                
+      344 +      getRecommendations(vuToken);                            
+      345 +    });                                                       
+      346 +  }                                                           
+      347 +                                                              
+      348 +  // ── Step 7: analytics history (every 10th iteration) ─────
+          +─────────────────                                             
+      349 +  if (__ITER % 10 === 0) {                                    
+      350 +    group('analytics', () => {                                
+      351 +      getAnalyticsHistory(vuToken);                           
+      352 +    });                                                       
+      353 +  }                                                           
+      354 +                                                              
+      355 +  // ── Step 8: notifications (every 10th iteration) ─────────
+          +─────────────────                                             
+      356 +  if (__ITER % 10 === 1) {                                    
+      357 +    group('notifications', () => {                            
+      358 +      getNotifications(vuToken);                              
+      359 +    });                                                       
+      360 +  }                                                           
+      361 +                                                              
+      362 +  // Think-time: 0.5–2 s random pause between iterations (redu
+          +ces "thundering                                               
+      363 +  // herd" effects and makes the load pattern more realistic) 
+      364 +  sleep(0.5 + Math.random() * 1.5);                           
+      365  }
+
+⏺ Now the Grafana scaling dashboard:
+
+⏺ Write(infra/grafana/dashboards/scaling.json)
+  ⎿  Wrote 433 lines to infra/grafana/dashboards/scaling.json
+       2   "__inputs": [],
+       3   "__requires": [],
+       4   "annotations": { "list": [] },
+       5   "description": "Music Streaming — scaling decision dashboard. 
+         Shows the metrics needed to decide when and what to scale.",
+       6   "editable": true,
+       7   "graphTooltip": 1,
+       8   "id": null,
+       9   "links": [],
+      10   "panels": [
+     … +449 lines (ctrl+o to expand)
+
+⏺ Now update .env.example and the docs files in parallel:
+
+⏺ Write(.env.example)
+  ⎿  Added 73 lines, removed 21 lines
+      2  # Music Streaming Benchmark Application — Environment Configurat
+         ion
+      3  # ==============================================================
+         ===============
+      4  # Copy this file to .env and adjust values for your environment.
+      5 -# Defaults shown here are for local development only. Do not use
+        - these                                                          
+      6 -# credentials in any production or internet-facing deployment.  
+      5 +# Defaults shown here match the scaled benchmark configuration. 
+      6 +# Do not use these credentials in any internet-facing deployment
+        +.                                                               
+      7  # ==============================================================
+         ===============
+      8  
+      9  # ── Image versions ────────────────────────────────────────────
+         ────────────────
+     ...
+      21  # External Kafka port (host → container). Internal services use
+           kafka:9092.
+      22  KAFKA_HOST_PORT=29092
+      23  
+      24 +# ── Kafka topic partition counts ─────────────────────────────
+         +─────────────────                                              
+      25 +# Set BEFORE the first `docker compose up`. Partition count is 
+         +immutable after                                                
+      26 +# topic creation (increasing requires --alter; decreasing requi
+         +res topic deletion).                                           
+      27 +# playback-events: 12 supports up to 12 analytics + 12 recommen
+         +dation replicas.                                               
+      28 +# playlist-events:  6 supports up to 6 notification replicas.  
+      29 +PLAYBACK_EVENTS_PARTITIONS=12                                  
+      30 +PLAYLIST_EVENTS_PARTITIONS=6                                   
+      31 +                                                               
+      32  # ── PostgreSQL — Auth Service ────────────────────────────────
+          ─────────────────
+      33  AUTH_DB_HOST_PORT=5432
+      34  AUTH_DB_NAME=authdb
+      35  AUTH_DB_USER=authuser
+      36  AUTH_DB_PASSWORD=authpass
+      37 +# HikariCP pool size: at 1 replica × 20 = 20 connections (well 
+         +within PG max_connections=200)                                 
+      38 +AUTH_DB_POOL_SIZE=20                                           
+      39  
+      40  # ── PostgreSQL — Catalog Service ─────────────────────────────
+          ─────────────────
+      41  CATALOG_DB_HOST_PORT=5433
+      42  CATALOG_DB_NAME=catalogdb
+      43  CATALOG_DB_USER=cataloguser
+      44  CATALOG_DB_PASSWORD=catalogpass
+      45 +# At 2 replicas × 20 = 40 connections. Scale to 4 replicas befo
+         +re raising pool size.                                          
+      46 +CATALOG_DB_POOL_SIZE=20                                        
+      47  
+      48  # ── PostgreSQL — Playlist Service ────────────────────────────
+          ────────────────
+      49  PLAYLIST_DB_HOST_PORT=5434
+      50  PLAYLIST_DB_NAME=playlistdb
+      51  PLAYLIST_DB_USER=playlistuser
+      52  PLAYLIST_DB_PASSWORD=playlistpass
+      53 +PLAYLIST_DB_POOL_SIZE=20                                       
+      54  
+      55  # ── PostgreSQL — Recommendation Service ──────────────────────
+          ────────────────
+      56  RECOMMENDATION_DB_HOST_PORT=5435
+      57  RECOMMENDATION_DB_NAME=recommendationdb
+      58  RECOMMENDATION_DB_USER=recommendationuser
+      59  RECOMMENDATION_DB_PASSWORD=recommendationpass
+      60 +RECOMMENDATION_DB_POOL_SIZE=20                                 
+      61  
+      62  # ── OpenSearch ───────────────────────────────────────────────
+          ─────────────────
+      63  OPENSEARCH_HOST_PORT=9200
+      64 +# Heap: min(half node RAM, 31 GB). 1 g is appropriate for a sin
+         +gle-node benchmark.                                            
+      65 +# Increase to 2-4 g on a host with ≥8 GB free before adding a s
+         +econd OS node.                                                 
+      66 +OPENSEARCH_JAVA_OPTS=-Xms1g -Xmx1g                             
+      67  
+      68  # ── ClickHouse ───────────────────────────────────────────────
+          ─────────────────
+      69  CLICKHOUSE_HTTP_HOST_PORT=8123
+     ...
+      74  
+      75  # ── Redis ────────────────────────────────────────────────────
+          ─────────────────
+      76  REDIS_HOST_PORT=6379
+      77 +# maxmemory: recommendation cache for 100 K DAU ≈ 150-200 MB; 5
+         +12 MB gives 2.5× headroom.                                     
+      78 +REDIS_MAXMEMORY=512mb                                          
+      79  
+      80  # ── MongoDB ──────────────────────────────────────────────────
+          ─────────────────
+      81  MONGO_HOST_PORT=27017
+     ...
+      83  MONGO_PASSWORD=mongopass
+      84  MONGO_DB=notificationdb
+      85  
+      86 +# ── nginx load balancer ──────────────────────────────────────
+         +─────────────────                                              
+      87 +# Primary API entry point for both the frontend proxy and k6 lo
+         +ad tests.                                                      
+      88 +NGINX_LB_HOST_PORT=80                                          
+      89 +                                                               
+      90  # ── Prometheus ───────────────────────────────────────────────
+          ─────────────────
+      91  PROMETHEUS_HOST_PORT=9090
+      92  
+     ...
+       96  GRAFANA_PASSWORD=admin
+       97  
+       98  # ── JWT ─────────────────────────────────────────────────────
+           ──────────────────
+       76 -# Lifetime of issued tokens in milliseconds (default: 1 hour) 
+       99  JWT_EXPIRATION_MS=3600000
+      100  
+       79 -# ── Application service host ports ──────────────────────────
+          -─────────────────                                             
+       80 -AUTH_SERVICE_HOST_PORT=8081                                   
+       81 -CATALOG_SERVICE_HOST_PORT=8082                                
+       82 -STREAMING_SERVICE_HOST_PORT=8083                              
+       83 -PLAYLIST_SERVICE_HOST_PORT=8084                               
+       84 -SEARCH_SERVICE_HOST_PORT=8085                                 
+       85 -ANALYTICS_SERVICE_HOST_PORT=8086                              
+       86 -RECOMMENDATION_SERVICE_HOST_PORT=8087                         
+       87 -NOTIFICATION_SERVICE_HOST_PORT=8088                           
+       88 -FRONTEND_HOST_PORT=3000                                       
+      101 +# ── Kafka topic names ───────────────────────────────────────
+          +──────────────────                                            
+      102 +KAFKA_TOPIC_PLAYBACK_EVENTS=playback-events                   
+      103 +KAFKA_TOPIC_PLAYLIST_EVENTS=playlist-events                   
+      104  
+      105  # ── Streaming service tuning ────────────────────────────────
+           ──────────────────
+       91 -# Size of each simulated HLS segment payload in bytes         
+      106  STREAM_SEGMENT_SIZE_BYTES=65536
+       93 -# Number of segments listed in each simulated HLS manifest    
+      107  STREAM_SEGMENT_COUNT=10
+       95 -# Kafka topic for playback events (consumed by Analytics and R
+          -ecommendation services)                                       
+       96 -KAFKA_TOPIC_PLAYBACK_EVENTS=playback-events                   
+      108  
+      109 +# ── Analytics service batch tuning ──────────────────────────
+          +─────────────────                                             
+      110 +# Flush to ClickHouse when buffer reaches BATCH_SIZE events OR
+          + after                                                        
+      111 +# FLUSH_INTERVAL_MS milliseconds, whichever occurs first.     
+      112 +# Larger batches = fewer ClickHouse parts = better merge perfo
+          +rmance.                                                       
+      113 +ANALYTICS_BATCH_SIZE=500                                      
+      114 +ANALYTICS_BATCH_FLUSH_INTERVAL_MS=5000                        
+      115 +ANALYTICS_HISTORY_LIMIT=100                                   
+      116 +                                                              
+      117 +# ── Recommendation service tuning ───────────────────────────
+          +──────────────────                                            
+      118 +RECOMMENDATION_DAILY_MIX_SIZE=20                              
+      119 +RECOMMENDATION_SIMILAR_SIZE=10                                
+      120 +RECOMMENDATION_CACHE_TTL_SECONDS=3600                         
+      121 +RECOMMENDATION_KAFKA_CONSUMER_GROUP_ID=recommendation-service 
+      122 +                                                              
+      123 +# ── Notification service ────────────────────────────────────
+          +──────────────────                                            
+      124 +NOTIFICATION_KAFKA_CONSUMER_GROUP_ID=notification-service     
+      125 +KAFKA_CONSUMER_GROUP_ID=analytics-service                     
+      126 +                                                              
+      127 +# ── Search service ──────────────────────────────────────────
+          +──────────────────                                            
+      128 +SEARCH_MAX_RESULTS=20                                         
+      129 +SEARCH_SEED_BATCH_SIZE=500                                    
+      130 +                                                              
+      131 +# ── Service replica counts ──────────────────────────────────
+          +──────────────────                                            
+      132 +# These set deploy.replicas in docker-compose.yml.            
+      133 +# Constraints:                                                
+      134 +#   auth-service:    keep at 1 on first boot (JWT key generati
+          +on race on fresh volumes).                                    
+      135 +#                    After keys exist, scale to 2-4: docker co
+          +mpose up --scale auth-service=4                               
+      136 +#   analytics/recommendation/notification: capped by Kafka par
+          +tition counts above.                                          
+      137 +#   streaming/catalog/search: stateless, scale freely.        
+      138 +# RAM budget (estimate per replica): services ~512 MB, JVM sta
+          +rtup overlap peak ~1 GB.                                      
+      139 +CATALOG_SERVICE_REPLICAS=2                                    
+      140 +STREAMING_SERVICE_REPLICAS=3                                  
+      141 +PLAYLIST_SERVICE_REPLICAS=2                                   
+      142 +SEARCH_SERVICE_REPLICAS=2                                     
+      143 +ANALYTICS_SERVICE_REPLICAS=2                                  
+      144 +RECOMMENDATION_SERVICE_REPLICAS=2                             
+      145 +NOTIFICATION_SERVICE_REPLICAS=1                               
+      146 +                                                              
+      147  # ── Resource limits (cpus / memory per container) ───────────
+           ─────────────────
+       99 -# Adjust these for different benchmarking scenarios.          
+      100 -AUTH_SERVICE_CPU_LIMIT=1.0                                    
+      148 +# auth-service gets 1.5 cpus because BCrypt hashing is CPU-hea
+          +vy.                                                           
+      149 +# streaming-service could go to 2.0 if HLS generation becomes 
+          +the bottleneck.                                               
+      150 +AUTH_SERVICE_CPU_LIMIT=1.5                                    
+      151  AUTH_SERVICE_MEMORY_LIMIT=512m
+      152  CATALOG_SERVICE_CPU_LIMIT=1.0
+      153  CATALOG_SERVICE_MEMORY_LIMIT=512m
+     ...
+      167  FRONTEND_MEMORY_LIMIT=256m
+      168  
+      169  # ── Load generator (k6) ─────────────────────────────────────
+           ──────────────────
+      120 -K6_VUS=10                                                     
+      121 -K6_DURATION=60s                                               
+      170 +# K6_SCENARIO: smoke | catalog_stream | kafka_pipeline | ramp 
+          +| stress | soak                                               
+      171 +K6_SCENARIO=ramp                                              
+      172 +K6_VUS=50                                                     
+      173 +K6_DURATION=5m                                                
+      174  LOAD_GENERATOR_CPU_LIMIT=2.0
+      175  LOAD_GENERATOR_MEMORY_LIMIT=512m
+⏺ Let me clean up the unnecessary imports introduced:
+
+⏺ Update(services/analytics-service/src/main/java/com/musicstreaming/analytics/r
+        epository/AnalyticsRepository.java)
+  ⎿  Removed 1 line
+       9  import java.sql.Timestamp;
+      10  import java.time.Instant;
+      11  import java.util.List;
+      12 -import java.util.ArrayList;                                    
+      12  
+      13  @Repository
+      14  public class AnalyticsRepository {
+
+⏺ Update(services/analytics-service/src/main/java/com/musicstreaming/analytics/s
+        ervice/AnalyticsService.java)
+  ⎿  Removed 1 line
+      10  import org.springframework.stereotype.Service;
+      11  
+      12  import java.util.List;
+      13 -import java.util.stream.Collectors;                            
+      13  
+      14  @Service
+      15  public class AnalyticsService {
+
+  Read 1 file (ctrl+o to expand)
+
+⏺ Update(services/analytics-service/src/main/java/com/musicstreaming/analytics/m
+        essaging/PlaybackEventConsumer.java)
+  ⎿  Removed 1 line
+      2  
+      3  import com.fasterxml.jackson.databind.ObjectMapper;
+      4  import com.musicstreaming.analytics.model.PlaybackEventRecord;
+      5 -import com.musicstreaming.analytics.service.AnalyticsService;   
+      5  import org.slf4j.Logger;
+      6  import org.slf4j.LoggerFactory;
+      7  import org.springframework.kafka.annotation.KafkaListener;
+
+⏺ Now update the SCALABILITY.md to document what was implemented, and then
+  update the three docs:
+
+  Read 1 file (ctrl+o to expand)
+
+⏺ Update(SCALABILITY.md)
+  ⎿  Added 40 lines, removed 1 line
+       996  
+       997  ---
+       998  
+       999 -*Last updated: 2026-05-20*                                   
+       999 +## 17. Implementation Status                                 
+      1000 +                                                             
+      1001 +The first scaling implementation (2026-05-21) delivers the fo
+           +llowing changes to the repository.                           
+      1002 +Each item references the affected file so the rationale can b
+           +e traced directly to the code.                               
+      1003 +                                                             
+      1004 +### Implemented                                              
+      1005 +                                                             
+      1006 +| Area | Change | File(s) |                                  
+      1007 +|---|---|---|                                                
+      1008 +| **Kafka partitions** | `init-kafka` one-shot service create
+           +s `playback-events` (12 partitions) and `playlist-events` (6 
+           +partitions) before any producer/consumer starts. `KAFKA_AUTO_
+           +CREATE_TOPICS_ENABLE` disabled to prevent accidental 1-partit
+           +ion creation. | `docker-compose.yml` |                       
+      1009 +| **nginx-lb** | Dedicated nginx load balancer on port 80. Us
+           +es `resolver 127.0.0.11 valid=5s` + `set $upstream` variables
+           + so new replicas are discovered within 5 s without an nginx r
+           +eload. Per-path rate limiting (auth: 20 r/s, streaming: 200 r
+           +/s, API: 500 r/s). | `infra/nginx-lb/nginx.conf`, `docker-com
+           +pose.yml` |                                                  
+      1010 +| **Frontend routing** | Frontend nginx now proxies all `/api
+           +/*` to `nginx-lb` instead of directly to individual services.
+           + Eliminates single-IP DNS caching at the SPA proxy layer. | `
+           +frontend/nginx.conf` |                                       
+      1011 +| **Service replicas** | `deploy.replicas` set per service: s
+           +treaming 3, catalog 2, search 2, playlist 2, analytics 2, rec
+           +ommendation 2, notification 1, auth 1 (JWT key race constrain
+           +t). All configurable via `.env`. | `docker-compose.yml`, `.en
+           +v.example` |                                                 
+      1012 +| **container_name removed** | All 8 application services los
+           +e `container_name`, enabling `docker compose up --scale <serv
+           +ice>=N`. Auth-service retains its name because it must stay a
+           +t 1 on fresh volumes. | `docker-compose.yml` |               
+      1013 +| **Service host ports removed** | Application services no lo
+           +nger bind host ports (8081–8088). All API traffic enters on p
+           +ort 80 via nginx-lb. Databases and observability keep host po
+           +rts for direct debugging. | `docker-compose.yml` |           
+      1014 +| **JWT key dependency** | All services that read `jwt-keys:r
+           +o` now depend on `auth-service: service_healthy`, guaranteein
+           +g RSA key files exist before consumers try to load them. | `d
+           +ocker-compose.yml` |                                         
+      1015 +| **OpenSearch heap** | Increased from 512 m to 1 g (`OPENSEA
+           +RCH_JAVA_OPTS`). Tunable via env var. | `docker-compose.yml`,
+           + `.env.example` |                                            
+      1016 +| **Redis tuning** | Added `--maxmemory 512mb --maxmemory-pol
+           +icy allkeys-lru --appendfsync everysec`. Explicit memory ceil
+           +ing prevents OOM; LRU eviction matches TTL-based recommendati
+           +on cache; everysec reduces blocking write latency from 1–2 ms
+           + to near-zero. | `docker-compose.yml`, `.env.example` |      
+      1017 +| **Resource limits** | All previously uncapped infrastructur
+           +e (Kafka, Zookeeper, ClickHouse, Redis, MongoDB, OpenSearch, 
+           +nginx-lb) now has explicit `deploy.resources.limits`. | `dock
+           +er-compose.yml` |                                            
+      1018 +| **PostgreSQL tuning** | Each PostgreSQL instance uses `comm
+           +and: postgres -c shared_buffers=... -c work_mem=...` tuned pe
+           +r workload. catalog-db gets 512 MB shared_buffers (largest re
+           +ad dataset). | `docker-compose.yml` |                        
+      1019 +| **HikariCP tuning** | `SPRING_DATASOURCE_HIKARI_MAXIMUM_POO
+           +L_SIZE=20` and `MINIMUM_IDLE=5` set via env on all DB-connect
+           +ed services. Pool per replica × replicas stays below PostgreS
+           +QL max_connections=200. | `docker-compose.yml` |             
+      1020 +| **ClickHouse batch insert** | `BatchEventBuffer` accumulate
+           +s Kafka-consumed events and flushes them to ClickHouse via `J
+           +dbcTemplate.batchUpdate()` in batches of 500 or every 5 secon
+           +ds. Eliminates the "one part per insert" anti-pattern. | `Bat
+           +chEventBuffer.java`, `PlaybackEventConsumer.java`, `Analytics
+           +Repository.java`, `AnalyticsService.java` |                  
+      1021 +| **`@EnableScheduling`** | Added to `AnalyticsServiceApplica
+           +tion` to activate the `@Scheduled` flush in `BatchEventBuffer
+           +`. | `AnalyticsServiceApplication.java` |                    
+      1022 +| **Prometheus exporters** | Added `postgres-exporter` (×4), 
+           +`redis-exporter`, `kafka-exporter` as compose services. | `do
+           +cker-compose.yml` |                                          
+      1023 +| **Prometheus DNS-SD** | Scaled services (catalog, streaming
+           +, playlist, search, analytics, recommendation, notification) 
+           +use `dns_sd_configs` so Prometheus auto-discovers replica pod
+           +s. | `infra/prometheus/prometheus.yml` |                     
+      1024 +| **Grafana scaling dashboard** | New `scaling.json` dashboar
+           +d with 19 panels covering: request rate, error rate, latency,
+           + JVM heap, CPU, HikariCP saturation, PostgreSQL connections/s
+           +equential scans, Kafka consumer lag per group, Redis hit rate
+           +/memory, OpenSearch heap. | `infra/grafana/dashboards/scaling
+           +.json` |                                                     
+      1025 +| **k6 multi-scenario script** | Full user journey implemente
+           +d: register → login → browse → search → stream (manifest + se
+           +gment + complete event) → playlist → recommendations → analyt
+           +ics → notifications. Six selectable scenarios via `K6_SCENARI
+           +O` env var. `NGINX_LB_URL` routes all load through nginx-lb. 
+           +| `load-generator/scripts/main.js` |                         
+      1026 +| **`.env.example`** | Updated with all new variables: replic
+           +a counts, partition counts, pool sizes, batch tuning, Redis m
+           +axmemory, OpenSearch heap. | `.env.example` |                
+      1027 +                                                             
+      1028 +### Not yet implemented (deferred)                           
+      1029 +                                                             
+      1030 +| Area | Reason deferred |                                   
+      1031 +|---|---|                                                    
+      1032 +| PgBouncer | Transaction-mode PgBouncer requires Flyway to u
+           +se a separate direct datasource URL; adds code complexity. Cu
+           +rrent pool sizing (20 × replicas) stays within PG max_connect
+           +ions=200. Add when replicas × pool_size approaches 150. |    
+      1033 +| Second Kafka broker | Single-broker is sufficient for bench
+           +marking. Three-broker setup (kafka, kafka2, kafka3) requires 
+           +separate compose service definitions with unique BROKER_IDs; 
+           +deferred to avoid inflating startup complexity. |            
+      1034 +| OpenSearch second node | Requires `opensearch-node2` compos
+           +e service + cluster coordination. `number_of_replicas: 0` on 
+           +songs index already set (single-node cannot host replica shar
+           +ds). Add node when OpenSearch heap consistently exceeds 75 %.
+           + |                                                           
+      1035 +| Resilience4j circuit breakers | Code changes in recommendat
+           +ion-service. Deferred; Redis fail-open fallback already provi
+           +des graceful degradation. |                                  
+      1036 +| Catalog Redis page cache | Requires code change in catalog-
+           +service. Deferred; existing PG indexes cover the read path at
+           + current scale. |                                            
+      1037 +                                                             
+      1038 +*Last updated: 2026-05-21*                                   
+
+⏺ Now update the three project docs. Let me read the ends of PROGRESS.md,
+  FINDINGS.md, DECISIONS.md first:
+
+  Read 6 files (ctrl+o to expand)
+
+⏺ Now let me verify the key files are correct — spot-check the analytics service
+   files and the docker-compose structure:
+
+  Searched for 2 patterns, read 1 file (ctrl+o to expand)
+
+⏺ Bash(sed -n '565,600p' /Users/Sabina/Desktop/Thesis/Iteration01/benchmark-appl
+      ication/docker-compose.yml)
+  ⎿    auth-service:
+         build:
+           context: ./services/auth-service
+     … +23 lines (ctrl+o to expand)
+
+  Searched for 2 patterns (ctrl+o to expand)
+
+⏺ Bash(sed -n '597,640p' /Users/Sabina/Desktop/Thesis/Iteration01/benchmark-appl
+      ication/docker-compose.yml)
+  ⎿    catalog-service:
+         build:
+           context: ./services/catalog-service
+     … +22 lines (ctrl+o to expand)
+
+⏺ Everything is wired correctly. Let me do a final check on the analytics
+  repository to make sure insertBatch compiles cleanly:
+
+  Read 1 file (ctrl+o to expand)
+
+⏺ All clean. Let me do a final summary of all files changed:
+
+⏺ Bash(git diff --stat HEAD)
+  ⎿   .env.example                                       |  94 +++--
+      FINDINGS.md                                        |  72 ++++
+      PROGRESS.md                                        |  39 +-
+     … +12 lines (ctrl+o to expand)
+
+⏺ Bash(git status --short)
+  ⎿   M .env.example
+      M FINDINGS.md
+      M PROGRESS.md
+     … +18 lines (ctrl+o to expand)
+
+⏺ Everything is in place. Here is a precise account of what was implemented and
+  why each decision was made the way it was.
+
+  ---
+  What changed and why
+
+  1. init-kafka one-shot container
+
+  File: docker-compose.yml
+
+  Creates playback-events (12 partitions) and playlist-events (6 partitions)
+  before any service starts. KAFKA_AUTO_CREATE_TOPICS_ENABLE=false was added to
+  the Kafka broker so services cannot accidentally trigger 1-partition topic
+  creation by connecting first. All Kafka-producing/consuming services declare
+  init-kafka: condition: service_completed_successfully in depends_on. Partition
+   counts are immutable after creation — this must be done before first boot.
+
+  2. nginx-lb dedicated load balancer
+
+  Files: infra/nginx-lb/nginx.conf, docker-compose.yml
+
+  Uses resolver 127.0.0.11 valid=5s with set $upstream_<svc> 
+  "service-name:8080"; proxy_pass http://$upstream_<svc> on every location. This
+   is the only pattern in open-source nginx that causes per-request DNS
+  re-resolution — without the variable, nginx resolves once at startup and all
+  traffic goes to one replica forever. Rate limiting: auth at 20 r/s (BCrypt is
+  CPU-expensive), streaming at 200 r/s, general API at 500 r/s. Streaming has
+  proxy_buffering off so 64 KB segment payloads pass through without buffering.
+
+  3. Frontend nginx routed through nginx-lb
+
+  File: frontend/nginx.conf
+
+  All /api/* locations now proxy_pass http://nginx-lb/<path> instead of directly
+   to services. The path rewriting pattern is preserved identically — only the
+  target changes from individual service names to nginx-lb. This eliminates the
+  single-IP DNS cache problem in the SPA nginx while also consolidating all
+  traffic through one observable, rate-limited point.
+
+  4. container_name removed from 7 application services
+
+  File: docker-compose.yml
+
+  auth-service retains its container_name because it must stay at 1 replica on a
+   fresh volume. The JwtConfig.java key generation is not atomic — two
+  simultaneous instances seeing absent files both generate different key pairs,
+  and whichever writes last determines what other services read from the volume.
+   All other services have no container_name, enabling docker compose up --scale
+   <service>=N without port or name conflicts.
+
+  5. auth-service: service_healthy in all jwt-keys consumers
+
+  File: docker-compose.yml
+
+  Every service that mounts jwt-keys:/jwt-keys:ro now depends on auth-service
+  being healthy. This adds ~30–60 s startup latency but eliminates the crash
+  race where a service starts its @PostConstruct key-loader before the RSA files
+   exist.
+
+  6. ClickHouse batch insert
+
+  Files: BatchEventBuffer.java (new), PlaybackEventConsumer.java,
+  AnalyticsRepository.java, AnalyticsService.java,
+  AnalyticsServiceApplication.java, application.yml
+
+  BatchEventBuffer accumulates events in a synchronized ArrayList and flushes
+  via JdbcTemplate.batchUpdate() in batches of 500 or every 5 seconds. The
+  existing recordEvent() API is unchanged (tests still pass). The new
+  recordEvents(List<>) path is only called from the buffer. @EnableScheduling
+  added to the application class to activate the @Scheduled flush.
+
+  7. Resource limits, PostgreSQL tuning, Redis and OpenSearch tuning
+
+  File: docker-compose.yml, .env.example
+
+  All infrastructure containers now have explicit CPU and memory limits
+  (previously none). Redis gets --maxmemory 512mb --maxmemory-policy allkeys-lru
+   --appendfsync everysec. OpenSearch heap goes from 512 m to 1 g. PostgreSQL
+  gets per-instance -c shared_buffers / work_mem / max_connections tuned to its
+  workload (catalog-db gets more because it serves the largest read dataset).
+
+  8. Prometheus exporters + DNS-SD for scaled services
+
+  Files: docker-compose.yml, infra/prometheus/prometheus.yml
+
+  Added postgres-exporter ×4, redis-exporter, kafka-exporter. Scaled services
+  (all except auth) use dns_sd_configs so Prometheus discovers and scrapes every
+   replica independently — without this, it only scrapes whichever IP Docker DNS
+   returns on the first query.
+
+  9. Grafana scaling dashboard
+
+  File: infra/grafana/dashboards/scaling.json
+
+  19 panels across 6 rows: request rate, error rate, latency, JVM heap, CPU,
+  HikariCP saturation, PostgreSQL connections and sequential scans, Kafka
+  consumer lag (per group), Redis hit rate and memory, OpenSearch heap.
+  Threshold lines are drawn at the alert values defined in SCALABILITY.md §13.
+
+  10. k6 full user journey with 6 scenarios
+
+  File: load-generator/scripts/main.js
+
+  Implements the complete flow: register → login → browse catalog → search →
+  stream manifest → stream segment → complete event (→ Kafka) → playlist →
+  recommendations → analytics → notifications. Each VU registers once and reuses
+   the token. Six selectable scenarios via K6_SCENARIO: smoke, catalog_stream,
+  kafka_pipeline, ramp, stress, soak. All traffic routes through
+  NGINX_LB_URL=http://nginx-lb.
+
+✻ Sautéed for 26m 16s
+
+※ recap: Scaled the benchmark application for 1M-user load testing: added nginx-lb, init-kafka with 12/6 partitions, per-service replicas, ClickHouse batch insert, six Prometheus exporters, a Grafana scaling dashboard, and a full k6 user journey. Next action is running docker compose up to validate the new configuration starts cleanly. (disable recaps in /config)

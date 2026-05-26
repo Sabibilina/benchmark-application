@@ -8,6 +8,13 @@ scrape_configs:
     static_configs:
       - targets: [localhost:9090]
 
+  # ── Application services (Spring Boot Actuator) ───────────────────────────
+  # All services expose /actuator/prometheus via Micrometer.
+  # When a service is scaled to N replicas, Prometheus scrapes each replica
+  # because Docker DNS returns all IPs for the service name in round-robin.
+  # The `application` label (set in each service's management.metrics.tags)
+  # distinguishes replicas in Grafana queries.
+
   - job_name: auth-service
     metrics_path: /actuator/prometheus
     static_configs:
@@ -15,35 +22,99 @@ scrape_configs:
 
   - job_name: catalog-service
     metrics_path: /actuator/prometheus
-    static_configs:
-      - targets: [catalog-service:8080]
+    dns_sd_configs:
+      - names: [catalog-service]
+        type: A
+        port: 8080
+        refresh_interval: 30s
 
   - job_name: streaming-service
     metrics_path: /actuator/prometheus
-    static_configs:
-      - targets: [streaming-service:8080]
+    dns_sd_configs:
+      - names: [streaming-service]
+        type: A
+        port: 8080
+        refresh_interval: 30s
 
   - job_name: playlist-service
     metrics_path: /actuator/prometheus
-    static_configs:
-      - targets: [playlist-service:8080]
+    dns_sd_configs:
+      - names: [playlist-service]
+        type: A
+        port: 8080
+        refresh_interval: 30s
 
   - job_name: search-service
     metrics_path: /actuator/prometheus
-    static_configs:
-      - targets: [search-service:8080]
+    dns_sd_configs:
+      - names: [search-service]
+        type: A
+        port: 8080
+        refresh_interval: 30s
 
   - job_name: analytics-service
     metrics_path: /actuator/prometheus
-    static_configs:
-      - targets: [analytics-service:8080]
+    dns_sd_configs:
+      - names: [analytics-service]
+        type: A
+        port: 8080
+        refresh_interval: 30s
 
   - job_name: recommendation-service
     metrics_path: /actuator/prometheus
-    static_configs:
-      - targets: [recommendation-service:8080]
+    dns_sd_configs:
+      - names: [recommendation-service]
+        type: A
+        port: 8080
+        refresh_interval: 30s
 
   - job_name: notification-service
     metrics_path: /actuator/prometheus
+    dns_sd_configs:
+      - names: [notification-service]
+        type: A
+        port: 8080
+        refresh_interval: 30s
+
+  # ── PostgreSQL exporters ───────────────────────────────────────────────────
+  # One exporter per database instance.  Key metrics: active connections,
+  # sequential scans (missing index indicator), lock waits.
+
+  - job_name: postgres-auth
     static_configs:
-      - targets: [notification-service:8080]
+      - targets: [postgres-exporter-auth:9187]
+        labels:
+          db: auth-db
+
+  - job_name: postgres-catalog
+    static_configs:
+      - targets: [postgres-exporter-catalog:9187]
+        labels:
+          db: catalog-db
+
+  - job_name: postgres-playlist
+    static_configs:
+      - targets: [postgres-exporter-playlist:9187]
+        labels:
+          db: playlist-db
+
+  - job_name: postgres-recommendation
+    static_configs:
+      - targets: [postgres-exporter-recommendation:9187]
+        labels:
+          db: recommendation-db
+
+  # ── Redis exporter ────────────────────────────────────────────────────────
+  # Key metrics: hit rate, used memory, connected clients, evictions.
+
+  - job_name: redis
+    static_configs:
+      - targets: [redis-exporter:9121]
+
+  # ── Kafka exporter ────────────────────────────────────────────────────────
+  # Key metric: kafka_consumergroup_lag — the primary signal for whether
+  # analytics-service or recommendation-service needs more replicas.
+
+  - job_name: kafka
+    static_configs:
+      - targets: [kafka-exporter:9308]

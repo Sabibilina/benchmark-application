@@ -35,6 +35,11 @@ services:
       ZOOKEEPER_4LW_COMMANDS_WHITELIST: "*"
     ports:
       - "${ZOOKEEPER_HOST_PORT:-2181}:2181"
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512m
     healthcheck:
       test: ["CMD-SHELL", "echo srvr | nc -w 2 localhost 2181 | grep -q 'Zookeeper version' || exit 1"]
       interval: 10s
@@ -63,16 +68,63 @@ services:
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
       KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
-      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+      # Disable auto-creation so init-kafka controls partition counts precisely.
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
       KAFKA_LOG_RETENTION_HOURS: 24
+      KAFKA_MESSAGE_MAX_BYTES: 1048576
+      KAFKA_REPLICA_FETCH_MAX_BYTES: 1048576
     ports:
       - "${KAFKA_HOST_PORT:-29092}:29092"
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1g
     healthcheck:
       test: ["CMD-SHELL", "kafka-broker-api-versions --bootstrap-server localhost:9092 > /dev/null 2>&1 || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 10
       start_period: 30s
+
+  # ── Kafka topic initialiser (one-shot) ────────────────────────────────────
+  # Creates topics with production-appropriate partition counts before any
+  # producer or consumer starts.  Partition counts are sized for the target
+  # replica counts:
+  #   playback-events  → 12 partitions  (analytics × 4  + recommendation × 3)
+  #   playlist-events  →  6 partitions  (notification × 2, headroom to 6)
+  # Services that produce/consume Kafka MUST depend on init-kafka completing.
+
+  init-kafka:
+    image: confluentinc/cp-kafka:${CONFLUENT_VERSION:-7.6.0}
+    container_name: init-kafka
+    networks: [music-net]
+    depends_on:
+      kafka:
+        condition: service_healthy
+    # Override the Confluent entrypoint so we can run kafka-topics directly.
+    # The default entrypoint (/etc/confluent/docker/run) starts a Kafka broker.
+    #
+    # The script MUST live as the third element of the entrypoint list.
+    # If it is placed in `command:` instead, Docker Compose tokenises the string
+    # into a list, and bash -c receives only the first token as the script to
+    # execute (the rest become $0, $1 … positional parameters that are never
+    # used), causing kafka-topics to be called with no arguments.
+    entrypoint:
+      - /bin/bash
+      - -c
+      - >-
+        kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists
+        --topic ${KAFKA_TOPIC_PLAYBACK_EVENTS:-playback-events}
+        --partitions ${PLAYBACK_EVENTS_PARTITIONS:-12}
+        --replication-factor 1 &&
+        kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists
+        --topic ${KAFKA_TOPIC_PLAYLIST_EVENTS:-playlist-events}
+        --partitions ${PLAYLIST_EVENTS_PARTITIONS:-6}
+        --replication-factor 1 &&
+        echo 'Kafka topics ready.' &&
+        kafka-topics --bootstrap-server kafka:9092 --list
+    restart: "no"
 
   # ── PostgreSQL databases (one per service) ────────────────────────────────
 
@@ -86,8 +138,19 @@ services:
       POSTGRES_DB: ${AUTH_DB_NAME:-authdb}
       POSTGRES_USER: ${AUTH_DB_USER:-authuser}
       POSTGRES_PASSWORD: ${AUTH_DB_PASSWORD:-authpass}
+    command: >
+      postgres
+        -c shared_buffers=256MB
+        -c work_mem=16MB
+        -c max_connections=200
+        -c effective_cache_size=512MB
     ports:
       - "${AUTH_DB_HOST_PORT:-5432}:5432"
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1g
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${AUTH_DB_USER:-authuser} -d ${AUTH_DB_NAME:-authdb}"]
       interval: 10s
@@ -105,8 +168,20 @@ services:
       POSTGRES_DB: ${CATALOG_DB_NAME:-catalogdb}
       POSTGRES_USER: ${CATALOG_DB_USER:-cataloguser}
       POSTGRES_PASSWORD: ${CATALOG_DB_PASSWORD:-catalogpass}
+    command: >
+      postgres
+        -c shared_buffers=512MB
+        -c work_mem=32MB
+        -c max_connections=200
+        -c effective_cache_size=1GB
+        -c random_page_cost=1.1
     ports:
       - "${CATALOG_DB_HOST_PORT:-5433}:5432"
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 2g
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${CATALOG_DB_USER:-cataloguser} -d ${CATALOG_DB_NAME:-catalogdb}"]
       interval: 10s
@@ -124,8 +199,19 @@ services:
       POSTGRES_DB: ${PLAYLIST_DB_NAME:-playlistdb}
       POSTGRES_USER: ${PLAYLIST_DB_USER:-playlistuser}
       POSTGRES_PASSWORD: ${PLAYLIST_DB_PASSWORD:-playlistpass}
+    command: >
+      postgres
+        -c shared_buffers=256MB
+        -c work_mem=16MB
+        -c max_connections=200
+        -c effective_cache_size=512MB
     ports:
       - "${PLAYLIST_DB_HOST_PORT:-5434}:5432"
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 1g
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${PLAYLIST_DB_USER:-playlistuser} -d ${PLAYLIST_DB_NAME:-playlistdb}"]
       interval: 10s
@@ -143,8 +229,19 @@ services:
       POSTGRES_DB: ${RECOMMENDATION_DB_NAME:-recommendationdb}
       POSTGRES_USER: ${RECOMMENDATION_DB_USER:-recommendationuser}
       POSTGRES_PASSWORD: ${RECOMMENDATION_DB_PASSWORD:-recommendationpass}
+    command: >
+      postgres
+        -c shared_buffers=256MB
+        -c work_mem=16MB
+        -c max_connections=200
+        -c effective_cache_size=512MB
     ports:
       - "${RECOMMENDATION_DB_HOST_PORT:-5435}:5432"
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 1g
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${RECOMMENDATION_DB_USER:-recommendationuser} -d ${RECOMMENDATION_DB_NAME:-recommendationdb}"]
       interval: 10s
@@ -153,6 +250,9 @@ services:
       start_period: 10s
 
   # ── OpenSearch ────────────────────────────────────────────────────────────
+  # Heap increased from 512 m to 1 g.  Rule: heap = min(half RAM on node, 31 g).
+  # At 1 g the JVM stays well below compressed-OOP threshold (~31 g) and has
+  # enough room for field-data caches and segment buffers at scale.
 
   opensearch:
     image: opensearchproject/opensearch:${OPENSEARCH_VERSION:-2.13.0}
@@ -162,7 +262,7 @@ services:
       - opensearch-data:/usr/share/opensearch/data
     environment:
       discovery.type: single-node
-      OPENSEARCH_JAVA_OPTS: "-Xms512m -Xmx512m"
+      OPENSEARCH_JAVA_OPTS: "${OPENSEARCH_JAVA_OPTS:--Xms1g -Xmx1g}"
       DISABLE_SECURITY_PLUGIN: "true"
       DISABLE_INSTALL_DEMO_CONFIG: "true"
     ulimits:
@@ -174,6 +274,11 @@ services:
         hard: 65536
     ports:
       - "${OPENSEARCH_HOST_PORT:-9200}:9200"
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 3g
     healthcheck:
       test: ["CMD-SHELL", "curl -sf http://localhost:9200/_cluster/health | grep -qE '\"status\":\"(green|yellow)\"' || exit 1"]
       interval: 15s
@@ -182,6 +287,8 @@ services:
       start_period: 45s
 
   # ── ClickHouse ────────────────────────────────────────────────────────────
+  # Resource limits added.  Without limits ClickHouse can claim all host RAM
+  # during a write-heavy load test.
 
   clickhouse:
     image: clickhouse/clickhouse-server:${CLICKHOUSE_VERSION:-24.3}
@@ -196,6 +303,13 @@ services:
     ports:
       - "${CLICKHOUSE_HTTP_HOST_PORT:-8123}:8123"
       - "${CLICKHOUSE_NATIVE_HOST_PORT:-9000}:9000"
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 4g
+        reservations:
+          memory: 1g
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:8123/ping | grep -q 'Ok.' || exit 1"]
       interval: 10s
@@ -204,6 +318,11 @@ services:
       start_period: 20s
 
   # ── Redis ─────────────────────────────────────────────────────────────────
+  # maxmemory: recommendation cache peaks at ~200 MB for 100 K active users;
+  #   512 MB gives 2.5× headroom before eviction kicks in.
+  # allkeys-lru: evict least-recently-used keys when full, matching TTL workload.
+  # appendfsync everysec: 1-second durability window is acceptable for a cache;
+  #   avoids blocking 1-2 ms per write that 'always' would impose.
 
   redis:
     image: redis:${REDIS_VERSION:-7.2-alpine}
@@ -211,9 +330,20 @@ services:
     networks: [music-net]
     volumes:
       - redis-data:/data
-    command: redis-server --appendonly yes
+    command: >
+      redis-server
+        --appendonly yes
+        --appendfsync everysec
+        --maxmemory ${REDIS_MAXMEMORY:-512mb}
+        --maxmemory-policy allkeys-lru
+        --save ""
     ports:
       - "${REDIS_HOST_PORT:-6379}:6379"
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 768m
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
@@ -235,12 +365,43 @@ services:
       MONGO_INITDB_DATABASE: ${MONGO_DB:-notificationdb}
     ports:
       - "${MONGO_HOST_PORT:-27017}:27017"
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 1g
     healthcheck:
       test: ["CMD-SHELL", "mongosh --username \"$$MONGO_INITDB_ROOT_USERNAME\" --password \"$$MONGO_INITDB_ROOT_PASSWORD\" --authenticationDatabase admin --eval 'db.runCommand({ ping: 1 })' --quiet || exit 1"]
       interval: 10s
       timeout: 10s
       retries: 5
       start_period: 30s
+
+  # ── nginx load balancer ───────────────────────────────────────────────────
+  # Single entry point for all backend API traffic (both browser via the
+  # frontend nginx, and k6 direct).  Uses Docker's embedded DNS resolver
+  # (127.0.0.11) with a 5-second TTL so newly scaled replicas are picked up
+  # without an nginx reload.  Rate limiting and access logging are applied here.
+
+  nginx-lb:
+    image: nginx:1.25-alpine
+    container_name: nginx-lb
+    networks: [music-net]
+    volumes:
+      - ./infra/nginx-lb/nginx.conf:/etc/nginx/nginx.conf:ro
+    ports:
+      - "${NGINX_LB_HOST_PORT:-80}:80"
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 256m
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1/health | grep -q UP || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
 
   # ── Prometheus ────────────────────────────────────────────────────────────
 
@@ -258,6 +419,11 @@ services:
       - '--web.enable-lifecycle'
     ports:
       - "${PROMETHEUS_HOST_PORT:-9090}:9090"
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512m
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:9090/-/healthy"]
       interval: 10s
@@ -284,6 +450,11 @@ services:
       GF_USERS_ALLOW_SIGN_UP: "false"
     ports:
       - "${GRAFANA_HOST_PORT:-3001}:3000"
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512m
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:3000/api/health | grep -q ok || exit 1"]
       interval: 10s
@@ -291,7 +462,114 @@ services:
       retries: 5
       start_period: 20s
 
+  # ── Prometheus exporters ──────────────────────────────────────────────────
+  # These expose database and infrastructure metrics for Grafana dashboards.
+  # They are lightweight and have no hard dependencies beyond the target service.
+
+  postgres-exporter-auth:
+    image: prometheuscommunity/postgres-exporter:v0.15.0
+    container_name: postgres-exporter-auth
+    networks: [music-net]
+    environment:
+      DATA_SOURCE_NAME: "postgresql://${AUTH_DB_USER:-authuser}:${AUTH_DB_PASSWORD:-authpass}@auth-db:5432/${AUTH_DB_NAME:-authdb}?sslmode=disable"
+    depends_on:
+      auth-db:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: "0.1"
+          memory: 64m
+
+  postgres-exporter-catalog:
+    image: prometheuscommunity/postgres-exporter:v0.15.0
+    container_name: postgres-exporter-catalog
+    networks: [music-net]
+    environment:
+      DATA_SOURCE_NAME: "postgresql://${CATALOG_DB_USER:-cataloguser}:${CATALOG_DB_PASSWORD:-catalogpass}@catalog-db:5432/${CATALOG_DB_NAME:-catalogdb}?sslmode=disable"
+    depends_on:
+      catalog-db:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: "0.1"
+          memory: 64m
+
+  postgres-exporter-playlist:
+    image: prometheuscommunity/postgres-exporter:v0.15.0
+    container_name: postgres-exporter-playlist
+    networks: [music-net]
+    environment:
+      DATA_SOURCE_NAME: "postgresql://${PLAYLIST_DB_USER:-playlistuser}:${PLAYLIST_DB_PASSWORD:-playlistpass}@playlist-db:5432/${PLAYLIST_DB_NAME:-playlistdb}?sslmode=disable"
+    depends_on:
+      playlist-db:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: "0.1"
+          memory: 64m
+
+  postgres-exporter-recommendation:
+    image: prometheuscommunity/postgres-exporter:v0.15.0
+    container_name: postgres-exporter-recommendation
+    networks: [music-net]
+    environment:
+      DATA_SOURCE_NAME: "postgresql://${RECOMMENDATION_DB_USER:-recommendationuser}:${RECOMMENDATION_DB_PASSWORD:-recommendationpass}@recommendation-db:5432/${RECOMMENDATION_DB_NAME:-recommendationdb}?sslmode=disable"
+    depends_on:
+      recommendation-db:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: "0.1"
+          memory: 64m
+
+  redis-exporter:
+    image: oliver006/redis_exporter:v1.60.0
+    container_name: redis-exporter
+    networks: [music-net]
+    environment:
+      REDIS_ADDR: "redis://redis:6379"
+    depends_on:
+      redis:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: "0.1"
+          memory: 64m
+
+  kafka-exporter:
+    image: danielqsj/kafka-exporter:v1.7.0
+    container_name: kafka-exporter
+    networks: [music-net]
+    command:
+      - "--kafka.server=kafka:9092"
+      - "--web.listen-address=:9308"
+    depends_on:
+      kafka:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: "0.1"
+          memory: 128m
+
   # ── Application services ──────────────────────────────────────────────────
+  # container_name is intentionally omitted from all application services so
+  # that `docker compose up --scale <service>=N` works without conflicts.
+  #
+  # Ports are intentionally omitted; all API traffic enters via nginx-lb:80.
+  # To inspect a specific replica directly, use `docker compose exec <service>`.
+  #
+  # HikariCP pool is tuned so that (replicas × pool_size) stays well below
+  # PostgreSQL max_connections (200).  At 4 replicas × 20 connections = 80,
+  # leaving room for DBA queries and exporter connections.
+  #
+  # All services that mount jwt-keys:ro depend on auth-service being healthy
+  # so that RSA key files are guaranteed to exist before they are read.
 
   auth-service:
     build:
@@ -308,14 +586,15 @@ services:
       SPRING_DATASOURCE_URL: jdbc:postgresql://auth-db:5432/${AUTH_DB_NAME:-authdb}
       SPRING_DATASOURCE_USERNAME: ${AUTH_DB_USER:-authuser}
       SPRING_DATASOURCE_PASSWORD: ${AUTH_DB_PASSWORD:-authpass}
+      SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: ${AUTH_DB_POOL_SIZE:-20}
+      SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE: 5
+      SPRING_DATASOURCE_HIKARI_CONNECTION_TIMEOUT: 30000
       JWT_KEY_DIR: /jwt-keys
       JWT_EXPIRATION_MS: ${JWT_EXPIRATION_MS:-3600000}
-    ports:
-      - "${AUTH_SERVICE_HOST_PORT:-8081}:8080"
     deploy:
       resources:
         limits:
-          cpus: "${AUTH_SERVICE_CPU_LIMIT:-1.0}"
+          cpus: "${AUTH_SERVICE_CPU_LIMIT:-1.5}"
           memory: "${AUTH_SERVICE_MEMORY_LIMIT:-512m}"
     healthcheck:
       test: ["CMD-SHELL", "curl -fs http://localhost:8080/actuator/health || exit 1"]
@@ -328,10 +607,11 @@ services:
     build:
       context: ./services/catalog-service
       dockerfile: Dockerfile
-    container_name: catalog-service
     networks: [music-net]
     depends_on:
       catalog-db:
+        condition: service_healthy
+      auth-service:
         condition: service_healthy
     volumes:
       - jwt-keys:/jwt-keys:ro
@@ -339,10 +619,12 @@ services:
       SPRING_DATASOURCE_URL: jdbc:postgresql://catalog-db:5432/${CATALOG_DB_NAME:-catalogdb}
       SPRING_DATASOURCE_USERNAME: ${CATALOG_DB_USER:-cataloguser}
       SPRING_DATASOURCE_PASSWORD: ${CATALOG_DB_PASSWORD:-catalogpass}
+      SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: ${CATALOG_DB_POOL_SIZE:-20}
+      SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE: 5
+      SPRING_DATASOURCE_HIKARI_CONNECTION_TIMEOUT: 30000
       JWT_PUBLIC_KEY_PATH: /jwt-keys/public.pem
-    ports:
-      - "${CATALOG_SERVICE_HOST_PORT:-8082}:8080"
     deploy:
+      replicas: ${CATALOG_SERVICE_REPLICAS:-2}
       resources:
         limits:
           cpus: "${CATALOG_SERVICE_CPU_LIMIT:-1.0}"
@@ -358,10 +640,13 @@ services:
     build:
       context: ./services/streaming-service
       dockerfile: Dockerfile
-    container_name: streaming-service
     networks: [music-net]
     depends_on:
       kafka:
+        condition: service_healthy
+      init-kafka:
+        condition: service_completed_successfully
+      auth-service:
         condition: service_healthy
     volumes:
       - jwt-keys:/jwt-keys:ro
@@ -371,9 +656,8 @@ services:
       STREAM_SEGMENT_SIZE_BYTES: ${STREAM_SEGMENT_SIZE_BYTES:-65536}
       STREAM_SEGMENT_COUNT: ${STREAM_SEGMENT_COUNT:-10}
       KAFKA_TOPIC_PLAYBACK_EVENTS: ${KAFKA_TOPIC_PLAYBACK_EVENTS:-playback-events}
-    ports:
-      - "${STREAMING_SERVICE_HOST_PORT:-8083}:8080"
     deploy:
+      replicas: ${STREAMING_SERVICE_REPLICAS:-3}
       resources:
         limits:
           cpus: "${STREAMING_SERVICE_CPU_LIMIT:-1.0}"
@@ -389,12 +673,15 @@ services:
     build:
       context: ./services/playlist-service
       dockerfile: Dockerfile
-    container_name: playlist-service
     networks: [music-net]
     depends_on:
       playlist-db:
         condition: service_healthy
       kafka:
+        condition: service_healthy
+      init-kafka:
+        condition: service_completed_successfully
+      auth-service:
         condition: service_healthy
     volumes:
       - jwt-keys:/jwt-keys:ro
@@ -402,11 +689,13 @@ services:
       SPRING_DATASOURCE_URL: jdbc:postgresql://playlist-db:5432/${PLAYLIST_DB_NAME:-playlistdb}
       SPRING_DATASOURCE_USERNAME: ${PLAYLIST_DB_USER:-playlistuser}
       SPRING_DATASOURCE_PASSWORD: ${PLAYLIST_DB_PASSWORD:-playlistpass}
+      SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: ${PLAYLIST_DB_POOL_SIZE:-20}
+      SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE: 5
+      SPRING_DATASOURCE_HIKARI_CONNECTION_TIMEOUT: 30000
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       JWT_PUBLIC_KEY_PATH: /jwt-keys/public.pem
-    ports:
-      - "${PLAYLIST_SERVICE_HOST_PORT:-8084}:8080"
     deploy:
+      replicas: ${PLAYLIST_SERVICE_REPLICAS:-2}
       resources:
         limits:
           cpus: "${PLAYLIST_SERVICE_CPU_LIMIT:-1.0}"
@@ -422,10 +711,11 @@ services:
     build:
       context: ./services/search-service
       dockerfile: Dockerfile
-    container_name: search-service
     networks: [music-net]
     depends_on:
       opensearch:
+        condition: service_healthy
+      auth-service:
         condition: service_healthy
     volumes:
       - jwt-keys:/jwt-keys:ro
@@ -437,9 +727,8 @@ services:
       SEARCH_MAX_RESULTS: ${SEARCH_MAX_RESULTS:-20}
       SEARCH_SEED_ENABLED: "true"
       SEARCH_SEED_BATCH_SIZE: ${SEARCH_SEED_BATCH_SIZE:-500}
-    ports:
-      - "${SEARCH_SERVICE_HOST_PORT:-8085}:8080"
     deploy:
+      replicas: ${SEARCH_SERVICE_REPLICAS:-2}
       resources:
         limits:
           cpus: "${SEARCH_SERVICE_CPU_LIMIT:-1.0}"
@@ -455,12 +744,15 @@ services:
     build:
       context: ./services/analytics-service
       dockerfile: Dockerfile
-    container_name: analytics-service
     networks: [music-net]
     depends_on:
       clickhouse:
         condition: service_healthy
       kafka:
+        condition: service_healthy
+      init-kafka:
+        condition: service_completed_successfully
+      auth-service:
         condition: service_healthy
     volumes:
       - jwt-keys:/jwt-keys:ro
@@ -474,10 +766,11 @@ services:
       KAFKA_TOPIC_PLAYBACK_EVENTS: ${KAFKA_TOPIC_PLAYBACK_EVENTS:-playback-events}
       KAFKA_CONSUMER_GROUP_ID: ${KAFKA_CONSUMER_GROUP_ID:-analytics-service}
       ANALYTICS_HISTORY_LIMIT: ${ANALYTICS_HISTORY_LIMIT:-100}
+      ANALYTICS_BATCH_SIZE: ${ANALYTICS_BATCH_SIZE:-500}
+      ANALYTICS_BATCH_FLUSH_INTERVAL_MS: ${ANALYTICS_BATCH_FLUSH_INTERVAL_MS:-5000}
       JWT_PUBLIC_KEY_PATH: /jwt-keys/public.pem
-    ports:
-      - "${ANALYTICS_SERVICE_HOST_PORT:-8086}:8080"
     deploy:
+      replicas: ${ANALYTICS_SERVICE_REPLICAS:-2}
       resources:
         limits:
           cpus: "${ANALYTICS_SERVICE_CPU_LIMIT:-1.0}"
@@ -493,7 +786,6 @@ services:
     build:
       context: ./services/recommendation-service
       dockerfile: Dockerfile
-    container_name: recommendation-service
     networks: [music-net]
     depends_on:
       recommendation-db:
@@ -502,12 +794,19 @@ services:
         condition: service_healthy
       kafka:
         condition: service_healthy
+      init-kafka:
+        condition: service_completed_successfully
+      auth-service:
+        condition: service_healthy
     volumes:
       - jwt-keys:/jwt-keys:ro
     environment:
       SPRING_DATASOURCE_URL: jdbc:postgresql://recommendation-db:5432/${RECOMMENDATION_DB_NAME:-recommendationdb}
       SPRING_DATASOURCE_USERNAME: ${RECOMMENDATION_DB_USER:-recommendationuser}
       SPRING_DATASOURCE_PASSWORD: ${RECOMMENDATION_DB_PASSWORD:-recommendationpass}
+      SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: ${RECOMMENDATION_DB_POOL_SIZE:-20}
+      SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE: 5
+      SPRING_DATASOURCE_HIKARI_CONNECTION_TIMEOUT: 30000
       SPRING_DATA_REDIS_HOST: redis
       SPRING_DATA_REDIS_PORT: 6379
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
@@ -517,9 +816,8 @@ services:
       RECOMMENDATION_DAILY_MIX_SIZE: ${RECOMMENDATION_DAILY_MIX_SIZE:-20}
       RECOMMENDATION_SIMILAR_SIZE: ${RECOMMENDATION_SIMILAR_SIZE:-10}
       RECOMMENDATION_CACHE_TTL_SECONDS: ${RECOMMENDATION_CACHE_TTL_SECONDS:-3600}
-    ports:
-      - "${RECOMMENDATION_SERVICE_HOST_PORT:-8087}:8080"
     deploy:
+      replicas: ${RECOMMENDATION_SERVICE_REPLICAS:-2}
       resources:
         limits:
           cpus: "${RECOMMENDATION_SERVICE_CPU_LIMIT:-1.0}"
@@ -535,12 +833,15 @@ services:
     build:
       context: ./services/notification-service
       dockerfile: Dockerfile
-    container_name: notification-service
     networks: [music-net]
     depends_on:
       mongodb:
         condition: service_healthy
       kafka:
+        condition: service_healthy
+      init-kafka:
+        condition: service_completed_successfully
+      auth-service:
         condition: service_healthy
     volumes:
       - jwt-keys:/jwt-keys:ro
@@ -550,9 +851,8 @@ services:
       KAFKA_TOPIC_PLAYLIST_EVENTS: ${KAFKA_TOPIC_PLAYLIST_EVENTS:-playlist-events}
       KAFKA_CONSUMER_GROUP_ID: ${NOTIFICATION_KAFKA_CONSUMER_GROUP_ID:-notification-service}
       JWT_PUBLIC_KEY_PATH: /jwt-keys/public.pem
-    ports:
-      - "${NOTIFICATION_SERVICE_HOST_PORT:-8088}:8080"
     deploy:
+      replicas: ${NOTIFICATION_SERVICE_REPLICAS:-1}
       resources:
         limits:
           cpus: "${NOTIFICATION_SERVICE_CPU_LIMIT:-1.0}"
@@ -565,6 +865,8 @@ services:
       start_period: 60s
 
   # ── Frontend ──────────────────────────────────────────────────────────────
+  # Depends on nginx-lb so that the baked-in nginx.conf can resolve `nginx-lb`
+  # at startup (nginx resolves static proxy_pass hostnames once on start).
 
   frontend:
     build:
@@ -572,6 +874,9 @@ services:
       dockerfile: Dockerfile
     container_name: frontend
     networks: [music-net]
+    depends_on:
+      nginx-lb:
+        condition: service_healthy
     ports:
       - "${FRONTEND_HOST_PORT:-3000}:80"
     deploy:
@@ -587,6 +892,11 @@ services:
       start_period: 10s
 
   # ── Load generator (opt-in profile) ──────────────────────────────────────
+  # Routes all benchmark traffic through nginx-lb (NGINX_LB_URL) to measure
+  # realistic system performance including proxy overhead and rate limiting.
+  # Individual service URLs are retained for targeted debugging runs.
+  # K6_SCENARIO selects the test phase: smoke | catalog_stream | kafka_pipeline
+  #   | ramp | stress | soak  (default: ramp)
 
   load-generator:
     build:
@@ -595,6 +905,8 @@ services:
     container_name: load-generator
     networks: [music-net]
     depends_on:
+      nginx-lb:
+        condition: service_healthy
       auth-service:
         condition: service_healthy
       catalog-service:
@@ -610,6 +922,9 @@ services:
       recommendation-service:
         condition: service_healthy
     environment:
+      # Primary entry point — routes through nginx-lb for realistic load distribution
+      NGINX_LB_URL: http://nginx-lb
+      # Direct service URLs for targeted health checks and bypass scenarios
       AUTH_SERVICE_URL: http://auth-service:8080
       CATALOG_SERVICE_URL: http://catalog-service:8080
       STREAMING_SERVICE_URL: http://streaming-service:8080
@@ -617,8 +932,10 @@ services:
       SEARCH_SERVICE_URL: http://search-service:8080
       ANALYTICS_SERVICE_URL: http://analytics-service:8080
       RECOMMENDATION_SERVICE_URL: http://recommendation-service:8080
-      K6_VUS: ${K6_VUS:-10}
-      K6_DURATION: ${K6_DURATION:-60s}
+      # k6 scenario selector
+      K6_SCENARIO: ${K6_SCENARIO:-ramp}
+      K6_VUS: ${K6_VUS:-50}
+      K6_DURATION: ${K6_DURATION:-5m}
     profiles:
       - load-test
     deploy:

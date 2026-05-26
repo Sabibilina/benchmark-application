@@ -14,6 +14,8 @@ This document records all bugs, defects, and notable issues discovered during th
 - **F-006** — `catalog-service`, `playlist-service`, `streaming-service` — Visibility: package-private constants — *Low* — **Fixed** — Recurring pattern: constants in main package unreachable from `*.unit` test sub-package
 - **F-007** — All Kafka consumers — Test infrastructure: container ordering — *Medium* — **Fixed by design** — `@DynamicPropertySource` resolves before `@Container` starts; Kafka properties unavailable
 - **F-008** — `auth-service` — Test environment — *Info* — **Pending** — Test suite execution deferred during Phase 1; requires Maven + Java 21 + Docker daemon
+- **F-009** — `search-service` — Test infrastructure: OpenSearch container startup timeout — *Medium* — **Fixed** — `OpenSearchTestContainer` timed out after 60 s; fixed by raising heap to 512 m, using server-side `wait_for_status=yellow` health check, and extending startup timeout to 3 min
+- **F-S06** — `docker-compose.yml` (`init-kafka`) — Infrastructure: wrong binary name — *Medium* — **Fixed** — `kafka-topics.sh` not found on PATH in Confluent image; fixed to `kafka-topics` (no `.sh`); risk: topics silently absent on a fresh volume
 
 ---
 
@@ -182,6 +184,37 @@ All other services (Phases 2–8) had their test suites executed and passed (see
 
 ---
 
+### F-009 — OpenSearch Testcontainer Startup Timeout in Search Service
+
+- **Service:** search-service
+- **Files:** `services/search-service/src/test/java/com/musicstreaming/search/config/OpenSearchTestContainer.java`
+- **Category:** Test infrastructure — container startup
+- **Severity:** Medium (causes `SearchServiceApplicationTests` and `SearchControllerIT` to error, blocking all 23 search-service tests)
+- **Discovered:** 2026-05-21 during first full `mvn test` run across all services
+
+**Description:**
+Both the `SearchServiceApplicationTests` context load test and `SearchControllerIT` integration tests failed with:
+
+```
+ContainerLaunchException: Timed out waiting for URL to be accessible
+  (http://localhost:XXXXX/_cluster/health should return HTTP [200])
+Caused by: java.net.SocketException: Unexpected end of file from server
+```
+
+`OpenSearchTestContainer` used the default Testcontainers startup timeout (60 s) with a plain `Wait.forHttp("/_cluster/health").forStatusCode(200)`. OpenSearch 2.13.0 takes longer than 60 s to fully initialise on a constrained host, and the health check fired repeatedly while OpenSearch was still binding its HTTP listener — each attempt receiving an abrupt socket close, not a valid HTTP response.
+
+**Root Cause:** Two compounding issues:
+1. Default 60 s startup timeout is insufficient for OpenSearch on a resource-constrained machine.
+2. The plain HTTP wait strategy retries immediately against a port that is open but not yet serving HTTP, producing repeated `SocketException: Unexpected end of file` instead of a connection-refused, which exhausts retries before OpenSearch is ready.
+
+**Fix:**
+- Increased JVM heap from `256m` to `512m` (`-Xms512m -Xmx512m`) to give OpenSearch enough memory to start cleanly.
+- Changed wait strategy to `Wait.forHttp("/_cluster/health?wait_for_status=yellow&timeout=30s")` — the server-side `wait_for_status=yellow` parameter causes OpenSearch to block the response until the cluster is at least yellow, eliminating premature 200 responses.
+- Extended `withStartupTimeout(Duration.ofMinutes(3))` so Testcontainers waits long enough for the server-side wait to complete on slow machines.
+- Added `@SuppressWarnings("resource")` on the static field (Ryuk reaper owns container lifecycle; IDE false-positive).
+
+---
+
 ## Pending / Open Issues
 
 The following items are not bugs in the current code but represent missing coverage or deferred work that may surface bugs later.
@@ -203,3 +236,89 @@ This document will be updated as new issues are found. Sources to monitor:
 - **`mvn verify` output per service:** Any new `ERROR` or `FAIL` in surefire output should be logged here.
 - **Code review of remaining phases:** Frontend (Phase 9) and integration (Phase 10) have not been reviewed yet.
 - **`ClaudeChats/` log files:** The decision IDs referenced throughout this document correspond to entries in those files where additional context is available.
+
+---
+
+## Phase S1 — Scaling Implementation Findings (2026-05-21)
+
+### F-S01 — Kafka auto-topic-creation was producing 1-partition topics
+
+**Observed:** With `KAFKA_AUTO_CREATE_TOPICS_ENABLE=true`, any service that connected to Kafka
+before `init-kafka` ran would trigger auto-creation of `playback-events` with 1 partition.
+This silently caps consumer concurrency to 1 regardless of replica count.
+
+**Fix:** Set `KAFKA_AUTO_CREATE_TOPICS_ENABLE=false`. Created `init-kafka` one-shot container
+that pre-creates topics with 12 / 6 partitions. Application services that produce/consume Kafka
+now declare `init-kafka: service_completed_successfully` in `depends_on`.
+
+---
+
+### F-S02 — nginx single-IP DNS cache prevented load distribution across replicas
+
+**Observed:** The frontend nginx resolved `http://streaming-service:8080` once at startup
+and cached a single IP. When `streaming-service` scaled to 3 replicas, all browser traffic
+continued going to the first replica.
+
+**Fix:** Added `nginx-lb` container with `resolver 127.0.0.11 valid=5s` and
+`set $upstream "streaming-service:8080"; proxy_pass http://$upstream;` pattern.
+Per-request re-resolution causes Docker DNS to return replica IPs in round-robin.
+Frontend nginx now routes all `/api/*` to nginx-lb.
+
+---
+
+### F-S03 — ClickHouse insert-per-event pattern under stress
+
+**Observed:** The analytics-service called `repository.insert(event)` for every Kafka message.
+ClickHouse's MergeTree creates one *part* per INSERT. At 40 K events/s this would trigger
+"Too many parts" errors and insert rejections within minutes.
+
+**Fix:** `BatchEventBuffer` accumulates events and calls `repository.insertBatch()` via
+`JdbcTemplate.batchUpdate()` in batches of 500 events or every 5 seconds. This collapses
+thousands of individual inserts into a single batch INSERT statement per flush.
+
+---
+
+### F-S04 — auth-service JWT key generation race on fresh volumes with multiple replicas
+
+**Observed:** `JwtConfig.java` checks file existence before generating RSA keys. With multiple
+auth-service replicas starting simultaneously on a fresh `jwt-keys` volume, two replicas could
+both see "files don't exist", both generate different key pairs, and both write to disk.
+The last writer's keys end up on disk; the other replica's keys are in memory but differ from
+what other services read from the volume.
+
+**Root cause confirmed** by reading `JwtConfig.java:45-51`.
+
+**Mitigation (implemented):** auth-service kept at `deploy.replicas: 1` in the base compose
+file. All other services depend on `auth-service: service_healthy`, guaranteeing keys are
+written before any other service reads them. Documented in SCALABILITY.md §16 Risk 1.
+
+**Full fix (not yet implemented):** A separate `init-jwt-keys` one-shot container generates
+the RSA pair before auth-service starts, removing the generation responsibility from the
+application service entirely.
+
+---
+
+### F-S05 — No resource limits on infrastructure containers
+
+**Observed:** Kafka, Zookeeper, ClickHouse, MongoDB, OpenSearch, Redis had no
+`deploy.resources.limits`. During a ClickHouse write storm or OpenSearch index operation,
+either could claim all host RAM, causing OOM kills of other containers.
+
+**Fix:** All infrastructure services now have explicit CPU and memory limits. ClickHouse
+capped at 4 g (largest consumer), Kafka at 1 g, OpenSearch at 3 g (1 g JVM + 2 g OS page
+cache headroom).
+
+---
+
+### F-S06 — `init-kafka` failed to create Kafka topics (`kafka-topics.sh` not on PATH)
+
+**Observed:** The `init-kafka` one-shot container exited without creating the `playback-events` or `playlist-events` topics. The three Kafka consumer services (analytics-service, notification-service, recommendation-service) still loaded successfully because the topics were already present on the broker volume from a previous stack run — masking the failure.
+
+**Root Cause:** The entrypoint script called `kafka-topics.sh`, but the Confluent `cp-kafka` image places the binary at `/usr/bin/kafka-topics` with no `.sh` extension. The shell returned `command not found`, and the `&&`-chained script exited non-zero before either `--create` call executed. Because `KAFKA_AUTO_CREATE_TOPICS_ENABLE` is set to `"false"` (intentionally, per F-S01), no fallback auto-creation occurred.
+
+**Risk if undetected on a fresh volume:** On a host that has never run the stack, topics would simply not exist. Consumer services would start, log "topic not found" warnings, and produce no data. The issue would only surface under load or inspection — not at startup.
+
+**Fix:** Updated `init-kafka` entrypoint in `docker-compose.yml` to call `kafka-topics` (no `.sh` extension), which matches the actual binary path in the Confluent image. Verified with `kafka-topics --bootstrap-server kafka:9092 --list` as the final step of the script.
+
+---
+

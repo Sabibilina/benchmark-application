@@ -2,220 +2,214 @@
 
 Cloud-native music streaming benchmark application for cost-aware IaC research.
 
-## What this application is
-
-A cloud-native music streaming system implemented as eight independent microservices. Services cover user authentication, song catalog management, simulated streaming, playlist operations, full-text search, analytics, recommendations, and notifications. The architecture emphasises database-per-service isolation, a shared Kafka event bus, and a Prometheus/Grafana monitoring stack — all deployable with a single `docker compose up`.
+Eight independent microservices, a shared Kafka event bus, and a full Prometheus/Grafana
+monitoring stack — all deployable with a single `docker compose up`.
 
 ---
 
-## Architecture overview
+## Architecture
 
-| Service | Technology | Persistence | Port |
-|---|---|---|---|
-| auth-service | Java 21 / Spring Boot 3 | PostgreSQL | 8081 |
-| catalog-service | Java 21 / Spring Boot 3 | PostgreSQL | 8082 |
-| streaming-service | Java 21 / Spring Boot 3 | Stateless | 8083 |
-| playlist-service | Java 21 / Spring Boot 3 | PostgreSQL | 8084 |
-| search-service | Java 21 / Spring Boot 3 | OpenSearch | 8085 |
-| analytics-service | Java 21 / Spring Boot 3 | ClickHouse | 8086 |
-| recommendation-service | Java 21 / Spring Boot 3 | PostgreSQL + Redis | 8087 |
-| notification-service | Java 21 / Spring Boot 3 | MongoDB | 8088 |
-| frontend | React + TypeScript (Vite) | — | 3000 |
+| Service | Persistence | Description |
+|---|---|---|
+| auth-service | PostgreSQL | JWT-based registration and login |
+| catalog-service | PostgreSQL | Paginated song catalog and artist top-tracks |
+| streaming-service | Stateless | Simulated HLS manifest + segment delivery |
+| playlist-service | PostgreSQL | Playlist CRUD, track ordering, Kafka producer |
+| search-service | OpenSearch | Full-text song search |
+| analytics-service | ClickHouse | Playback event ingestion and charts |
+| recommendation-service | PostgreSQL + Redis | Daily mix and similar-songs recommendations |
+| notification-service | MongoDB | Playlist-event-driven notification feed |
+| frontend | — | React SPA served by nginx |
 
-**Shared infrastructure:** Apache Kafka (+ Zookeeper), Prometheus, Grafana.
+**Infrastructure:** Kafka + Zookeeper, Prometheus, Grafana, nginx load balancer.
 
-All containers share the named Docker network `music-net`.
+All traffic enters through **nginx-lb on port 80**. Individual service ports are not exposed by
+default; use `docker-compose.dev.yml` when you need direct host access (e2e tests).
 
 ---
 
 ## Prerequisites
 
-- Docker Engine 24+ with Docker Compose v2 (`docker compose version`)
-- At least 8 GB of free RAM for the full stack
-- Ports listed above plus 2181, 9090, 3001, 9200, 8123, 6379, 27017, 29092 available on the host
+- Docker Engine 24+ with Compose v2 — confirm with `docker compose version`
+- At least 16 GB free RAM for the full scaled stack (8 services × up to 3 replicas + infrastructure)
+- Ports free on host: `80`, `3000`, `3001`, `9090`, `9200`, `8123`, `29092`,
+  `5432–5435`, `6379`, `27017`
 
 ---
 
-## Phase 0 — Shared deployment environment (current phase)
-
-Phase 0 scaffolds the full repository and starts all infrastructure containers. Application service images are minimal Spring Boot stubs that respond to `/actuator/health`. Full service business logic is added in Phases 1–9.
-
-### 1. Configure the environment
+## 1. Start the application
 
 ```bash
 cp .env.example .env
-# Edit .env if you need to change any port or credential
+docker compose up --build -d
 ```
 
-### 2. Start infrastructure only (fastest validation)
+First build downloads Maven dependencies and Docker base images — allow 10–15 minutes.
+Subsequent starts take 2–3 minutes.
 
-```bash
-docker compose up -d \
-  zookeeper kafka \
-  auth-db catalog-db playlist-db recommendation-db \
-  opensearch clickhouse redis mongodb \
-  prometheus grafana
-```
-
-Wait for all containers to be healthy:
+Check that everything is up:
 
 ```bash
 docker compose ps
 ```
 
-### 3. Start the full skeleton (infrastructure + placeholder app services)
+All services should show `healthy`. Services that consume Kafka (`streaming-service`,
+`analytics-service`, `recommendation-service`, `notification-service`) wait for
+`init-kafka` to finish creating topics before starting.
+
+**Open in browser:**
+- Frontend: http://localhost:3000
+- Grafana (admin / admin): http://localhost:3001
+- Prometheus: http://localhost:9090
+
+---
+
+## 2. Run per-service tests (unit + integration)
+
+Each service has its own unit tests and Testcontainer-based integration tests.
+**The full Docker Compose stack does not need to be running.** Docker daemon must be running.
+
+Run all eight services in sequence:
 
 ```bash
-docker compose up -d
+cd /Users/Sabina/Desktop/Thesis/Iteration01/benchmark-application && \
+for svc in auth-service catalog-service streaming-service playlist-service search-service analytics-service recommendation-service notification-service; do
+  echo "====== $svc ======"
+  (cd services/$svc && mvn verify -q) && echo "✓ $svc PASSED" || echo "✗ $svc FAILED"
+done
 ```
 
-This builds the placeholder Spring Boot stubs from source (requires Maven to download dependencies — allow 5–10 minutes on first run) and starts all containers.
-
-### 4. Run the load generator (opt-in)
+Run a single service:
 
 ```bash
-docker compose --profile load-test up load-generator
+cd services/auth-service && mvn verify
+```
+
+Unit tests only (no Docker required):
+
+```bash
+cd services/auth-service && mvn test -Dtest="**/*Test"
+```
+
+> Testcontainers pulls database images on first run (PostgreSQL, ClickHouse, OpenSearch, etc.).
+> This is slow once; subsequent runs use the cached images.
+
+---
+
+## 3. Run end-to-end tests
+
+The e2e tests use REST Assured and call live services on `localhost:8081–8088`.
+Because services do not expose host ports in the default compose file, use the
+`docker-compose.dev.yml` overlay which adds them back.
+
+**Terminal 1 — start the stack with ports exposed:**
+
+```bash
+cd /Users/Sabina/Desktop/Thesis/Iteration01/benchmark-application && \
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build -d
+```
+
+Wait until all services are healthy:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.dev.yml ps
+```
+
+**Terminal 2 — run the e2e tests:**
+
+```bash
+cd /Users/Sabina/Desktop/Thesis/Iteration01/benchmark-application/e2e-tests && \
+mvn test
+```
+
+Tear down when done:
+
+```bash
+cd /Users/Sabina/Desktop/Thesis/Iteration01/benchmark-application && \
+docker compose -f docker-compose.yml -f docker-compose.dev.yml down
 ```
 
 ---
 
-## Service endpoints (Phase 0)
+## 4. Run load tests (k6)
 
-| Endpoint | Description |
-|---|---|
-| `http://localhost:808{1-8}/actuator/health` | Spring Boot health for each service |
-| `http://localhost:808{1-8}/actuator/prometheus` | Prometheus metrics for each service |
-| `http://localhost:9090` | Prometheus UI |
-| `http://localhost:3001` | Grafana (admin / admin) |
-| `http://localhost:3000` | Frontend placeholder |
-| `localhost:29092` | Kafka (external / host access) |
-| `http://localhost:9200` | OpenSearch |
-| `http://localhost:8123/ping` | ClickHouse HTTP ping |
+The load generator runs inside Docker and routes all traffic through nginx-lb.
+The full stack must be running (standard `docker compose up`, no dev overlay needed).
 
----
-
-## Phase 0 validation checklist
-
-Run these commands to confirm Phase 0 is working correctly.
+Default scenario (`ramp` — scales from 0 to 500 virtual users):
 
 ```bash
-# 1. Compose file parses without errors
-docker compose config > /dev/null && echo "PASS: compose config valid"
-
-# 2. Named network exists
-docker network inspect music-net --format '{{.Name}}' | grep -q music-net && echo "PASS: music-net exists"
-
-# 3. All infrastructure containers healthy
-docker compose ps --format "table {{.Name}}\t{{.Status}}" | grep -v "unhealthy"
-
-# 4. Prometheus is up
-curl -sf http://localhost:9090/-/healthy && echo "PASS: Prometheus healthy"
-
-# 5. Grafana is up
-curl -sf http://localhost:3001/api/health | grep -q ok && echo "PASS: Grafana healthy"
-
-# 6. Kafka broker reachable from within the network
-docker compose exec kafka kafka-broker-api-versions --bootstrap-server localhost:9092 > /dev/null 2>&1 && echo "PASS: Kafka broker API responding"
-
-# 7. OpenSearch cluster status
-curl -sf http://localhost:9200/_cluster/health | python3 -m json.tool | grep status
-
-# 8. ClickHouse ping
-curl -sf http://localhost:8123/ping && echo "PASS: ClickHouse responding"
-
-# 9. Redis ping
-docker compose exec redis redis-cli ping && echo "PASS: Redis pong"
-
-# 10. MongoDB ping
-docker compose exec mongodb mongosh --username mongouser --password mongopass \
-  --authenticationDatabase admin --eval 'db.runCommand({ping:1})' --quiet
+cd /Users/Sabina/Desktop/Thesis/Iteration01/benchmark-application && \
+docker compose --profile load-test up --build
 ```
 
----
-
-## Environment configuration
-
-All tuneable values live in `.env` (copied from `.env.example`). Key variables:
-
-| Variable | Default | Purpose |
-|---|---|---|
-| `*_CPU_LIMIT` / `*_MEMORY_LIMIT` | 1.0 / 512m | Per-service resource caps (M-20) |
-| `JWT_EXPIRATION_MS` | 3600000 | JWT lifetime in ms |
-| `STREAM_SEGMENT_SIZE_BYTES` | 65536 | Simulated HLS segment size |
-| `K6_VUS` / `K6_DURATION` | 10 / 60s | Load generator concurrency and duration |
-| `KAFKA_HOST_PORT` | 29092 | External Kafka port on the host |
-
----
-
-## Tearing down
+Choose a specific scenario:
 
 ```bash
-# Stop and remove containers, networks
+# smoke — 5 VUs for 2 minutes (quick sanity check)
+K6_SCENARIO=smoke docker compose --profile load-test up
+
+# catalog_stream — 50 VUs for 5 minutes (auth + browse + stream)
+K6_SCENARIO=catalog_stream docker compose --profile load-test up
+
+# kafka_pipeline — 200 VUs for 10 minutes (full flow including playlists)
+K6_SCENARIO=kafka_pipeline docker compose --profile load-test up
+
+# stress — ramps to 2000 VUs (drives services past comfortable limits)
+K6_SCENARIO=stress docker compose --profile load-test up
+
+# soak — 100 VUs for 2 hours (catches memory leaks and Kafka lag)
+K6_SCENARIO=soak docker compose --profile load-test up
+```
+
+Watch metrics in real time at http://localhost:3001 (Grafana → **Music Streaming — Scaling Dashboard**).
+
+---
+
+## 5. Scale individual services
+
+Services with `container_name` removed support `--scale`. The load balancer picks up
+new replicas within 5 seconds via Docker DNS re-resolution.
+
+```bash
+# Scale streaming to 6 replicas (highest traffic service)
+docker compose up -d --scale streaming-service=6
+
+# Scale catalog and search together
+docker compose up -d --scale catalog-service=4 --scale search-service=4
+
+# Check running replicas
+docker compose ps streaming-service
+```
+
+> `auth-service` is intentionally excluded from scaling on a fresh volume.
+> Start the stack once, wait for it to be healthy (RSA keys are generated),
+> then scale: `docker compose up -d --scale auth-service=4`
+
+---
+
+## 6. Tear down
+
+```bash
+# Stop containers and remove network
 docker compose down
 
-# Also remove all named volumes (destroys persisted data)
+# Also delete all persisted data (databases, Kafka logs, etc.)
 docker compose down -v
 ```
 
 ---
 
-## Phase 6 — Analytics Service
+## Key configuration
 
-Consumes `playback-events` from Kafka and stores them in ClickHouse. Exposes two protected endpoints:
+All tuneable values are in `.env` (copied from `.env.example`).
 
-| Endpoint | Description |
-|---|---|
-| `GET /analytics/me/history` | Authenticated user's listening history (newest first, capped by `ANALYTICS_HISTORY_LIMIT`) |
-| `GET /analytics/charts/global` | Global top-50 chart ranked by `play.started` event count |
-
-### Running the tests
-
-```bash
-# From the project root — requires Docker socket mounted for ClickHouse Testcontainer
-docker run --rm \
-  -v /var/run/docker.sock:/var/run/docker.sock \
-  -v "$PWD/services/analytics-service":/app \
-  -w /app \
-  -e TESTCONTAINERS_HOST_OVERRIDE=host.docker.internal \
-  maven:3.9-eclipse-temurin-21-alpine \
-  mvn test
-```
-
-### Building the Docker image
-
-```bash
-cd services/analytics-service
-docker build -t analytics-service .
-```
-
-### Configuration
-
-| Variable | Default | Description |
+| Variable | Default | Effect |
 |---|---|---|
-| `CLICKHOUSE_HOST` | `clickhouse` | ClickHouse hostname |
-| `CLICKHOUSE_HTTP_PORT` | `8123` | ClickHouse HTTP port |
-| `CLICKHOUSE_DB` | `analyticsdb` | Target database |
-| `CLICKHOUSE_USER` | `analyticsuser` | ClickHouse user |
-| `CLICKHOUSE_PASSWORD` | `analyticspass` | ClickHouse password |
-| `KAFKA_TOPIC_PLAYBACK_EVENTS` | `playback-events` | Topic consumed from Streaming Service |
-| `KAFKA_CONSUMER_GROUP_ID` | `analytics-service` | Kafka consumer group |
-| `ANALYTICS_HISTORY_LIMIT` | `100` | Max history entries per response |
-| `JWT_PUBLIC_KEY_PATH` | `/jwt-keys/public.pem` | RSA public key for JWT verification |
-
----
-
-## Implementation status
-
-| Phase | Scope | Status |
-|---|---|---|
-| 0 | Shared deployment environment + skeleton | **Complete** |
-| 1 | Auth Service | Pending |
-| 2 | Catalog Service | Pending |
-| 3 | Playlist Service | Pending |
-| 4 | Streaming Service | Pending |
-| 5 | Search Service | Pending |
-| 6 | Analytics Service | **Complete** |
-| 7 | Recommendation Service | Pending |
-| 8 | Notification Service | Pending |
-| 9 | Frontend | Pending |
-| 10 | Monitoring, load generator, integration | Pending |
+| `STREAMING_SERVICE_REPLICAS` | 3 | Default replica count at `up` |
+| `KAFKA_SCENARIO` | `ramp` | k6 load test scenario |
+| `K6_VUS` | 50 | Virtual users for fixed-VU scenarios |
+| `ANALYTICS_BATCH_SIZE` | 500 | ClickHouse insert batch size |
+| `REDIS_MAXMEMORY` | `512mb` | Redis cache memory ceiling |
+| `OPENSEARCH_JAVA_OPTS` | `-Xms1g -Xmx1g` | OpenSearch JVM heap |
+| `PLAYBACK_EVENTS_PARTITIONS` | 12 | Kafka topic partition count (set before first boot) |

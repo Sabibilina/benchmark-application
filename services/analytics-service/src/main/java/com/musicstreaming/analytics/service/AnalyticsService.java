@@ -34,6 +34,18 @@ public class AnalyticsService {
         repository.insert(event);
     }
 
+    public void recordEvents(List<PlaybackEventRecord> events) {
+        List<PlaybackEventRecord> valid = events.stream()
+                .filter(e -> e.userId() != null && e.songId() != null)
+                .toList();
+        if (valid.size() < events.size()) {
+            log.warn("Dropped {} events with null userId or songId", events.size() - valid.size());
+        }
+        if (!valid.isEmpty()) {
+            repository.insertBatch(valid);
+        }
+    }
+
     public List<HistoryEntry> getHistory(String userId) {
         return repository.findHistoryForUser(userId, historyLimit);
     }

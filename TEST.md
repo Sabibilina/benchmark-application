@@ -32,7 +32,7 @@
 | catalog-service | `CatalogServiceTest` (7), `DataSeederTest` (6) | 13 | `CatalogControllerIT` | 13 | 1 | **27** |
 | streaming-service | `StreamingServiceTest` | 8 | `StreamingControllerIT` | 15 | 1 | **24** |
 | playlist-service | `PlaylistServiceTest` | 21 | `PlaylistControllerIT` | 22 | 1 | **44** |
-| search-service | `SearchQueryBuilderTest` | 10 | `SearchControllerIT` | 12 | 1 | **23** |
+| search-service | `SearchQueryBuilderTest` | 10 | `SearchControllerIT` | 12 | 1 | **23** (fixed F-009) |
 | analytics-service | `AnalyticsServiceTest` | 9 | `AnalyticsControllerIT` | 12 | 1 | **22** |
 | recommendation-service | `RecommendationServiceTest` | 6 | `RecommendationControllerIT` | 9 | 1 | **16** |
 | notification-service | `NotificationServiceTest` | 7 | `NotificationControllerIT` | 6 | 1 | **14** |
@@ -47,7 +47,7 @@
 | catalog-service | 6 | 27 | **74%** (181/244) | **46%** (12/26) | **98%** (81/83) | **Good** — seeder logic + service queries covered by unit tests; controller endpoints verified with Testcontainers PostgreSQL; pagination and filter paths tested; low branch coverage reflects uncovered CSV-parse edge paths in DataSeeder |
 | streaming-service | 4 | 24 | **96%** (104/108) | **75%** (6/8) | **97%** (29/30) | **High** — manifest building, segment generation, and all three event types (started/ended/skipped) covered in unit tests; HLS and JWT paths verified in integration tests |
 | playlist-service | 5 | 44 | **96%** (239/250) | **88%** (30/34) | **94%** (85/90) | **High** — 21 unit tests exercise all service paths including Liked Songs enforcement, reorder, and exception branches; 22 integration tests cover all 8 required endpoints |
-| search-service | 5 | 23 | **66%** (169/258) | **43%** (29/68) | **89%** (66/74) | **Good** — query builder logic fully unit-tested across filter combinations; controller integration tests verify OpenSearch interaction; lower coverage reflects uncovered OpenSearch exception-handling paths and index-management code |
+| search-service | 5 | 23 | **66%** (169/258) | **43%** (29/68) | **89%** (66/74) | **Good** — query builder logic fully unit-tested across filter combinations; controller integration tests verify OpenSearch interaction; lower coverage reflects uncovered OpenSearch exception-handling paths and index-management code. Note: OpenSearch container startup fix applied (F-009); re-run `mvn test` to confirm pass. |
 | analytics-service | 5 | 22 | **94%** (117/124) | **80%** (8/10) | **93%** (40/43) | **Good** — Kafka consumer, history persistence, and aggregation logic tested; ClickHouse integration verified via dedicated test container |
 | recommendation-service | 6 | 16 | **72%** (195/271) | **52%** (30/58) | **87%** (62/71) | **Moderate** — daily mix and similar-song logic covered; Redis caching paths tested; lower coverage reflects uncovered Kafka deserialization error paths and fallback recommendation branches |
 | notification-service | 5 | 14 | **86%** (116/135) | **77%** (20/26) | **92%** (44/48) | **Moderate** — Kafka consumer and MongoDB persistence tested; benign shutdown exception documented (see FINDINGS.md) |

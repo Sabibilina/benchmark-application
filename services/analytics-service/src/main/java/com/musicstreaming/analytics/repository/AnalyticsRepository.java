@@ -26,6 +26,18 @@ public class AnalyticsRepository {
                 event.type(), event.userId(), event.songId(), Timestamp.from(ts));
     }
 
+    public void insertBatch(List<PlaybackEventRecord> events) {
+        if (events.isEmpty()) return;
+        String sql = "INSERT INTO playback_events (event_type, user_id, song_id, occurred_at) VALUES (?, ?, ?, ?)";
+        jdbcTemplate.batchUpdate(sql, events, events.size(), (ps, event) -> {
+            Instant ts = event.timestamp() != null ? event.timestamp() : Instant.now();
+            ps.setString(1, event.type());
+            ps.setString(2, event.userId());
+            ps.setString(3, event.songId());
+            ps.setTimestamp(4, Timestamp.from(ts));
+        });
+    }
+
     public List<HistoryEntry> findHistoryForUser(String userId, int limit) {
         return jdbcTemplate.query(
                 "SELECT song_id, event_type, occurred_at " +

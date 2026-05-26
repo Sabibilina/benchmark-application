@@ -2,7 +2,6 @@ package com.musicstreaming.analytics.messaging;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.musicstreaming.analytics.model.PlaybackEventRecord;
-import com.musicstreaming.analytics.service.AnalyticsService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.kafka.annotation.KafkaListener;
@@ -14,11 +13,11 @@ public class PlaybackEventConsumer {
     private static final Logger log = LoggerFactory.getLogger(PlaybackEventConsumer.class);
 
     private final ObjectMapper objectMapper;
-    private final AnalyticsService analyticsService;
+    private final BatchEventBuffer batchEventBuffer;
 
-    public PlaybackEventConsumer(ObjectMapper objectMapper, AnalyticsService analyticsService) {
+    public PlaybackEventConsumer(ObjectMapper objectMapper, BatchEventBuffer batchEventBuffer) {
         this.objectMapper = objectMapper;
-        this.analyticsService = analyticsService;
+        this.batchEventBuffer = batchEventBuffer;
     }
 
     @KafkaListener(
@@ -28,7 +27,7 @@ public class PlaybackEventConsumer {
     public void consume(String message) {
         try {
             PlaybackEventRecord event = objectMapper.readValue(message, PlaybackEventRecord.class);
-            analyticsService.recordEvent(event);
+            batchEventBuffer.add(event);
         } catch (Exception e) {
             log.warn("Failed to process playback event, skipping: {}", e.getMessage());
         }
