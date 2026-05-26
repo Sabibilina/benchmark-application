@@ -19,3 +19,23 @@ scrape_configs:
           - analytics-service:8080
           - recommendation-service:8080
           - notification-service:8080
+
+  - job_name: gateway
+    static_configs:
+      - targets:
+          - nginx-exporter:9113
+
+  - job_name: kafka
+    static_configs:
+      - targets:
+          - kafka-exporter:9308
+
+  - job_name: redis
+    static_configs:
+      - targets:
+          - redis-exporter:9121
+
+  - job_name: containers
+    static_configs:
+      - targets:
+          - cadvisor:8080

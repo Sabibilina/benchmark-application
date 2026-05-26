@@ -5,28 +5,32 @@ Cloud-native music streaming benchmark application for cost-aware IaC research
 
 This is a cloud-native music streaming system planned as a set of eight independent microservices. Each service owns specific responsibilities such as user authentication, song catalog management, streaming simulation, playlist operations, search, analytics, recommendations, and notifications. The architecture emphasizes service isolation, database-per-service patterns, and purpose-specific infrastructure choices to support cost-aware Infrastructure-as-Code research.
 
-## Phase 0 status
+## Current status
 
-This repository currently contains the shared deployment skeleton only. The service containers are placeholders so the Docker Compose topology can be started before business logic is generated service by service.
+This repository contains the Docker Compose runtime for the benchmark application, including implemented backend services, persistence components, messaging, observability, and load-generation support.
 
 The source-of-truth documents are:
 
 * `ARCHITECTURE.md` for system shape and service boundaries.
 * `REQUIREMENTS.md` for mandatory, optional, and out-of-scope behavior.
 * `TECH-STACK.md` for implementation technology choices.
-* `PROGRESS.md` for phase status and checklist tracking.
-* `DESIGN-DECISIONS.md` for planning decisions, assumptions, corrections, and rationale.
+* `SCALABILITY.md` for Docker Compose scalability and benchmark planning.
+* `PROGRESS.md` for phase status.
+* `DESIGN-DECISIONS.md` for decision records.
 
 ## Repository layout
 
 ```text
 benchmark-application/
   docker-compose.yml
+  docker-compose.scale-baseline.yml
+  docker-compose.scale-100k.yml
+  docker-compose.scale-1m.yml
   .env.example
   config/
+    nginx/
     prometheus/
     grafana/
-    kafka/
     jwt/
   infrastructure/
     postgres/
@@ -50,17 +54,18 @@ benchmark-application/
 
 `docker-compose.yml` defines the baseline shared runtime:
 
-* Eight backend service placeholders.
+* Eight backend services.
+* Nginx gateway for benchmark traffic routing.
 * Kafka for internal events.
 * Dedicated persistence components for stateful services.
 * Redis for recommendation caching.
-* Prometheus and Grafana for observability.
-* k6 placeholder for later workload scripts.
+* Prometheus, Grafana, gateway metrics, Kafka metrics, Redis metrics, and container metrics for observability.
+* k6 workload scripts.
 * One named Docker network: `benchmark-network`.
 
 Object storage is intentionally not included in this phase because the minimum system simulates streaming and does not require real audio files.
 
-## Start the Phase 0 environment
+## Start the baseline environment
 
 Docker Desktop or a compatible Docker Engine with Docker Compose is required.
 
@@ -79,10 +84,37 @@ docker compose ps
 
 4. Open the shared observability tools:
 
+* Gateway: http://localhost:8080/health
 * Prometheus: http://localhost:9090
 * Grafana: http://localhost:3001
 
 The default Grafana login from `.env.example` is `admin` / `admin`.
+
+## Run benchmark-oriented profiles
+
+Scaled profiles keep traffic entering through the gateway and remove direct app-service host ports so replicas can run behind Docker Compose service discovery.
+
+Baseline scale profile:
+
+```powershell
+docker compose -f docker-compose.yml -f docker-compose.scale-baseline.yml up -d --build
+docker compose run --rm k6 run /scripts/smoke.js
+```
+
+Moderate 100k-user benchmark shape:
+
+```powershell
+docker compose -f docker-compose.yml -f docker-compose.scale-100k.yml up -d --build --scale streaming-service=6 --scale catalog-service=3 --scale search-service=3 --scale recommendation-service=3 --scale analytics-service=2 --scale auth-service=2 --scale playlist-service=2
+docker compose run --rm -e K6_TARGET_RATE=50 -e K6_HOLD_DURATION=10m k6 run /scripts/mixed-user-journey.js
+```
+
+The 1M profile is intentionally resource-heavy. Review host capacity before starting it:
+
+```powershell
+docker compose -f docker-compose.yml -f docker-compose.scale-1m.yml config
+```
+
+See `SCALABILITY.md` for the scaling rationale, instance counts, observability thresholds, and load-test order.
 
 ## Stop the environment
 
@@ -96,8 +128,6 @@ To remove named volumes created by the infrastructure containers:
 docker compose down -v
 ```
 
-## Important Phase 0 limitations
+## Benchmarking notes
 
-The placeholders do not implement API endpoints, JWT enforcement, metrics endpoints, catalog ingestion, messaging behavior, or load-test flows. Those are generated and validated in later phases according to `PROGRESS.md`.
-
-Prometheus is configured with the intended Spring Boot metrics target path, `/actuator/prometheus`, so application targets will remain unavailable until each service is implemented with metrics support.
+Use the gateway port for benchmark traffic instead of individual service ports. Direct service ports are kept for development and debugging, but scaled benchmark profiles route through Nginx so replicas can be added with `docker compose up --scale`.

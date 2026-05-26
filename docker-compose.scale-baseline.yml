@@ -1,0 +1,86 @@
+services:
+  auth-service:
+    ports: !reset []
+    environment:
+      SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: ${AUTH_DB_POOL_SIZE:-8}
+      JAVA_TOOL_OPTIONS: ${AUTH_JAVA_TOOL_OPTIONS:--XX:MaxRAMPercentage=70}
+    deploy:
+      replicas: 1
+
+  catalog-service:
+    ports: !reset []
+    environment:
+      SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: ${CATALOG_DB_POOL_SIZE:-8}
+      JAVA_TOOL_OPTIONS: ${CATALOG_JAVA_TOOL_OPTIONS:--XX:MaxRAMPercentage=70}
+    deploy:
+      replicas: 1
+
+  streaming-service:
+    ports: !reset []
+    environment:
+      SPRING_KAFKA_PRODUCER_PROPERTIES_LINGER_MS: ${STREAMING_KAFKA_LINGER_MS:-5}
+      SPRING_KAFKA_PRODUCER_PROPERTIES_BATCH_SIZE: ${STREAMING_KAFKA_BATCH_SIZE:-32768}
+      SPRING_KAFKA_PRODUCER_PROPERTIES_COMPRESSION_TYPE: ${STREAMING_KAFKA_COMPRESSION:-lz4}
+      JAVA_TOOL_OPTIONS: ${STREAMING_JAVA_TOOL_OPTIONS:--XX:MaxRAMPercentage=70}
+    deploy:
+      replicas: 2
+
+  playlist-service:
+    ports: !reset []
+    environment:
+      SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: ${PLAYLIST_DB_POOL_SIZE:-8}
+      JAVA_TOOL_OPTIONS: ${PLAYLIST_JAVA_TOOL_OPTIONS:--XX:MaxRAMPercentage=70}
+    deploy:
+      replicas: 1
+
+  search-service:
+    ports: !reset []
+    environment:
+      SEARCH_INDEXING_ENABLED: ${SEARCH_INDEXING_ENABLED:-true}
+      JAVA_TOOL_OPTIONS: ${SEARCH_JAVA_TOOL_OPTIONS:--XX:MaxRAMPercentage=70}
+    deploy:
+      replicas: 1
+
+  analytics-service:
+    ports: !reset []
+    environment:
+      SPRING_KAFKA_LISTENER_CONCURRENCY: ${ANALYTICS_KAFKA_LISTENER_CONCURRENCY:-1}
+      JAVA_TOOL_OPTIONS: ${ANALYTICS_JAVA_TOOL_OPTIONS:--XX:MaxRAMPercentage=70}
+    deploy:
+      replicas: 1
+
+  recommendation-service:
+    ports: !reset []
+    environment:
+      SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: ${RECOMMENDATION_DB_POOL_SIZE:-8}
+      SPRING_KAFKA_LISTENER_CONCURRENCY: ${RECOMMENDATION_KAFKA_LISTENER_CONCURRENCY:-1}
+      JAVA_TOOL_OPTIONS: ${RECOMMENDATION_JAVA_TOOL_OPTIONS:--XX:MaxRAMPercentage=70}
+    deploy:
+      replicas: 1
+
+  notification-service:
+    ports: !reset []
+    environment:
+      SPRING_KAFKA_LISTENER_CONCURRENCY: ${NOTIFICATION_KAFKA_LISTENER_CONCURRENCY:-1}
+      JAVA_TOOL_OPTIONS: ${NOTIFICATION_JAVA_TOOL_OPTIONS:--XX:MaxRAMPercentage=70}
+    deploy:
+      replicas: 1
+
+  frontend:
+    build:
+      args:
+        VITE_AUTH_API_BASE_URL: ${GATEWAY_PUBLIC_URL:-http://localhost:8080}
+        VITE_CATALOG_API_BASE_URL: ${GATEWAY_PUBLIC_URL:-http://localhost:8080}
+        VITE_STREAMING_API_BASE_URL: ${GATEWAY_PUBLIC_URL:-http://localhost:8080}
+        VITE_PLAYLIST_API_BASE_URL: ${GATEWAY_PUBLIC_URL:-http://localhost:8080}
+        VITE_SEARCH_API_BASE_URL: ${GATEWAY_PUBLIC_URL:-http://localhost:8080}
+        VITE_ANALYTICS_API_BASE_URL: ${GATEWAY_PUBLIC_URL:-http://localhost:8080}
+        VITE_RECOMMENDATION_API_BASE_URL: ${GATEWAY_PUBLIC_URL:-http://localhost:8080}
+    environment:
+      VITE_AUTH_API_BASE_URL: ${GATEWAY_PUBLIC_URL:-http://localhost:8080}
+      VITE_CATALOG_API_BASE_URL: ${GATEWAY_PUBLIC_URL:-http://localhost:8080}
+      VITE_STREAMING_API_BASE_URL: ${GATEWAY_PUBLIC_URL:-http://localhost:8080}
+      VITE_PLAYLIST_API_BASE_URL: ${GATEWAY_PUBLIC_URL:-http://localhost:8080}
+      VITE_SEARCH_API_BASE_URL: ${GATEWAY_PUBLIC_URL:-http://localhost:8080}
+      VITE_ANALYTICS_API_BASE_URL: ${GATEWAY_PUBLIC_URL:-http://localhost:8080}
+      VITE_RECOMMENDATION_API_BASE_URL: ${GATEWAY_PUBLIC_URL:-http://localhost:8080}

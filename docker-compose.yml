@@ -1,6 +1,6 @@
 name: benchmark-application
 
-x-placeholder-app: &placeholder-app
+x-app-base: &app-base
   restart: unless-stopped
   networks:
     - benchmark-network
@@ -27,7 +27,7 @@ x-postgres: &postgres
 
 services:
   auth-service:
-    <<: *placeholder-app
+    <<: *app-base
     build:
       context: ./services/auth-service
       args:
@@ -44,6 +44,10 @@ services:
       JWT_PRIVATE_KEY_PATH: ${JWT_PRIVATE_KEY_PATH:-/run/secrets/jwt/private.pem}
       JWT_ISSUER: ${JWT_ISSUER:-benchmark-auth}
       JWT_ACCESS_TOKEN_TTL: ${JWT_ACCESS_TOKEN_TTL:-PT1H}
+      FRONTEND_ALLOWED_ORIGINS: ${FRONTEND_ALLOWED_ORIGINS:-http://localhost:5173,http://127.0.0.1:5173}
+      SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: ${AUTH_DB_POOL_SIZE:-10}
+      SPRING_DATASOURCE_HIKARI_CONNECTION_TIMEOUT: ${DB_CONNECTION_TIMEOUT_MS:-2000}
+      JAVA_TOOL_OPTIONS: ${AUTH_JAVA_TOOL_OPTIONS:--XX:MaxRAMPercentage=70}
     volumes:
       - ./config/jwt/public.pem:/run/config/jwt/public.pem:ro
       - ./config/jwt/private.pem:/run/secrets/jwt/private.pem:ro
@@ -52,7 +56,7 @@ services:
         condition: service_healthy
 
   catalog-service:
-    <<: *placeholder-app
+    <<: *app-base
     build:
       context: ./services/catalog-service
       args:
@@ -70,12 +74,16 @@ services:
       CATALOG_INGESTION_ENABLED: ${CATALOG_INGESTION_ENABLED:-true}
       CATALOG_DEFAULT_PAGE_SIZE: ${CATALOG_DEFAULT_PAGE_SIZE:-20}
       CATALOG_MAX_PAGE_SIZE: ${CATALOG_MAX_PAGE_SIZE:-100}
+      FRONTEND_ALLOWED_ORIGINS: ${FRONTEND_ALLOWED_ORIGINS:-http://localhost:5173,http://127.0.0.1:5173}
+      SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: ${CATALOG_DB_POOL_SIZE:-10}
+      SPRING_DATASOURCE_HIKARI_CONNECTION_TIMEOUT: ${DB_CONNECTION_TIMEOUT_MS:-2000}
+      JAVA_TOOL_OPTIONS: ${CATALOG_JAVA_TOOL_OPTIONS:--XX:MaxRAMPercentage=70}
     depends_on:
       catalog-db:
         condition: service_healthy
 
   streaming-service:
-    <<: *placeholder-app
+    <<: *app-base
     build:
       context: ./services/streaming-service
       args:
@@ -90,12 +98,18 @@ services:
       STREAMING_PLAYBACK_EVENTS_TOPIC: ${STREAMING_PLAYBACK_EVENTS_TOPIC:-playback-events}
       STREAMING_SEGMENT_COUNT: ${STREAMING_SEGMENT_COUNT:-5}
       STREAMING_SEGMENT_SIZE_BYTES: ${STREAMING_SEGMENT_SIZE_BYTES:-65536}
+      FRONTEND_ALLOWED_ORIGINS: ${FRONTEND_ALLOWED_ORIGINS:-http://localhost:5173,http://127.0.0.1:5173}
+      SPRING_KAFKA_PRODUCER_PROPERTIES_LINGER_MS: ${STREAMING_KAFKA_LINGER_MS:-5}
+      SPRING_KAFKA_PRODUCER_PROPERTIES_BATCH_SIZE: ${STREAMING_KAFKA_BATCH_SIZE:-32768}
+      SPRING_KAFKA_PRODUCER_PROPERTIES_COMPRESSION_TYPE: ${STREAMING_KAFKA_COMPRESSION:-lz4}
+      SPRING_KAFKA_PRODUCER_PROPERTIES_DELIVERY_TIMEOUT_MS: ${STREAMING_KAFKA_DELIVERY_TIMEOUT_MS:-30000}
+      JAVA_TOOL_OPTIONS: ${STREAMING_JAVA_TOOL_OPTIONS:--XX:MaxRAMPercentage=70}
     depends_on:
       kafka:
         condition: service_started
 
   playlist-service:
-    <<: *placeholder-app
+    <<: *app-base
     build:
       context: ./services/playlist-service
       args:
@@ -109,12 +123,16 @@ services:
       SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-benchmark}
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-benchmark}
       JWT_PUBLIC_KEY_PATH: ${JWT_PUBLIC_KEY_PATH:-/run/config/jwt/public.pem}
+      FRONTEND_ALLOWED_ORIGINS: ${FRONTEND_ALLOWED_ORIGINS:-http://localhost:5173,http://127.0.0.1:5173}
+      SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: ${PLAYLIST_DB_POOL_SIZE:-10}
+      SPRING_DATASOURCE_HIKARI_CONNECTION_TIMEOUT: ${DB_CONNECTION_TIMEOUT_MS:-2000}
+      JAVA_TOOL_OPTIONS: ${PLAYLIST_JAVA_TOOL_OPTIONS:--XX:MaxRAMPercentage=70}
     depends_on:
       playlist-db:
         condition: service_healthy
 
   search-service:
-    <<: *placeholder-app
+    <<: *app-base
     build:
       context: ./services/search-service
       args:
@@ -132,6 +150,8 @@ services:
       SEARCH_INDEX_BATCH_SIZE: ${SEARCH_INDEX_BATCH_SIZE:-500}
       SEARCH_DEFAULT_PAGE_SIZE: ${SEARCH_DEFAULT_PAGE_SIZE:-20}
       SEARCH_MAX_PAGE_SIZE: ${SEARCH_MAX_PAGE_SIZE:-100}
+      FRONTEND_ALLOWED_ORIGINS: ${FRONTEND_ALLOWED_ORIGINS:-http://localhost:5173,http://127.0.0.1:5173}
+      JAVA_TOOL_OPTIONS: ${SEARCH_JAVA_TOOL_OPTIONS:--XX:MaxRAMPercentage=70}
     volumes:
       - ./config/jwt/public.pem:/run/config/jwt/public.pem:ro
       - ./services/catalog-service/data/catalog.csv:/app/data/catalog.csv:ro
@@ -140,7 +160,7 @@ services:
         condition: service_healthy
 
   analytics-service:
-    <<: *placeholder-app
+    <<: *app-base
     build:
       context: ./services/analytics-service
       args:
@@ -160,6 +180,9 @@ services:
       ANALYTICS_DEFAULT_PAGE_SIZE: ${ANALYTICS_DEFAULT_PAGE_SIZE:-20}
       ANALYTICS_MAX_PAGE_SIZE: ${ANALYTICS_MAX_PAGE_SIZE:-100}
       ANALYTICS_GLOBAL_CHART_LIMIT: ${ANALYTICS_GLOBAL_CHART_LIMIT:-50}
+      FRONTEND_ALLOWED_ORIGINS: ${FRONTEND_ALLOWED_ORIGINS:-http://localhost:5173,http://127.0.0.1:5173}
+      SPRING_KAFKA_LISTENER_CONCURRENCY: ${ANALYTICS_KAFKA_LISTENER_CONCURRENCY:-1}
+      JAVA_TOOL_OPTIONS: ${ANALYTICS_JAVA_TOOL_OPTIONS:--XX:MaxRAMPercentage=70}
     depends_on:
       analytics-db:
         condition: service_healthy
@@ -167,7 +190,7 @@ services:
         condition: service_started
 
   recommendation-service:
-    <<: *placeholder-app
+    <<: *app-base
     build:
       context: ./services/recommendation-service
       args:
@@ -188,6 +211,11 @@ services:
       RECOMMENDATION_DEFAULT_LIMIT: ${RECOMMENDATION_DEFAULT_LIMIT:-10}
       RECOMMENDATION_MAX_LIMIT: ${RECOMMENDATION_MAX_LIMIT:-50}
       RECOMMENDATION_CACHE_TTL: ${RECOMMENDATION_CACHE_TTL:-PT5M}
+      FRONTEND_ALLOWED_ORIGINS: ${FRONTEND_ALLOWED_ORIGINS:-http://localhost:5173,http://127.0.0.1:5173}
+      SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: ${RECOMMENDATION_DB_POOL_SIZE:-10}
+      SPRING_DATASOURCE_HIKARI_CONNECTION_TIMEOUT: ${DB_CONNECTION_TIMEOUT_MS:-2000}
+      SPRING_KAFKA_LISTENER_CONCURRENCY: ${RECOMMENDATION_KAFKA_LISTENER_CONCURRENCY:-1}
+      JAVA_TOOL_OPTIONS: ${RECOMMENDATION_JAVA_TOOL_OPTIONS:--XX:MaxRAMPercentage=70}
     depends_on:
       recommendation-db:
         condition: service_healthy
@@ -197,7 +225,7 @@ services:
         condition: service_started
 
   notification-service:
-    <<: *placeholder-app
+    <<: *app-base
     build:
       context: ./services/notification-service
       args:
@@ -212,10 +240,54 @@ services:
       JWT_PUBLIC_KEY_PATH: ${JWT_PUBLIC_KEY_PATH:-/run/config/jwt/public.pem}
       NOTIFICATION_PLAYLIST_EVENTS_TOPIC: ${NOTIFICATION_PLAYLIST_EVENTS_TOPIC:-playlist-events}
       NOTIFICATION_KAFKA_CONSUMER_GROUP_ID: ${NOTIFICATION_KAFKA_CONSUMER_GROUP_ID:-notification-service}
+      SPRING_KAFKA_LISTENER_CONCURRENCY: ${NOTIFICATION_KAFKA_LISTENER_CONCURRENCY:-1}
+      JAVA_TOOL_OPTIONS: ${NOTIFICATION_JAVA_TOOL_OPTIONS:--XX:MaxRAMPercentage=70}
     depends_on:
       notification-db:
         condition: service_started
       kafka:
+        condition: service_started
+
+  gateway:
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    networks:
+      - benchmark-network
+    ports:
+      - "${GATEWAY_HOST_PORT:-8080}:8080"
+    cpus: ${GATEWAY_CPUS:-1.00}
+    mem_limit: ${GATEWAY_MEMORY:-256m}
+    volumes:
+      - ./config/nginx/gateway.conf:/etc/nginx/nginx.conf:ro
+      - ./config/nginx/proxy_params:/etc/nginx/proxy_params:ro
+      - gateway-cache:/var/cache/nginx
+    depends_on:
+      auth-service:
+        condition: service_started
+      catalog-service:
+        condition: service_started
+      streaming-service:
+        condition: service_started
+      playlist-service:
+        condition: service_started
+      search-service:
+        condition: service_started
+      analytics-service:
+        condition: service_started
+      recommendation-service:
+        condition: service_started
+
+  nginx-exporter:
+    image: nginx/nginx-prometheus-exporter:1.1.0
+    restart: unless-stopped
+    networks:
+      - benchmark-network
+    command:
+      - --nginx.scrape-uri=http://gateway:8080/nginx_status
+    cpus: ${EXPORTER_CPUS:-0.25}
+    mem_limit: ${EXPORTER_MEMORY:-128m}
+    depends_on:
+      gateway:
         condition: service_started
 
   auth-db:
@@ -263,8 +335,29 @@ services:
       - "${REDIS_HOST_PORT:-6379}:6379"
     cpus: ${INFRA_CPUS:-1.00}
     mem_limit: ${INFRA_MEMORY:-1g}
+    command:
+      - redis-server
+      - --appendonly
+      - "yes"
+      - --maxmemory
+      - ${REDIS_MAXMEMORY:-512mb}
+      - --maxmemory-policy
+      - ${REDIS_MAXMEMORY_POLICY:-allkeys-lru}
     volumes:
       - recommendation-redis-data:/data
+
+  redis-exporter:
+    image: oliver006/redis_exporter:v1.61.0
+    restart: unless-stopped
+    networks:
+      - benchmark-network
+    environment:
+      REDIS_ADDR: redis://recommendation-redis:6379
+    cpus: ${EXPORTER_CPUS:-0.25}
+    mem_limit: ${EXPORTER_MEMORY:-128m}
+    depends_on:
+      recommendation-redis:
+        condition: service_started
 
   search-opensearch:
     image: opensearchproject/opensearch:2.13.0
@@ -345,12 +438,60 @@ services:
       KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
       KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
       KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
-      # MANUAL CHANGE 
+      # MANUAL CHANGE
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
       KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
     volumes:
       - kafka-data:/var/lib/kafka/data
+
+  kafka-init:
+    image: apache/kafka:3.7.0
+    restart: "no"
+    networks:
+      - benchmark-network
+    depends_on:
+      kafka:
+        condition: service_started
+    entrypoint:
+      - /bin/bash
+      - -c
+      - |
+        /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic "$${PLAYBACK_TOPIC}" --partitions "$${PLAYBACK_PARTITIONS}" --replication-factor 1
+        /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic "$${PLAYLIST_TOPIC}" --partitions "$${PLAYLIST_PARTITIONS}" --replication-factor 1
+    environment:
+      PLAYBACK_TOPIC: ${STREAMING_PLAYBACK_EVENTS_TOPIC:-playback-events}
+      PLAYBACK_PARTITIONS: ${PLAYBACK_EVENTS_PARTITIONS:-6}
+      PLAYLIST_TOPIC: ${NOTIFICATION_PLAYLIST_EVENTS_TOPIC:-playlist-events}
+      PLAYLIST_PARTITIONS: ${PLAYLIST_EVENTS_PARTITIONS:-3}
+
+  kafka-exporter:
+    image: danielqsj/kafka-exporter:v1.7.0
+    restart: unless-stopped
+    networks:
+      - benchmark-network
+    command:
+      - --kafka.server=kafka:9092
+    cpus: ${EXPORTER_CPUS:-0.25}
+    mem_limit: ${EXPORTER_MEMORY:-128m}
+    depends_on:
+      kafka:
+        condition: service_started
+
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:v0.49.1
+    restart: unless-stopped
+    networks:
+      - benchmark-network
+    ports:
+      - "${CADVISOR_HOST_PORT:-8089}:8080"
+    cpus: ${EXPORTER_CPUS:-0.25}
+    mem_limit: ${EXPORTER_MEMORY:-256m}
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
 
   prometheus:
     image: prom/prometheus:v2.52.0
@@ -390,17 +531,22 @@ services:
 
   k6:
     image: grafana/k6:0.49.0
-    restart: unless-stopped
+    restart: "no"
     networks:
       - benchmark-network
     cpus: ${DEFAULT_SERVICE_CPUS:-0.50}
     mem_limit: ${K6_MEMORY:-512m}
     entrypoint:
-      - /bin/sh
-      - -c
-      - echo 'k6 placeholder for Phase 0. Workload scripts are added in later phases.'; tail -f /dev/null
+      - k6
+    command:
+      - version
+    environment:
+      BASE_URL: ${K6_BASE_URL:-http://gateway:8080}
     volumes:
       - ./load-generator/k6:/scripts:ro
+    depends_on:
+      gateway:
+        condition: service_started
 
 networks:
   benchmark-network:
@@ -419,3 +565,4 @@ volumes:
   kafka-data:
   prometheus-data:
   grafana-data:
+  gateway-cache:
