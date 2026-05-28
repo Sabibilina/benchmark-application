@@ -42,5 +42,37 @@ export default function () {
     'recommend ok': (response) => response.status === 200,
   });
 
+  const songId = __ENV.K6_SONG_ID || 'spotify:track:benchmark';
+  const encodedSongId = encodeURIComponent(songId);
+
+  check(http.get(`${baseUrl}/stream/${encodedSongId}`, { headers: authHeaders }), {
+    'stream ok': (response) => response.status === 200,
+  });
+  check(http.post(`${baseUrl}/stream/${encodedSongId}/ended`, null, { headers: authHeaders }), {
+    'stream ended ok': (response) => response.status === 202,
+  });
+
+  const playlist = http.post(
+    `${baseUrl}/playlists`,
+    JSON.stringify({ name: `k6 smoke ${suffix}` }),
+    { headers: { ...authHeaders, 'Content-Type': 'application/json' } },
+  );
+  check(playlist, { 'playlist create ok': (response) => response.status === 201 });
+
+  const playlistId = playlist.json('id');
+  if (playlistId) {
+    check(http.post(
+      `${baseUrl}/playlists/${playlistId}/tracks`,
+      JSON.stringify({ songId }),
+      { headers: { ...authHeaders, 'Content-Type': 'application/json' } },
+    ), {
+      'playlist add track ok': (response) => response.status === 201 || response.status === 204,
+    });
+  }
+
+  check(http.get(`${baseUrl}/analytics/me/history?page=0&size=10`, { headers: authHeaders }), {
+    'history ok': (response) => response.status === 200,
+  });
+
   sleep(1);
 }

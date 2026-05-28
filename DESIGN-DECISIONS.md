@@ -2934,3 +2934,37 @@ The current phase explicitly requested removal of frontend functionality and fro
 - `frontend/` and `coverage-output/frontend/` were removed from the repository tree.
 - `docker compose build auth-service catalog-service playlist-service streaming-service search-service analytics-service recommendation-service notification-service` passed with escalated Docker access; the backend Maven verification suites completed during image builds.
 - `SCALABILITY.md` remains absent in the current repository baseline, so no scalability document was changed in this scope-removal pass.
+
+## Scalability Target Alignment - 1M User Benchmark
+
+### Issue
+
+The existing Docker Compose scalability plan described a 1,000,000-user direction and included benchmark profiles, but it did not exactly include the canonical target workload table. Several 1M-profile recommendations were expressed as ranges rather than concrete values, and the mixed k6 workload logged in on every iteration instead of separating auth, catalog/search, streaming-event, and playlist-mutation pressure according to the target traffic shape.
+
+### Decisions Recorded
+
+| Decision | Why | Justification | Affected files/services |
+| --- | --- | --- | --- |
+| Make the provided target table canonical in `SCALABILITY.md`. | The user supplied exact workload estimates that must drive the scale plan. | User target plan; `REQUIREMENTS.md` M-21 for load-generation coverage; `TECH-STACK.md` k6 load generator choice. | `SCALABILITY.md`. |
+| Keep the implementation Docker Compose-only with Nginx as the gateway. | Compose replicas need one stable ingress path, and external orchestrators are explicitly out of scope. | User constraint; `REQUIREMENTS.md` M-18, M-19, M-20; `TECH-STACK.md` Docker Compose runtime. | `docker-compose.yml`, `config/nginx/gateway.conf`, scale override files. |
+| Set the 1M target profile to concrete app replica counts: Auth 4, Catalog 8, Streaming 20, Playlist 4, Search 8, Analytics 8, Recommendation 8, Notification 2. | The target workload is uneven: Streaming and playback events dominate, catalog/search are read-heavy, playlist mutations are lower volume, and Auth is not called per protected request because JWT validation is local. | Target table; `REQUIREMENTS.md` M-03, M-06, M-10, M-12, M-13, M-14, M-16, M-17. | `docker-compose.scale-1m.yml`, `SCALABILITY.md`. |
+| Increase the 1M playback topic partition target to 24 and align Analytics/Recommendation listener concurrency to 8 replicas times 3 listener threads. | The target is about 40,000 playback events per second, so consumer parallelism must be explicit while remaining inside one Docker Compose broker for this phase. | `TECH-STACK.md` Kafka messaging choice; target playback-event rate. | `docker-compose.scale-1m.yml`, Kafka, Analytics, Recommendation. |
+| Keep the lower calibration profile below target rates. | A full target run is resource-heavy; calibration remains useful for finding bottlenecks without claiming target readiness. | Docker Compose benchmarking assumptions in `SCALABILITY.md`; `REQUIREMENTS.md` M-20. | `docker-compose.scale-100k.yml`, `README.md`, `load-generator/k6/README.md`. |
+| Replace the single mixed ramping-arrival k6 scenario with explicit constant-arrival scenarios for auth login, catalog/search, streaming sessions, and playlist mutations. | The target table defines different request classes with different rates, so one blended rate would hide whether each class matches the benchmark shape. | Target table; `REQUIREMENTS.md` M-21. | `load-generator/k6/mixed-user-journey.js`, `load-generator/k6/README.md`, `README.md`. |
+| Map 20,000 streaming iterations per second to about 40,000 playback events per second by calling stream start and then ended/skipped. | Streaming requirements require started, ended, and skipped events, and the target rationale states two events per song average. | `REQUIREMENTS.md` M-06; target playback-event rate. | `load-generator/k6/mixed-user-journey.js`, Streaming Service event endpoints. |
+| Map 2,000 catalog/search iterations per second to about 4,000 combined catalog/search requests per second. | Each k6 iteration issues one catalog browse and one search request to model the combined target request class. | Target catalog/search request rate; `REQUIREMENTS.md` M-07, M-12, M-21. | `load-generator/k6/mixed-user-journey.js`, `load-generator/k6/README.md`. |
+| Map 100 playlist iterations per second to about 200 playlist mutations per second. | Each k6 iteration creates a playlist and adds one track, matching the lower-frequency write-operation target. | Target playlist mutation rate; `REQUIREMENTS.md` M-10, M-21. | `load-generator/k6/mixed-user-journey.js`, Playlist Service. |
+| Increase Nginx gateway file-descriptor and worker-connection capacity. | The target includes 20,000 peak concurrent users, so the gateway should not be artificially capped by the earlier 4,096 worker-connection setting. | Target peak concurrency; `REQUIREMENTS.md` M-20. | `config/nginx/gateway.conf`, `docker-compose.yml`. |
+| Add target constants and k6 workload knobs to `.env.example` and Compose. | Benchmark inputs should be repeatable and visible without hard-coding local-only rates into scripts. | `REQUIREMENTS.md` M-20, M-21; `TECH-STACK.md` Docker Compose and k6 choices. | `.env.example`, `docker-compose.yml`, scale override files. |
+
+### Assumptions
+
+* The target table is a benchmark workload model, not a guarantee that one local Docker host can physically sustain the full 1M-profile run.
+* The 1M profile keeps the current single Kafka broker unless measurement proves the broker is the bottleneck; this preserves the existing Docker Compose simplicity while making partitions and consumer parallelism explicit.
+* Catalog/search, streaming, and playlist target rates are mapped to k6 iteration rates based on the number of backend operations each iteration performs.
+
+### Validation
+
+Validation for this alignment step was performed with Docker Compose static configuration checks for the base file and scale overrides, plus k6 script syntax inspection through the k6 container where available.
+
+`docker compose run --rm k6 inspect ...` could not complete because the local Docker daemon pipe was unavailable in the execution environment. The k6 scripts were still syntax-checked with the bundled Node runtime, and all Compose files passed static configuration validation.
