@@ -105,13 +105,20 @@ Moderate 100k-user benchmark shape:
 
 ```powershell
 docker compose -f docker-compose.yml -f docker-compose.scale-100k.yml up -d --build --scale streaming-service=6 --scale catalog-service=3 --scale search-service=3 --scale recommendation-service=3 --scale analytics-service=2 --scale auth-service=2 --scale playlist-service=2
-docker compose run --rm -e K6_TARGET_RATE=50 -e K6_HOLD_DURATION=10m k6 run /scripts/mixed-user-journey.js
+docker compose run --rm -e K6_DURATION=10m -e K6_AUTH_LOGIN_RATE=50 -e K6_CATALOG_SEARCH_ITER_RATE=400 -e K6_STREAMING_SESSION_RATE=2000 -e K6_PLAYLIST_MUTATION_ITER_RATE=20 k6 run /scripts/mixed-user-journey.js
 ```
 
-The 1M profile is intentionally resource-heavy. Review host capacity before starting it:
+The 1M target profile is intentionally resource-heavy and models the workload in `SCALABILITY.md`: 1,000,000 registered users, 100,000 DAU, 20,000 peak concurrent users, about 40,000 playback events per second, about 500 auth logins per second, about 4,000 combined catalog/search requests per second, and about 200 playlist mutations per second. Review host capacity before starting it:
 
 ```powershell
 docker compose -f docker-compose.yml -f docker-compose.scale-1m.yml config
+```
+
+Target-shape command:
+
+```powershell
+docker compose -f docker-compose.yml -f docker-compose.scale-1m.yml up -d --build --scale auth-service=4 --scale catalog-service=8 --scale streaming-service=20 --scale playlist-service=4 --scale search-service=8 --scale analytics-service=8 --scale recommendation-service=8 --scale notification-service=2
+docker compose run --rm -e K6_DURATION=10m -e K6_AUTH_LOGIN_RATE=500 -e K6_CATALOG_SEARCH_ITER_RATE=2000 -e K6_STREAMING_SESSION_RATE=20000 -e K6_PLAYLIST_MUTATION_ITER_RATE=100 k6 run /scripts/mixed-user-journey.js
 ```
 
 See `SCALABILITY.md` for the scaling rationale, instance counts, observability thresholds, and load-test order.

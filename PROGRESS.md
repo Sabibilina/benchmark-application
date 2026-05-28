@@ -314,9 +314,9 @@ Frontend UI work has been intentionally moved out of scope for this version so d
 - [ ] All services expose metrics suitable for Prometheus scraping
 
 ### Load Generator
-- [ ] Covers: registration, login, catalog browsing, search, streaming requests, playlist operations, and history queries (M-21)
-- [ ] Load generator starts as a service in `docker-compose.yml`
-- [ ] Workload definition is documented
+- [x] Covers: registration, login, catalog browsing, search, streaming requests, playlist operations, and history queries (M-21)
+- [x] Load generator starts as a service in `docker-compose.yml`
+- [x] Workload definition is documented
 
 ### Integration Fixes
 - [ ] Inter-service HTTP calls implement retry with exponential backoff (M-22)

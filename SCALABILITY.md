@@ -14,6 +14,23 @@ The deployment must remain centered on:
 
 Kubernetes, Helm, Nomad, Swarm, and other orchestrators are out of scope.
 
+## Target Scalability Plan
+
+This table is the canonical target workload for Docker-based benchmarking. Service counts, k6 rates, Kafka partitions, database tuning, and dashboard interpretation should be evaluated against these numbers.
+
+| Metric | Estimate | Rationale |
+|---|---:|---|
+| Registered users | 1,000,000 | Target |
+| DAU | 100,000 | 10% of registered users, industry norm for streaming apps |
+| Peak concurrent users | 20,000 | 20% of DAU active at the same time |
+| Avg. songs streamed per session | 10 | About 30 min/session at 3 min/song |
+| Playback events per second, peak | ~40,000 | 20,000 users times 2 events/song average |
+| Auth logins per second, peak | ~500 | Session start plus 1 hour token refresh |
+| Catalog/search requests per second, peak | ~4,000 | About 20% of active users browsing at once |
+| Playlist mutations per second, peak | ~200 | Lower-frequency write operation |
+
+The previous scalability document used ranges for some 1M-profile service counts and did not include this exact workload table. It has been corrected so the target constants above are explicit and drive the implemented Compose and k6 benchmark profiles.
+
 ## Implemented First Version
 
 The first serious scalability implementation keeps the system Docker Compose-only and adds benchmark-oriented infrastructure without changing the service boundaries.
@@ -37,9 +54,9 @@ Decisions:
 - **Nginx gateway was added as the Docker-only traffic entrypoint.** This is necessary because scaled Compose replicas cannot all bind the same host ports. The gateway exposes one stable port, routes by path to the existing services, and lets app replicas stay internal on `benchmark-network`.
 - **Direct service ports remain in the base Compose file for development.** The scale override files remove app host ports with Compose `!reset []`, so benchmark runs can use `docker compose up --scale` safely without breaking the simpler developer path.
 - **Different scale profiles were encoded as Compose overrides.** Baseline, 100k, and 1M profiles express different resource and replica expectations for services instead of scaling all services equally.
-- **Streaming receives the highest replica count.** It is stateless and expected to carry the heaviest request volume from stream starts, segment fetches, and playback event publishing.
+- **Streaming receives the highest replica count.** It is stateless and expected to carry the heaviest request volume from stream starts, segment fetches, and the target of about 40,000 playback events per second.
 - **Search, Catalog, Recommendation, and Analytics receive medium/high replica counts.** These are read-heavy or event-heavy services with backend-specific bottlenecks, so replicas are useful but must be paired with OpenSearch, PostgreSQL, Redis, Kafka, and ClickHouse tuning.
-- **Auth and Notification are scaled more modestly.** Auth is not on every request because JWT validation is local, and Notification is internal and can tolerate lag.
+- **Auth and Notification are scaled more modestly.** Auth targets about 500 login requests per second and is not on every request because JWT validation is local, while Notification is internal and can tolerate lag.
 - **Kafka topic initialization was added.** The `kafka-init` service creates playback and playlist topics with configurable partitions, making consumer parallelism repeatable across benchmark runs.
 - **Bounded DB and Kafka client tuning was added through environment variables.** Hikari pool sizes, connection timeouts, Kafka producer batching, listener concurrency, and JVM memory percentages are now profile-tunable without code changes.
 - **Redis max-memory and eviction policy are now explicit.** This makes recommendation cache behavior repeatable and prevents hidden memory growth during long benchmark runs.
@@ -54,6 +71,7 @@ Validation performed:
 - `docker compose -f docker-compose.yml -f docker-compose.scale-baseline.yml config --quiet`
 - `docker compose -f docker-compose.yml -f docker-compose.scale-100k.yml config --quiet`
 - `docker compose -f docker-compose.yml -f docker-compose.scale-1m.yml config --quiet`
+- `node --experimental-vm-modules` syntax parsing for `load-generator/k6/mixed-user-journey.js` and `load-generator/k6/smoke.js`
 
 Recommended first benchmark command:
 
@@ -66,7 +84,7 @@ Recommended scaled benchmark command shape:
 
 ```powershell
 docker compose -f docker-compose.yml -f docker-compose.scale-100k.yml up -d --build --scale streaming-service=6 --scale catalog-service=3 --scale search-service=3 --scale recommendation-service=3 --scale analytics-service=2 --scale auth-service=2 --scale playlist-service=2
-docker compose run --rm -e K6_TARGET_RATE=50 -e K6_HOLD_DURATION=10m k6 run /scripts/mixed-user-journey.js
+docker compose run --rm -e K6_DURATION=10m -e K6_AUTH_LOGIN_RATE=50 -e K6_CATALOG_SEARCH_ITER_RATE=400 -e K6_STREAMING_SESSION_RATE=2000 -e K6_PLAYLIST_MUTATION_ITER_RATE=20 k6 run /scripts/mixed-user-journey.js
 ```
 
 ## Assumptions
@@ -81,6 +99,8 @@ docker compose run --rm -e K6_TARGET_RATE=50 -e K6_HOLD_DURATION=10m k6 run /scr
 ## Traffic Shape
 
 Different services should not scale equally because user traffic is uneven.
+
+The canonical target assumes 100,000 DAU, 20,000 peak concurrent users, about 40,000 playback events per second, about 500 login requests per second, about 4,000 combined catalog/search requests per second, and about 200 playlist mutations per second.
 
 | Workload | Expected Pressure | Main Services |
 | --- | --- | --- |
@@ -170,9 +190,9 @@ Use this to validate dashboards and scripts.
 | Redis | 1 |
 | MongoDB | 1 |
 
-### Profile B: 100k Registered / Moderate Active
+### Profile B: Moderate Pre-Target Calibration
 
-Use this after endpoint-specific tests pass.
+Use this after endpoint-specific tests pass. This is not the canonical 1,000,000-registered-user target; it is a lower-pressure calibration profile for finding obvious bottlenecks before attempting the target rates.
 
 | Service | Instances | Notes |
 | --- | ---: | --- |
@@ -189,19 +209,19 @@ Use this after endpoint-specific tests pass.
 | ClickHouse | 1 larger container | Batch/event throughput test. |
 | Redis | 1 larger container | Ensure cache memory is sufficient. |
 
-### Profile C: 1M Registered / High Active Benchmark
+### Profile C: 1M Registered / Target Benchmark
 
-Use this only after Profile B bottlenecks are understood.
+Use this only after Profile B bottlenecks are understood. The profile is aligned with the target plan: 1,000,000 registered users, 100,000 DAU, 20,000 peak concurrent users, about 40,000 playback events per second, about 500 auth logins per second, about 4,000 combined catalog/search requests per second, and about 200 playlist mutations per second.
 
 | Service | Instances | Notes |
 | --- | ---: | --- |
-| Auth | 3-4 | Login bursts, not per-request validation. |
-| Catalog | 6-8 | Browse and song-detail reads. |
-| Streaming | 12-20 | Primary scale target due to segment load and playback events. |
-| Playlist | 4-6 | User library operations with DB write constraints. |
-| Search | 6-10 | Query fan-out to OpenSearch, protect with timeouts. |
-| Analytics | 4-8 | Separate API pressure from event lag where possible. |
-| Recommendation | 6-10 | Cache-heavy read path plus Kafka consumers. |
+| Auth | 4 | Targets about 500 login requests per second; JWT validation stays local elsewhere. |
+| Catalog | 8 | Shares the about 4,000 catalog/search requests per second browsing pressure with Search. |
+| Streaming | 20 | Primary scale target for 20,000 concurrent users and about 40,000 playback events per second. |
+| Playlist | 4 | Targets about 200 playlist mutations per second while limiting DB connection pressure. |
+| Search | 8 | Shares the about 4,000 catalog/search requests per second pressure and protects OpenSearch with timeouts. |
+| Analytics | 8 | Consumes the playback-event stream and serves history/charts while ClickHouse handles persistence. |
+| Recommendation | 8 | Cache-heavy read path plus playback-event consumers. |
 | Notification | 2 | Increase only if Kafka lag or Mongo writes rise. |
 | Kafka | 1 larger broker, then 3 brokers if single broker saturates | Compose can run 3 brokers, but complexity rises. |
 | OpenSearch | 1 large node, then 2-3 nodes if host resources allow | Keep shard count low and measured. |
@@ -403,7 +423,7 @@ Why:
 
 Plan:
 
-- Start with 2 replicas for 100k profile and 3-4 for 1M profile.
+- Start with 2 replicas for calibration runs and 4 replicas for the 1M target profile.
 - Keep registration/login rate separate from normal browsing/streaming tests.
 - Tune password hashing cost only deliberately; lowering cost improves benchmark throughput but weakens realism.
 - Add DB index verification for email uniqueness and lookup.
@@ -427,7 +447,7 @@ Why:
 
 Plan:
 
-- Start 3 replicas, then 6-8 under high active users.
+- Start 3 replicas for calibration runs and 8 replicas for the 1M target profile.
 - Enforce page size limits.
 - Add indexes for genre, year, BPM, ID, and common sort fields.
 - Consider short-lived response caching for top pages and stable catalog slices.
@@ -453,7 +473,7 @@ Why:
 
 Plan:
 
-- Start with 6 replicas for moderate load; use 12-20 for high active benchmark.
+- Start with 6 replicas for calibration runs and 20 replicas for the 1M target profile.
 - Keep segment size and segment count configurable per scenario.
 - Test stream descriptor and segment endpoints separately.
 - Watch Kafka producer latency and broker throughput.
@@ -477,7 +497,7 @@ Why:
 
 Plan:
 
-- Start with 2 replicas, scale to 4-6.
+- Start with 2 replicas for calibration runs and 4 replicas for the 1M target profile.
 - Index `(user_id)`, `(playlist_id)`, `(playlist_id, position)`, and uniqueness for liked songs.
 - Keep playlist list responses paginated if user libraries grow.
 - Avoid validating every song ID against Catalog synchronously in write paths unless required.
@@ -501,7 +521,7 @@ Why:
 
 Plan:
 
-- Start with 3 Search replicas, scale to 6-10.
+- Start with 3 Search replicas for calibration runs and 8 replicas for the 1M target profile.
 - Tune OpenSearch heap and memory before adding OpenSearch nodes.
 - Enforce max page size and reject pathological BPM/year ranges.
 - Cache very hot global searches only if query repetition is proven by metrics.
@@ -527,7 +547,7 @@ Why:
 
 Plan:
 
-- Start with 2 replicas, scale to 4-8.
+- Start with 2 replicas for calibration runs and 8 replicas for the 1M target profile.
 - Increase Kafka partitions for `playback-events`.
 - Batch ClickHouse inserts where possible.
 - Cache `/analytics/charts/global` briefly because many users may request the same chart.
@@ -555,7 +575,7 @@ Why:
 
 Plan:
 
-- Start with 3 replicas, scale to 6-10.
+- Start with 3 replicas for calibration runs and 8 replicas for the 1M target profile.
 - Cache `daily-mix` per user and `similar` per song.
 - Track Redis hit ratio and memory usage.
 - Increase Kafka partitions if playback interaction processing lags.
@@ -920,6 +940,15 @@ Example commands, non-final:
 docker compose -f docker-compose.yml -f docker-compose.scale-100k.yml up -d --scale streaming-service=6 --scale search-service=3 --scale catalog-service=3
 docker compose run --rm k6 run /scripts/mixed-user-journey.js
 ```
+
+Target-shape command, resource-heavy:
+
+```powershell
+docker compose -f docker-compose.yml -f docker-compose.scale-1m.yml up -d --build --scale auth-service=4 --scale catalog-service=8 --scale streaming-service=20 --scale playlist-service=4 --scale search-service=8 --scale analytics-service=8 --scale recommendation-service=8 --scale notification-service=2
+docker compose run --rm -e K6_DURATION=10m -e K6_AUTH_LOGIN_RATE=500 -e K6_CATALOG_SEARCH_ITER_RATE=2000 -e K6_STREAMING_SESSION_RATE=20000 -e K6_PLAYLIST_MUTATION_ITER_RATE=100 k6 run /scripts/mixed-user-journey.js
+```
+
+In the target k6 command, each catalog/search iteration issues one catalog request and one search request, so 2,000 iterations per second models about 4,000 combined catalog/search requests per second. Each streaming iteration starts a stream and then emits an ended or skipped terminal event, so 20,000 streaming iterations per second models about 40,000 playback events per second. Each playlist mutation iteration creates a playlist and adds a track, so 100 iterations per second models about 200 playlist mutations per second.
 
 ## Risks And Trade-Offs
 
