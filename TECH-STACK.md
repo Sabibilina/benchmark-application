@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This document defines the implementation stack for each microservice, the frontend, and the shared infrastructure of the cloud-native music streaming benchmark system.
+This document defines the implementation stack for each backend microservice and the shared infrastructure of the cloud-native music streaming benchmark system.
 
 It translates the frozen system shape from `ARCHITECTURE.md` and `REQUIREMENTS.md` into concrete technology choices for implementation.
 
@@ -83,7 +83,7 @@ Java + Spring Boot is the preferred backend stack for all services for the follo
 ### 3.5. Notification Service
 **Messaging choice: Kafka consumer**
 - Consume playlist update events and, if implemented, other internal application events such as new-release notifications.
-- Persist the resulting notification documents for frontend retrieval.
+- Persist the resulting notification documents in the Notification Service storage for backend retrieval in a later version.
 
 ## 4. Database and Persistence per Service
 
@@ -176,39 +176,9 @@ Java + Spring Boot is the preferred backend stack for all services for the follo
 - Notification data is document-like and event-derived.
 - MongoDB keeps the persistence model simple and flexible for this internal service.
 
-## 5. Frontend Stack
+## 5. Frontend Scope
 
-### Recommended Frontend Stack
-
-The frontend should use the following stack:
-
-- **React** for the SPA UI layer
-- **TypeScript** for type safety
-- **Vite** for fast local development and simple frontend builds
-- **React Router** for client-side routing
-- **Zustand** for lightweight client state such as session, playback state, and queue
-- **TanStack Query** for server-state fetching, caching, and background refetching
-- **Axios** for the centralized API client with JWT injection and error normalization
-- **React Hook Form + Zod** for forms and validation
-- **dnd-kit** for playlist drag-and-drop reordering
-- **Tailwind CSS** for fast, consistent UI development
-
-### Why this is the best frontend stack here
-
-- React + TypeScript is the strongest overall fit because it matches the SPA architecture, is very popular, and has a huge ecosystem.
-- TypeScript improves safety across many service integrations and reduces frontend integration mistakes.
-- Vite keeps the local development loop fast and simple.
-- Zustand is lighter and easier to review than a larger state solution when the main client state is session, playback, and queue.
-- TanStack Query is a strong fit because the app talks to many backend services and benefits from caching, refetching, and request state management.
-- This stack is modern, productive, and easy to verify manually when AI generates UI code.
-
-### Frontend runtime choices
-
-- Keep the JWT in memory only, not in `localStorage`.
-- Use a centralized API client to attach `Authorization: Bearer` headers.
-- Use a frontend playback state machine for `idle → loading → playing → paused → ended/skipped`.
-- Expose a `/health` route or equivalent static health response.
-
+Frontend UI work is intentionally out of scope for this version. No React, Vite, browser UI, frontend runtime container, frontend tests, frontend health endpoint, or client-side metrics stack is required. The implementation scope remains backend microservices, infrastructure, observability, load generation, and Docker Compose-based scalability benchmarking.
 ## 6. Cross-Cutting Technical Decisions
 
 ### API and Service Communication
@@ -238,7 +208,7 @@ The frontend should use the following stack:
 - **Analytics DB:** ClickHouse
 - **Recommendation persistence:** PostgreSQL + Redis
 - **Notification DB:** MongoDB
-- **Frontend:** React + TypeScript + Vite + React Router + Zustand + TanStack Query
+- **Frontend:** Out of scope for this version
 - **Messaging:** Apache Kafka
 - **Observability:** Prometheus + Grafana
 - **Load generator:** k6

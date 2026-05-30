@@ -46,6 +46,8 @@ This document defines the functional and non-functional requirements for the clo
 | W-01 | Will not have | F | Email and push notifications will not be implemented | External SMTP or third-party notification delivery is out of scope |
 | W-02 | Will not have | F | OAuth2 or social login will not be implemented | Authentication is limited to local registration and login |
 | W-03 | Will not have | F | Real audio playback files will not be required | The system simulates streaming behavior and load using metadata and generated payloads only |
+| W-04 | Will not have | F | Frontend UI work will not be implemented in this version | Browser UI, SPA routes, frontend runtime containers, and frontend build artifacts are out of scope so the version focuses on backend services, infrastructure, observability, load generation, and scalability |
+| W-05 | Will not have | NF | Frontend-specific validation will not be required in this version | Frontend tests, browser reachability checks, client-side metrics, and UI flow validation are out of scope |
 
 ## Testing Requirements
 
@@ -57,10 +59,6 @@ The system must include automated tests to verify service behavior, integration 
 - Services with protected endpoints must include integration tests for authenticated and unauthenticated access.
 - Services that publish or consume internal events should include tests for event production or consumption behavior.
 - Tests must be runnable in an automated way as part of local validation.
-
-### Frontend testing
-- The frontend should include automated tests for critical UI behavior, routing, and API integration behavior.
-- Core flows such as authentication, protected API usage, playback state transitions, playlist interaction, and search filtering should be covered by tests.
 
 ### Completion expectation
 - A service should not be considered complete if its required tests are missing or failing.

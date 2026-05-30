@@ -106,14 +106,4 @@ class AnalyticsControllerIntegrationTest {
     void healthIsOperational() throws Exception {
         mockMvc.perform(get("/actuator/health")).andExpect(status().isOk());
     }
-
-    @Test
-    void corsPreflightAllowsFrontendOriginForAnalyticsEndpoints() throws Exception {
-        mockMvc.perform(options("/analytics/me/history")
-                        .header("Origin", "http://localhost:5173")
-                        .header("Access-Control-Request-Method", "GET")
-                        .header("Access-Control-Request-Headers", "authorization"))
-                .andExpect(status().isOk())
-                .andExpect(header().string("Access-Control-Allow-Origin", "http://localhost:5173"));
-    }
 }

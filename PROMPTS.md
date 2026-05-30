@@ -56,8 +56,7 @@ Work in iterative prompts: plan → generate → validate/fix.
 - **Session 6:** Analytics Service
 - **Session 7:** Recommendation Service
 - **Session 8:** Notification Service
-- **Session 9:** Frontend
-- **Session 10:** Monitoring + load generator + integration fixes
+- **Session 9:** Monitoring + load generator + integration fixes
 
 ## Prompt pattern
 
@@ -94,8 +93,7 @@ No pseudocode and no placeholders.
 Whenever applicable, also generate:
 - unit tests for core business logic,
 - integration tests for required endpoints and persistence behavior,
-- event production or consumption tests for messaging-based services,
-- frontend component/integration tests for critical UI flows.
+- event production or consumption tests for messaging-based services.
 
 After generating the implementation, update `PROGRESS.md` only to reflect checklist/task completion status for this phase. Record every important decision taken during generation in `DESIGN-DECISIONS.md`, including the reason, affected files, and any assumptions made.
 

@@ -153,14 +153,4 @@ class AuthControllerIntegrationTest {
         mockMvc.perform(get("/actuator/health")).andExpect(status().isOk());
         mockMvc.perform(get("/not-public")).andExpect(status().isUnauthorized());
     }
-
-    @Test
-    void corsPreflightAllowsFrontendOriginForAuthEndpoints() throws Exception {
-        mockMvc.perform(options("/auth/login")
-                        .header("Origin", "http://localhost:5173")
-                        .header("Access-Control-Request-Method", "POST")
-                        .header("Access-Control-Request-Headers", "content-type"))
-                .andExpect(status().isOk())
-                .andExpect(header().string("Access-Control-Allow-Origin", "http://localhost:5173"));
-    }
 }

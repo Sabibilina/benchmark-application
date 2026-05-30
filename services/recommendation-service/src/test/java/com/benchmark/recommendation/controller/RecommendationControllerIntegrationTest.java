@@ -103,14 +103,4 @@ class RecommendationControllerIntegrationTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.message").value("JWT subject must be a UUID"));
     }
-
-    @Test
-    void corsPreflightAllowsFrontendOriginForRecommendationEndpoints() throws Exception {
-        mockMvc.perform(options("/recommend/daily-mix")
-                        .header("Origin", "http://localhost:5173")
-                        .header("Access-Control-Request-Method", "GET")
-                        .header("Access-Control-Request-Headers", "authorization"))
-                .andExpect(status().isOk())
-                .andExpect(header().string("Access-Control-Allow-Origin", "http://localhost:5173"));
-    }
 }

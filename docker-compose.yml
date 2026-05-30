@@ -218,21 +218,6 @@ services:
       kafka:
         condition: service_started
 
-  frontend:
-    restart: unless-stopped
-    build:
-      context: ./frontend
-      args:
-        SERVICE_NAME: frontend
-    networks:
-      - benchmark-network
-    ports:
-      - "${FRONTEND_HOST_PORT:-5173}:5173"
-    cpus: ${DEFAULT_SERVICE_CPUS:-0.50}
-    mem_limit: ${DEFAULT_SERVICE_MEMORY:-512m}
-    environment:
-      SERVICE_NAME: frontend
-
   auth-db:
     <<: *postgres
     environment:

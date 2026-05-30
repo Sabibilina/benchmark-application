@@ -2902,3 +2902,35 @@ Reviewed the Notification Service implementation against `ARCHITECTURE.md`, `REQ
 
 * Playlist Service event production remains outside this phase; Notification's contract and consumer are validated independently.
 * No protected read interface exists because the minimum architecture says no public client-facing API is required. If the frontend inbox is implemented later, that interface must be planned and validated in that phase.
+# Phase 9 Scope Change - Frontend Removed From Active Application Scope
+
+## Decision
+Frontend UI work is no longer part of the active application scope for this version. The repository now focuses on backend services, infrastructure, observability, load generation, and scalability benchmarking. Any earlier frontend planning or implementation notes in this historical decision log are superseded by this scope decision.
+
+## Why
+The current phase explicitly requested removal of frontend functionality and frontend runtime artifacts so the project can focus only on backend behavior, infrastructure, and scalability. This also prevents Docker Compose, validation, and final delivery criteria from requiring a browser UI or frontend tests.
+
+## Justification
+- `REQUIREMENTS.md` now places frontend UI work and frontend-specific validation in the "Will not have" scope.
+- `ARCHITECTURE.md` now defines frontend UI work as out of scope.
+- `TECH-STACK.md` now states that no frontend stack is required for this version.
+
+## Affected Files And Services
+- Removed `frontend/` from the repository source layout.
+- Removed the `frontend` service from `docker-compose.yml`.
+- Removed `FRONTEND_HOST_PORT` from `.env.example`.
+- Updated `ARCHITECTURE.md`, `REQUIREMENTS.md`, `TECH-STACK.md`, `README.md`, `PROGRESS.md`, `PROMPTS.md`, and `TESTS.md`.
+- Removed frontend-origin CORS regression tests from backend controller integration tests because they validated a UI integration path that is no longer in scope.
+- Backend services, databases, Kafka, Redis, OpenSearch, ClickHouse, MongoDB, Prometheus, Grafana, and k6 remain in scope.
+
+## Assumptions And Notes
+- `SCALABILITY.md` was referenced by the task but is not present in the current repository baseline, so no scalability document could be updated in this phase.
+- Historical frontend entries that remain in this decision log are retained as past project history and are superseded by this section.
+
+### Validation Update - Frontend Scope Removal
+
+- `docker compose config --quiet` passed after removing the frontend service. Docker emitted host config access warnings, but Compose returned success.
+- `docker compose config --services` listed backend services and infrastructure only; no `frontend` service is present.
+- `frontend/` and `coverage-output/frontend/` were removed from the repository tree.
+- `docker compose build auth-service catalog-service playlist-service streaming-service search-service analytics-service recommendation-service notification-service` passed with escalated Docker access; the backend Maven verification suites completed during image builds.
+- `SCALABILITY.md` remains absent in the current repository baseline, so no scalability document was changed in this scope-removal pass.

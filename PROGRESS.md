@@ -1,4 +1,4 @@
-ï»¿# Progress Document
+# Progress Document
 
 ## Overview
 This document defines the iterative generation, validation, and completion workflow for the system, ensuring that each phase, service, and supporting artifact is planned, implemented, checked against the frozen architecture, and verified through the checklist before the project is considered complete.
@@ -64,25 +64,25 @@ Generation should begin with the shared deployment environment, including the in
 ## **More Detailed Checklist**
 
 Services are built **one at a time** in the order below. Each service goes through three steps:
-**Plan â†’ Generate â†’ Validate/Fix**. Do not move to the next service until the current one starts cleanly and passes its acceptance criteria.
+**Plan ? Generate ? Validate/Fix**. Do not move to the next service until the current one starts cleanly and passes its acceptance criteria.
 
-## Phase 0 â€” Shared Deployment Environment
+## Phase 0 — Shared Deployment Environment
 
-- [x] **Plan** â€” Propose repo structure, compose file layout, named Docker network, infrastructure, and env/config strategy
-- [x] **Generate** â€” Top-level folder structure, `docker-compose.yml`, shared config files, placeholder Dockerfiles, and README
-- [x] **Validate/Fix** â€” Confirm compose file reflects required architecture; named network defined; no invented requirements
+- [x] **Plan** — Propose repo structure, compose file layout, named Docker network, infrastructure, and env/config strategy
+- [x] **Generate** — Top-level folder structure, `docker-compose.yml`, shared config files, placeholder Dockerfiles, and README
+- [x] **Validate/Fix** — Confirm compose file reflects required architecture; named network defined; no invented requirements
 - [x] Compose file starts without errors
 - [x] Named Docker network is defined and all services reference it
 - [x] Service directories are scaffolded
 - [x] README covers startup instructions for this phase
 
 
-## Phase 1 â€” Auth Service
+## Phase 1 — Auth Service
 
 ### Steps
-- [x] **Step 1 â€” Plan**: File tree, endpoints, JWT signing and verification approach, persistence approach, env vars, dependencies, validation steps
-- [x] **Step 2 â€” Generate**: All source files, Dockerfile, dependency manifest, `.env.example`, `init.sql`, unit tests, integration tests, README section
-- [x] **Step 3 â€” Validate/Fix**: Review against acceptance criteria; fix and return only changed files
+- [x] **Step 1 — Plan**: File tree, endpoints, JWT signing and verification approach, persistence approach, env vars, dependencies, validation steps
+- [x] **Step 2 — Generate**: All source files, Dockerfile, dependency manifest, `.env.example`, `init.sql`, unit tests, integration tests, README section
+- [x] **Step 3 — Validate/Fix**: Review against acceptance criteria; fix and return only changed files
 
 ### Acceptance Criteria
 - [x] `POST /auth/register` is implemented
@@ -102,12 +102,12 @@ Services are built **one at a time** in the order below. Each service goes throu
 ---
 
 
-## Phase 2 â€” Catalog Service
+## Phase 2 — Catalog Service
 
 ### Steps
-- [x] **Step 1 â€” Plan**: File tree, persistence and data model approach, dataset ingestion strategy, endpoints, pagination design, env vars, dependencies, validation steps
-- [x] **Step 2 â€” Generate**: All source files, Dockerfile, dependency manifest, `.env.example`, schema/migration, seed script, unit tests, integration tests, README section
-- [x] **Step 3 â€” Validate/Fix**: Review against acceptance criteria; fix and return only changed files
+- [x] **Step 1 — Plan**: File tree, persistence and data model approach, dataset ingestion strategy, endpoints, pagination design, env vars, dependencies, validation steps
+- [x] **Step 2 — Generate**: All source files, Dockerfile, dependency manifest, `.env.example`, schema/migration, seed script, unit tests, integration tests, README section
+- [x] **Step 3 — Validate/Fix**: Review against acceptance criteria; fix and return only changed files
 
 ### Acceptance Criteria
 - [x] `GET /catalog/songs` is implemented with pagination
@@ -126,12 +126,12 @@ Services are built **one at a time** in the order below. Each service goes throu
 ---
 
 
-## Phase 3 â€” Playlist Service
+## Phase 3 — Playlist Service
 
 ### Steps
-- [x] **Step 1 â€” Plan**: File tree, persistence and data model approach, required endpoints, track reorder strategy, Liked Songs handling, JWT validation, env vars, dependencies, validation steps
-- [x] **Step 2 â€” Generate**: All source files, Dockerfile, dependency manifest, `.env.example`, schema/migration, unit tests, integration tests, README section
-- [x] **Step 3 â€” Validate/Fix**: Review against acceptance criteria; fix and return only changed files
+- [x] **Step 1 — Plan**: File tree, persistence and data model approach, required endpoints, track reorder strategy, Liked Songs handling, JWT validation, env vars, dependencies, validation steps
+- [x] **Step 2 — Generate**: All source files, Dockerfile, dependency manifest, `.env.example`, schema/migration, unit tests, integration tests, README section
+- [x] **Step 3 — Validate/Fix**: Review against acceptance criteria; fix and return only changed files
 
 ### Acceptance Criteria
 - [x] All 8 required endpoints exist and return correct HTTP status codes
@@ -151,12 +151,12 @@ Services are built **one at a time** in the order below. Each service goes throu
 
 ---
 
-## Phase 4 â€” Streaming Service
+## Phase 4 — Streaming Service
 
 ### Steps
-- [x] **Step 1 â€” Plan**: File tree, endpoint design, dummy segment payload strategy, event emission strategy, JWT validation approach, persistence approach if needed, env vars, dependencies, validation steps
-- [x] **Step 2 â€” Generate**: All source files, Dockerfile, dependency manifest, `.env.example`, persistence/bootstrap logic if needed, unit tests, integration tests, README section
-- [x] **Step 3 â€” Validate/Fix**: Review against acceptance criteria; fix and return only changed files
+- [x] **Step 1 — Plan**: File tree, endpoint design, dummy segment payload strategy, event emission strategy, JWT validation approach, persistence approach if needed, env vars, dependencies, validation steps
+- [x] **Step 2 — Generate**: All source files, Dockerfile, dependency manifest, `.env.example`, persistence/bootstrap logic if needed, unit tests, integration tests, README section
+- [x] **Step 3 — Validate/Fix**: Review against acceptance criteria; fix and return only changed files
 
 ### Acceptance Criteria
 - [x] `GET /stream/:songId` requires a valid JWT
@@ -175,12 +175,12 @@ Services are built **one at a time** in the order below. Each service goes throu
 
 ---
 
-## Phase 5 â€” Search Service
+## Phase 5 — Search Service
 
 ### Steps
-- [x] **Step 1 â€” Plan**: File tree, endpoint design, search strategy, filter logic, persistence/indexing approach if needed, env vars, dependencies, validation steps
-- [x] **Step 2 â€” Generate**: All source files, Dockerfile, dependency manifest, `.env.example`, schema/migration with indexes, data population script, unit tests, integration tests, README section
-- [x] **Step 3 â€” Validate/Fix**: Review against acceptance criteria; fix and return only changed files
+- [x] **Step 1 — Plan**: File tree, endpoint design, search strategy, filter logic, persistence/indexing approach if needed, env vars, dependencies, validation steps
+- [x] **Step 2 — Generate**: All source files, Dockerfile, dependency manifest, `.env.example`, schema/migration with indexes, data population script, unit tests, integration tests, README section
+- [x] **Step 3 — Validate/Fix**: Review against acceptance criteria; fix and return only changed files
 
 ### Acceptance Criteria
 - [x] `GET /search` supports text search
@@ -200,12 +200,12 @@ Services are built **one at a time** in the order below. Each service goes throu
 
 ---
 
-## Phase 6 â€” Analytics Service
+## Phase 6 — Analytics Service
 
 ### Steps
-- [x] **Step 1 â€” Plan**: File tree, persistence approach, history endpoint design, aggregation approach, metrics exposure approach, JWT validation, env vars, dependencies, validation steps
-- [x] **Step 2 â€” Generate**: All source files, Dockerfile, dependency manifest, `.env.example`, schema/migration, unit tests, integration tests, README section
-- [x] **Step 3 â€” Validate/Fix**: Review against acceptance criteria; fix and return only changed files
+- [x] **Step 1 — Plan**: File tree, persistence approach, history endpoint design, aggregation approach, metrics exposure approach, JWT validation, env vars, dependencies, validation steps
+- [x] **Step 2 — Generate**: All source files, Dockerfile, dependency manifest, `.env.example`, schema/migration, unit tests, integration tests, README section
+- [x] **Step 3 — Validate/Fix**: Review against acceptance criteria; fix and return only changed files
 
 ### Acceptance Criteria
 - [x] `GET /analytics/me/history` is implemented
@@ -233,12 +233,12 @@ Services are built **one at a time** in the order below. Each service goes throu
 
 ---
 
-## Phase 7 â€” Recommendation Service
+## Phase 7 — Recommendation Service
 
 ### Steps
-- [x] **Step 1 â€” Plan**: File tree, endpoint design, recommendation strategy, persistence/caching approach if needed, JWT validation, env vars, dependencies, validation steps
-- [x] **Step 2 â€” Generate**: All source files, Dockerfile, Maven build files, `.env.example`, schema/migration, unit tests, integration tests, README section
-- [x] **Step 3 â€” Validate/Fix**: Review against acceptance criteria; fix and return only changed files
+- [x] **Step 1 — Plan**: File tree, endpoint design, recommendation strategy, persistence/caching approach if needed, JWT validation, env vars, dependencies, validation steps
+- [x] **Step 2 — Generate**: All source files, Dockerfile, Maven build files, `.env.example`, schema/migration, unit tests, integration tests, README section
+- [x] **Step 3 — Validate/Fix**: Review against acceptance criteria; fix and return only changed files
 
 ### Acceptance Criteria
 - [x] `GET /recommend/daily-mix` returns a non-empty response for valid requests
@@ -256,16 +256,16 @@ Services are built **one at a time** in the order below. Each service goes throu
 
 ---
 
-## Phase 8 â€” Notification Service
+## Phase 8 — Notification Service
 
 ### Steps
-- [x] **Step 1 â€” Plan**: File tree, internal event handling design, notification persistence approach, internal exposure approach, env vars, dependencies, validation steps
-- [x] **Step 2 â€” Generate**: All source files, Dockerfile, dependency manifest, `.env.example`, persistence/index setup if needed, unit tests, integration tests, README section
-- [x] **Step 3 â€” Validate/Fix**: Review against acceptance criteria; fix and return only changed files
+- [x] **Step 1 — Plan**: File tree, internal event handling design, notification persistence approach, internal exposure approach, env vars, dependencies, validation steps
+- [x] **Step 2 — Generate**: All source files, Dockerfile, dependency manifest, `.env.example`, persistence/index setup if needed, unit tests, integration tests, README section
+- [x] **Step 3 — Validate/Fix**: Review against acceptance criteria; fix and return only changed files
 
 ### Acceptance Criteria
 - [x] Internal events are consumed
-- [x] In-app notifications are persisted in the serviceâ€™s own storage
+- [x] In-app notifications are persisted in the service’s own storage
 - [x] At least playlist update events or new release events result in stored notifications
 - [x] No email or push logic is implemented
 - [x] The service uses its own dedicated persistence layer
@@ -288,49 +288,25 @@ Services are built **one at a time** in the order below. Each service goes throu
 
 ---
 
-## Phase 9 â€” Frontend (React + TypeScript SPA)
+## Phase 9 - Frontend Scope Removal
+
+Frontend UI work has been intentionally moved out of scope for this version so delivery focuses on backend behavior, infrastructure, observability, load generation, and scalability.
 
 ### Steps
-- [ ] **Step 1 â€” Plan**: File tree for `frontend/`, routing strategy, global state shape (session, playback, queue), API client design (JWT injection, retry, error normalization), view inventory, env vars, build/containerization approach, validation steps
-- [ ] **Step 2 â€” Generate**: All source files, Dockerfile, `package.json`, `.env.example`, build config, unit/component tests, integration tests, README section covering build, run, and backend configuration
-- [ ] **Step 3 â€” Validate/Fix**: Review against acceptance criteria; fix and return only changed files
+- [x] Remove frontend from active application scope
+- [x] Remove frontend runtime artifacts from Docker Compose and repository source layout
+- [x] Update requirements, stack, architecture, progress, testing, and README documentation so frontend deliverables are not required
+- [x] Validate Docker Compose configuration after frontend removal
+- [x] Rebuild backend service images and rerun backend Maven test suites through Docker Compose
 
-### Views to Implement
-- [ ] **Home / Discovery** â€” Daily Mix cards and "Because you listened toâ€¦" rails; trending tracks from Analytics global charts if implemented
-- [ ] **Search** â€” Full-text search bar; optional real-time autocomplete; results filterable by genre, BPM range, and release year; song results with optional artist/album/playlist sections
-- [ ] **Catalog Browse** â€” Paginated song grid/list with sort controls (title, artist, BPM); artist detail/top tracks only if implemented
-- [ ] **Now Playing / Player Bar** â€” Persistent bottom bar with track title, artist, album art placeholder, play/pause/skip/previous controls, progress scrubber, and volume control; visible across all views
-- [ ] **Playlists** â€” Sidebar list of user's playlists including "Liked Songs"; playlist detail with drag-and-drop reordering, track removal, add-from-search/catalog; playlist creation and deletion
-- [ ] **Listening History** â€” Chronological log of play events from Analytics Service, grouped by date
-- [ ] **Notifications** â€” Optional inbox panel for in-app notifications if notification retrieval is exposed to the frontend in the implemented version
-
-### Acceptance Criteria
-- [ ] Registration and login flows work end-to-end against the Auth Service; JWT stored in memory (not `localStorage`)
-- [ ] JWT is attached via `Authorization: Bearer` header on all protected API requests
-- [ ] Required frontend views are present and navigable via client-side routing (no full-page reload between views)
-- [ ] Now Playing bar persists across all route changes
-- [ ] Player calls `GET /stream/:songId` to initiate a stream session; playback state machine transitions correctly (`idle â†’ loading â†’ playing â†’ paused â†’ ended/skipped`)
-- [ ] Skip and completion actions explicitly trigger the appropriate state transitions and backend event payloads
-- [ ] API client handles JWT injection, exponential backoff retry, and error normalization centrally
-- [ ] Search returns results and filters (genre, BPM range, year) work in combination
-- [ ] Playlist drag-and-drop reorder calls `PATCH /playlists/:id/tracks/reorder`
-- [ ] "Liked Songs" playlist is visible but the delete control is hidden or disabled
-- [ ] Notifications are retrievable and viewable from the frontend if the notification inbox is implemented in the current version
-- [ ] Frontend exposes a `/health` route or static response for uptime checks
-- [ ] Key client-side metrics tracked: page load time, API error rates, playback failure counts
-- [ ] Dockerfile builds and container starts without errors; frontend is added to `docker-compose.yml`
-- [ ] `.env.example` documents all `VITE_` / `REACT_APP_` variables (API base URLs, etc.)
-- [ ] No requirements from the brief are missing; no extra requirements added
-- [ ] Automated tests cover critical UI flows and route behavior
-- [ ] Authentication flow is tested
-- [ ] Playback state transitions are tested
-- [ ] Search filtering behavior is tested
-- [ ] Playlist reorder interaction is tested
-- [ ] Test suite passes successfully
+### Out-of-Scope Items
+- [ ] Frontend implementation deliverable
+- [ ] Frontend Docker image or runtime service
+- [ ] Frontend build, startup, browser reachability, or UI flow validation
+- [ ] Frontend automated tests and client-side metrics
 
 ---
-
-## Phase 10 â€” Monitoring, Load Generator & Integration
+## Phase 10 — Monitoring, Load Generator & Integration
 
 ### Monitoring
 - [ ] Prometheus configured to scrape all 8 services
@@ -364,9 +340,9 @@ Services are built **one at a time** in the order below. Each service goes throu
 
 ### Artifacts
 - [ ] `docker-compose.yml` starts all 8 application services and the required infrastructure
-- [ ] Source code complete and runnable for all 8 services and the frontend (no pseudocode or placeholders)
-- [ ] Dockerfiles present and building for all 8 services and the frontend
-- [ ] `.env.example` present and complete for all 8 services and the frontend
+- [ ] Source code complete and runnable for all 8 backend services (no pseudocode or placeholders)
+- [ ] Dockerfiles present and building for all 8 backend services
+- [ ] `.env.example` present and complete for all 8 backend services
 - [ ] Database schemas / migrations present for all services with persistence
 - [ ] Catalog CSV seed script included and runs automatically at startup
 - [ ] Prometheus config file included
@@ -379,13 +355,11 @@ Services are built **one at a time** in the order below. Each service goes throu
 ### Testing Deliverables
 - [ ] All backend unit tests pass
 - [ ] All backend integration tests pass
-- [ ] Frontend automated tests pass
 - [ ] Integrated system tests show that the services run correctly together
 - [ ] End-to-end test results are documented
 
 ### Minimum Completion Criteria
 - [ ] All 8 services start successfully in the local deployment environment
-- [ ] Frontend starts and is reachable in the browser via `docker-compose up`
 - [ ] All required endpoints are implemented and reachable
 - [ ] Protected endpoints enforce JWT authentication
 - [ ] Metrics are exposed and collected through the monitoring stack

@@ -209,16 +209,6 @@ class PlaylistControllerIntegrationTest {
         mockMvc.perform(get("/actuator/health")).andExpect(status().isOk());
     }
 
-    @Test
-    void corsPreflightAllowsFrontendOriginForPlaylistEndpoints() throws Exception {
-        mockMvc.perform(options("/playlists")
-                        .header("Origin", "http://localhost:5173")
-                        .header("Access-Control-Request-Method", "GET")
-                        .header("Access-Control-Request-Headers", "authorization"))
-                .andExpect(status().isOk())
-                .andExpect(header().string("Access-Control-Allow-Origin", "http://localhost:5173"));
-    }
-
     private JsonNode createPlaylist(String owner, String name, String description) throws Exception {
         String body = objectMapper.writeValueAsString(new CreateBody(name, description));
         String response = mockMvc.perform(post("/playlists")

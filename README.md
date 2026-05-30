@@ -14,7 +14,8 @@ The source-of-truth documents are:
 * `ARCHITECTURE.md` for system shape and service boundaries.
 * `REQUIREMENTS.md` for mandatory, optional, and out-of-scope behavior.
 * `TECH-STACK.md` for implementation technology choices.
-* `PROGRESS.md` for phase status, validation notes, and decision records.
+* `PROGRESS.md` for phase status and checklist tracking.
+* `DESIGN-DECISIONS.md` for planning decisions, assumptions, corrections, and rationale.
 
 ## Repository layout
 
@@ -41,7 +42,6 @@ benchmark-application/
     analytics-service/
     recommendation-service/
     notification-service/
-  frontend/
   load-generator/
     k6/
 ```
@@ -51,7 +51,6 @@ benchmark-application/
 `docker-compose.yml` defines the baseline shared runtime:
 
 * Eight backend service placeholders.
-* Frontend placeholder.
 * Kafka for internal events.
 * Dedicated persistence components for stateful services.
 * Redis for recommendation caching.
@@ -99,6 +98,6 @@ docker compose down -v
 
 ## Important Phase 0 limitations
 
-The placeholders do not implement API endpoints, JWT enforcement, metrics endpoints, frontend routes, catalog ingestion, messaging behavior, or load-test flows. Those are generated and validated in later phases according to `PROGRESS.md`.
+The placeholders do not implement API endpoints, JWT enforcement, metrics endpoints, catalog ingestion, messaging behavior, or load-test flows. Those are generated and validated in later phases according to `PROGRESS.md`.
 
 Prometheus is configured with the intended Spring Boot metrics target path, `/actuator/prometheus`, so application targets will remain unavailable until each service is implemented with metrics support.
