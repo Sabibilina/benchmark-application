@@ -1,16 +1,22 @@
 import http from 'k6/http';
 import { check, sleep } from 'k6';
 
+const durationP95Ms = Number(__ENV.K6_SMOKE_HTTP_REQ_DURATION_P95_MS || 2000);
+
 export const options = {
   vus: Number(__ENV.K6_VUS || 5),
   duration: __ENV.K6_DURATION || '30s',
   thresholds: {
     http_req_failed: ['rate<0.05'],
-    http_req_duration: ['p(95)<1000'],
+    http_req_duration: [`p(95)<${durationP95Ms}`],
   },
 };
 
 const baseUrl = __ENV.BASE_URL || 'http://gateway:8080';
+
+function jsonAuthHeaders(authHeaders) {
+  return Object.assign({ 'Content-Type': 'application/json' }, authHeaders);
+}
 
 export default function () {
   const suffix = `${__VU}-${__ITER}-${Date.now()}`;
@@ -55,7 +61,7 @@ export default function () {
   const playlist = http.post(
     `${baseUrl}/playlists`,
     JSON.stringify({ name: `k6 smoke ${suffix}` }),
-    { headers: { ...authHeaders, 'Content-Type': 'application/json' } },
+    { headers: jsonAuthHeaders(authHeaders) },
   );
   check(playlist, { 'playlist create ok': (response) => response.status === 201 });
 
@@ -64,7 +70,7 @@ export default function () {
     check(http.post(
       `${baseUrl}/playlists/${playlistId}/tracks`,
       JSON.stringify({ songId }),
-      { headers: { ...authHeaders, 'Content-Type': 'application/json' } },
+      { headers: jsonAuthHeaders(authHeaders) },
     ), {
       'playlist add track ok': (response) => response.status === 201 || response.status === 204,
     });

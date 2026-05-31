@@ -6,6 +6,12 @@ x-app-base: &app-base
     - benchmark-network
   cpus: ${DEFAULT_SERVICE_CPUS:-0.50}
   mem_limit: ${DEFAULT_SERVICE_MEMORY:-512m}
+  healthcheck:
+    test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8080/actuator/health | grep -q UP"]
+    interval: 10s
+    timeout: 5s
+    retries: 30
+    start_period: 30s
   volumes:
     - ./config/jwt/public.pem:/run/config/jwt/public.pem:ro
 
@@ -44,7 +50,6 @@ services:
       JWT_PRIVATE_KEY_PATH: ${JWT_PRIVATE_KEY_PATH:-/run/secrets/jwt/private.pem}
       JWT_ISSUER: ${JWT_ISSUER:-benchmark-auth}
       JWT_ACCESS_TOKEN_TTL: ${JWT_ACCESS_TOKEN_TTL:-PT1H}
-      FRONTEND_ALLOWED_ORIGINS: ${FRONTEND_ALLOWED_ORIGINS:-http://localhost:5173,http://127.0.0.1:5173}
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: ${AUTH_DB_POOL_SIZE:-10}
       SPRING_DATASOURCE_HIKARI_CONNECTION_TIMEOUT: ${DB_CONNECTION_TIMEOUT_MS:-2000}
       JAVA_TOOL_OPTIONS: ${AUTH_JAVA_TOOL_OPTIONS:--XX:MaxRAMPercentage=70}
@@ -74,7 +79,6 @@ services:
       CATALOG_INGESTION_ENABLED: ${CATALOG_INGESTION_ENABLED:-true}
       CATALOG_DEFAULT_PAGE_SIZE: ${CATALOG_DEFAULT_PAGE_SIZE:-20}
       CATALOG_MAX_PAGE_SIZE: ${CATALOG_MAX_PAGE_SIZE:-100}
-      FRONTEND_ALLOWED_ORIGINS: ${FRONTEND_ALLOWED_ORIGINS:-http://localhost:5173,http://127.0.0.1:5173}
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: ${CATALOG_DB_POOL_SIZE:-10}
       SPRING_DATASOURCE_HIKARI_CONNECTION_TIMEOUT: ${DB_CONNECTION_TIMEOUT_MS:-2000}
       JAVA_TOOL_OPTIONS: ${CATALOG_JAVA_TOOL_OPTIONS:--XX:MaxRAMPercentage=70}
@@ -98,11 +102,11 @@ services:
       STREAMING_PLAYBACK_EVENTS_TOPIC: ${STREAMING_PLAYBACK_EVENTS_TOPIC:-playback-events}
       STREAMING_SEGMENT_COUNT: ${STREAMING_SEGMENT_COUNT:-5}
       STREAMING_SEGMENT_SIZE_BYTES: ${STREAMING_SEGMENT_SIZE_BYTES:-65536}
-      FRONTEND_ALLOWED_ORIGINS: ${FRONTEND_ALLOWED_ORIGINS:-http://localhost:5173,http://127.0.0.1:5173}
       SPRING_KAFKA_PRODUCER_PROPERTIES_LINGER_MS: ${STREAMING_KAFKA_LINGER_MS:-5}
       SPRING_KAFKA_PRODUCER_PROPERTIES_BATCH_SIZE: ${STREAMING_KAFKA_BATCH_SIZE:-32768}
       SPRING_KAFKA_PRODUCER_PROPERTIES_COMPRESSION_TYPE: ${STREAMING_KAFKA_COMPRESSION:-lz4}
-      SPRING_KAFKA_PRODUCER_PROPERTIES_DELIVERY_TIMEOUT_MS: ${STREAMING_KAFKA_DELIVERY_TIMEOUT_MS:-30000}
+      SPRING_KAFKA_PRODUCER_PROPERTIES_REQUEST_TIMEOUT_MS: ${STREAMING_KAFKA_REQUEST_TIMEOUT_MS:-30000}
+      SPRING_KAFKA_PRODUCER_PROPERTIES_DELIVERY_TIMEOUT_MS: ${STREAMING_KAFKA_DELIVERY_TIMEOUT_MS:-120000}
       JAVA_TOOL_OPTIONS: ${STREAMING_JAVA_TOOL_OPTIONS:--XX:MaxRAMPercentage=70}
     depends_on:
       kafka:
@@ -123,7 +127,6 @@ services:
       SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-benchmark}
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-benchmark}
       JWT_PUBLIC_KEY_PATH: ${JWT_PUBLIC_KEY_PATH:-/run/config/jwt/public.pem}
-      FRONTEND_ALLOWED_ORIGINS: ${FRONTEND_ALLOWED_ORIGINS:-http://localhost:5173,http://127.0.0.1:5173}
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: ${PLAYLIST_DB_POOL_SIZE:-10}
       SPRING_DATASOURCE_HIKARI_CONNECTION_TIMEOUT: ${DB_CONNECTION_TIMEOUT_MS:-2000}
       JAVA_TOOL_OPTIONS: ${PLAYLIST_JAVA_TOOL_OPTIONS:--XX:MaxRAMPercentage=70}
@@ -150,7 +153,6 @@ services:
       SEARCH_INDEX_BATCH_SIZE: ${SEARCH_INDEX_BATCH_SIZE:-500}
       SEARCH_DEFAULT_PAGE_SIZE: ${SEARCH_DEFAULT_PAGE_SIZE:-20}
       SEARCH_MAX_PAGE_SIZE: ${SEARCH_MAX_PAGE_SIZE:-100}
-      FRONTEND_ALLOWED_ORIGINS: ${FRONTEND_ALLOWED_ORIGINS:-http://localhost:5173,http://127.0.0.1:5173}
       JAVA_TOOL_OPTIONS: ${SEARCH_JAVA_TOOL_OPTIONS:--XX:MaxRAMPercentage=70}
     volumes:
       - ./config/jwt/public.pem:/run/config/jwt/public.pem:ro
@@ -180,7 +182,6 @@ services:
       ANALYTICS_DEFAULT_PAGE_SIZE: ${ANALYTICS_DEFAULT_PAGE_SIZE:-20}
       ANALYTICS_MAX_PAGE_SIZE: ${ANALYTICS_MAX_PAGE_SIZE:-100}
       ANALYTICS_GLOBAL_CHART_LIMIT: ${ANALYTICS_GLOBAL_CHART_LIMIT:-50}
-      FRONTEND_ALLOWED_ORIGINS: ${FRONTEND_ALLOWED_ORIGINS:-http://localhost:5173,http://127.0.0.1:5173}
       SPRING_KAFKA_LISTENER_CONCURRENCY: ${ANALYTICS_KAFKA_LISTENER_CONCURRENCY:-1}
       JAVA_TOOL_OPTIONS: ${ANALYTICS_JAVA_TOOL_OPTIONS:--XX:MaxRAMPercentage=70}
     depends_on:
@@ -211,7 +212,6 @@ services:
       RECOMMENDATION_DEFAULT_LIMIT: ${RECOMMENDATION_DEFAULT_LIMIT:-10}
       RECOMMENDATION_MAX_LIMIT: ${RECOMMENDATION_MAX_LIMIT:-50}
       RECOMMENDATION_CACHE_TTL: ${RECOMMENDATION_CACHE_TTL:-PT5M}
-      FRONTEND_ALLOWED_ORIGINS: ${FRONTEND_ALLOWED_ORIGINS:-http://localhost:5173,http://127.0.0.1:5173}
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: ${RECOMMENDATION_DB_POOL_SIZE:-10}
       SPRING_DATASOURCE_HIKARI_CONNECTION_TIMEOUT: ${DB_CONNECTION_TIMEOUT_MS:-2000}
       SPRING_KAFKA_LISTENER_CONCURRENCY: ${RECOMMENDATION_KAFKA_LISTENER_CONCURRENCY:-1}
@@ -265,21 +265,27 @@ services:
       - ./config/nginx/gateway.conf:/etc/nginx/nginx.conf:ro
       - ./config/nginx/proxy_params:/etc/nginx/proxy_params:ro
       - gateway-cache:/var/cache/nginx
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8080/health | grep -q ok"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 5s
     depends_on:
       auth-service:
-        condition: service_started
+        condition: service_healthy
       catalog-service:
-        condition: service_started
+        condition: service_healthy
       streaming-service:
-        condition: service_started
+        condition: service_healthy
       playlist-service:
-        condition: service_started
+        condition: service_healthy
       search-service:
-        condition: service_started
+        condition: service_healthy
       analytics-service:
-        condition: service_started
+        condition: service_healthy
       recommendation-service:
-        condition: service_started
+        condition: service_healthy
 
   nginx-exporter:
     image: nginx/nginx-prometheus-exporter:1.1.0
@@ -292,7 +298,7 @@ services:
     mem_limit: ${EXPORTER_MEMORY:-128m}
     depends_on:
       gateway:
-        condition: service_started
+        condition: service_healthy
 
   auth-db:
     <<: *postgres
@@ -557,7 +563,7 @@ services:
       - ./load-generator/k6:/scripts:ro
     depends_on:
       gateway:
-        condition: service_started
+        condition: service_healthy
 
 networks:
   benchmark-network:

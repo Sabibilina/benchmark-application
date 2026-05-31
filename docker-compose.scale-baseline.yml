@@ -66,21 +66,3 @@ services:
     deploy:
       replicas: 1
 
-  frontend:
-    build:
-      args:
-        VITE_AUTH_API_BASE_URL: ${GATEWAY_PUBLIC_URL:-http://localhost:8080}
-        VITE_CATALOG_API_BASE_URL: ${GATEWAY_PUBLIC_URL:-http://localhost:8080}
-        VITE_STREAMING_API_BASE_URL: ${GATEWAY_PUBLIC_URL:-http://localhost:8080}
-        VITE_PLAYLIST_API_BASE_URL: ${GATEWAY_PUBLIC_URL:-http://localhost:8080}
-        VITE_SEARCH_API_BASE_URL: ${GATEWAY_PUBLIC_URL:-http://localhost:8080}
-        VITE_ANALYTICS_API_BASE_URL: ${GATEWAY_PUBLIC_URL:-http://localhost:8080}
-        VITE_RECOMMENDATION_API_BASE_URL: ${GATEWAY_PUBLIC_URL:-http://localhost:8080}
-    environment:
-      VITE_AUTH_API_BASE_URL: ${GATEWAY_PUBLIC_URL:-http://localhost:8080}
-      VITE_CATALOG_API_BASE_URL: ${GATEWAY_PUBLIC_URL:-http://localhost:8080}
-      VITE_STREAMING_API_BASE_URL: ${GATEWAY_PUBLIC_URL:-http://localhost:8080}
-      VITE_PLAYLIST_API_BASE_URL: ${GATEWAY_PUBLIC_URL:-http://localhost:8080}
-      VITE_SEARCH_API_BASE_URL: ${GATEWAY_PUBLIC_URL:-http://localhost:8080}
-      VITE_ANALYTICS_API_BASE_URL: ${GATEWAY_PUBLIC_URL:-http://localhost:8080}
-      VITE_RECOMMENDATION_API_BASE_URL: ${GATEWAY_PUBLIC_URL:-http://localhost:8080}

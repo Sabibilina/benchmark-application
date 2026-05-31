@@ -98,15 +98,19 @@ Baseline scale profile:
 
 ```powershell
 docker compose -f docker-compose.yml -f docker-compose.scale-baseline.yml up -d --build
-docker compose run --rm k6 run /scripts/smoke.js
+docker compose -f docker-compose.yml -f docker-compose.scale-baseline.yml run --rm k6 run /scripts/smoke.js
 ```
 
 Moderate 100k-user benchmark shape:
 
 ```powershell
-docker compose -f docker-compose.yml -f docker-compose.scale-100k.yml up -d --build --scale streaming-service=6 --scale catalog-service=3 --scale search-service=3 --scale recommendation-service=3 --scale analytics-service=2 --scale auth-service=2 --scale playlist-service=2
-docker compose run --rm -e K6_DURATION=10m -e K6_AUTH_LOGIN_RATE=50 -e K6_CATALOG_SEARCH_ITER_RATE=400 -e K6_STREAMING_SESSION_RATE=2000 -e K6_PLAYLIST_MUTATION_ITER_RATE=20 k6 run /scripts/mixed-user-journey.js
+docker compose -f docker-compose.yml -f docker-compose.scale-100k.yml up -d --build --scale streaming-service=6 --scale catalog-service=3 --scale search-service=3 --scale recommendation-service=3 --scale analytics-service=2 --scale auth-service=4 --scale playlist-service=2
+docker compose -f docker-compose.yml -f docker-compose.scale-100k.yml run --rm -e BENCHMARK_DURATION=10m -e K6_AUTH_LOGIN_RATE=50 -e K6_AUTH_PREALLOCATED_VUS=100 -e K6_AUTH_MAX_VUS=250 -e K6_CATALOG_SEARCH_ITER_RATE=400 -e K6_CATALOG_SEARCH_PREALLOCATED_VUS=300 -e K6_CATALOG_SEARCH_MAX_VUS=700 -e K6_STREAMING_SESSION_RATE=2000 -e K6_STREAMING_PREALLOCATED_VUS=1500 -e K6_STREAMING_MAX_VUS=3000 -e K6_PLAYLIST_MUTATION_ITER_RATE=20 -e K6_PLAYLIST_PREALLOCATED_VUS=100 -e K6_PLAYLIST_MAX_VUS=250 k6 run /scripts/mixed-user-journey.js
 ```
+
+The 100k profile raises the gateway and k6 container resource limits above local defaults. If `dropped_iterations` remains high, the load generator or host is still saturated and the result should not be treated as achieved backend throughput.
+
+To find the current host's sustainable ceiling, run the same 100k traffic mix with `K6_RATE_SCALE=0.25`, then try `0.50`, `0.75`, and `1.0` only while `dropped_iterations` remains zero and thresholds pass.
 
 The 1M target profile is intentionally resource-heavy and models the workload in `SCALABILITY.md`: 1,000,000 registered users, 100,000 DAU, 20,000 peak concurrent users, about 40,000 playback events per second, about 500 auth logins per second, about 4,000 combined catalog/search requests per second, and about 200 playlist mutations per second. Review host capacity before starting it:
 
@@ -118,7 +122,7 @@ Target-shape command:
 
 ```powershell
 docker compose -f docker-compose.yml -f docker-compose.scale-1m.yml up -d --build --scale auth-service=4 --scale catalog-service=8 --scale streaming-service=20 --scale playlist-service=4 --scale search-service=8 --scale analytics-service=8 --scale recommendation-service=8 --scale notification-service=2
-docker compose run --rm -e K6_DURATION=10m -e K6_AUTH_LOGIN_RATE=500 -e K6_CATALOG_SEARCH_ITER_RATE=2000 -e K6_STREAMING_SESSION_RATE=20000 -e K6_PLAYLIST_MUTATION_ITER_RATE=100 k6 run /scripts/mixed-user-journey.js
+docker compose -f docker-compose.yml -f docker-compose.scale-1m.yml run --rm -e BENCHMARK_DURATION=10m -e K6_AUTH_LOGIN_RATE=500 -e K6_CATALOG_SEARCH_ITER_RATE=2000 -e K6_STREAMING_SESSION_RATE=20000 -e K6_PLAYLIST_MUTATION_ITER_RATE=100 k6 run /scripts/mixed-user-journey.js
 ```
 
 See `SCALABILITY.md` for the scaling rationale, instance counts, observability thresholds, and load-test order.
