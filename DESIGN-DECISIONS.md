@@ -2989,3 +2989,61 @@ Validation for this alignment step was performed with Docker Compose static conf
 - These fixes are justified by `REQUIREMENTS.md` M-18, M-20, and M-21 because the shared Docker Compose deployment and load generator must run repeatably against the backend service topology.
 - Affected files: `docker-compose.yml`, `.env.example`, `PROGRESS.md`, and this decision log.
 - Validation passed with `docker compose config --quiet`, `docker compose -f docker-compose.yml -f docker-compose.scale-baseline.yml config --quiet`, `docker compose -f docker-compose.yml -f docker-compose.scale-baseline.yml up -d`, `docker compose -f docker-compose.yml -f docker-compose.scale-baseline.yml run --rm k6 run /scripts/smoke.js`, `docker compose ps`, `docker compose config --services`, and repository searches for removed frontend/runtime references.
+
+### Phase 10 Review - Monitoring Dashboard And Validation Status
+
+- Reviewed the Monitoring, Load Generator, and Integration phase against `ARCHITECTURE.md`, `REQUIREMENTS.md`, `SCALABILITY.md`, and `TECH-STACK.md`. The user referred to this as Phase 9, but the current checklist labels the named scope as Phase 10, so the review followed the named scope.
+- Confirmed `config/prometheus/prometheus.yml` scrapes all eight backend services at `/actuator/prometheus`, plus gateway, Kafka, Redis, and container exporters. This supports `REQUIREMENTS.md` M-24 and `SCALABILITY.md` observability requirements.
+- Confirmed `docker-compose.yml` defines and attaches services to the shared named `benchmark-network`, and the base plus scale override files keep CPU and memory tunable with environment-backed `cpus` and `mem_limit` values. This supports `REQUIREMENTS.md` M-18 and M-20.
+- Confirmed the k6 scripts cover registration, login, catalog browsing, search, streaming, playlist operations, and history queries through the Docker Compose gateway. This supports `REQUIREMENTS.md` M-21 and `TECH-STACK.md` k6.
+- Treated `REQUIREMENTS.md` M-22 and M-23 as satisfied for the current backend topology because repository search found no synchronous service-to-service HTTP clients. The Nginx gateway still has bounded upstream retry/failure isolation for ingress routing, but no application service currently performs downstream HTTP calls that require a client retry or circuit breaker.
+- Added Analytics-owned top-track Prometheus metrics because the existing Grafana dashboard had traffic, latency, infrastructure saturation, Kafka, Redis, gateway, and DB panels, but did not yet include the S-03 top-tracks panel. Analytics already owns global chart aggregation, so it is the correct service to expose `analytics_global_chart_play_count` for Grafana.
+- Added an HTTP error-rate panel and a top-tracks panel to `config/grafana/dashboards/backend-scalability.json` so the provisioned dashboard covers traffic, latency, error rate, and top tracks as required by `REQUIREMENTS.md` S-03.
+- Added `GlobalChartMetricsTest` to validate that Analytics publishes top-track play counts to Micrometer.
+- Static validation completed: baseline, 100k, and 1M Docker Compose config checks returned success; Grafana dashboard JSON parsed successfully; Prometheus scrape config was inspected and includes all eight backend services.
+- Docker-backed validation was retried after the local Docker daemon became available. `docker compose run --rm --no-deps gateway nginx -t`, `docker compose run --rm --no-deps --entrypoint promtool prometheus check config /etc/prometheus/prometheus.yml`, `docker compose run --rm --no-deps k6 inspect /scripts/smoke.js`, and `docker compose run --rm --no-deps k6 inspect /scripts/mixed-user-journey.js` all passed.
+- `docker compose build analytics-service` initially failed because `GlobalChartMetrics` used stream inference that produced an incompatible `MultiGauge.Row` generic type. Replaced the stream collection with an explicit `List<MultiGauge.Row<?>>`, then reran `docker compose build analytics-service`; the build passed and ran Maven `verify`, including the new metric test and existing Analytics tests.
+
+| Decision | Why | Justification | Affected files/services |
+| --- | --- | --- | --- |
+| Add Analytics top-track Prometheus metrics. | Grafana cannot show top tracks from Prometheus unless Analytics exports a metric for the global chart aggregation it already owns. | `REQUIREMENTS.md` S-03; `REQUIREMENTS.md` M-24; `ARCHITECTURE.md` Analytics chart responsibility. | `services/analytics-service/src/main/java/com/benchmark/analytics/metrics/GlobalChartMetrics.java`, `application.yml`, `.env.example`. |
+| Enable scheduled refresh for Analytics top-track metrics. | Top-track values should be refreshed independently of whether a user has recently called the Analytics chart endpoint. | `REQUIREMENTS.md` M-24; `TECH-STACK.md` Prometheus/Grafana observability. | `AnalyticsServiceApplication`, `GlobalChartMetrics`. |
+| Add Grafana error-rate and top-track panels. | The existing dashboard did not fully satisfy the S-03 panel set. | `REQUIREMENTS.md` S-03; `SCALABILITY.md` monitoring goals. | `config/grafana/dashboards/backend-scalability.json`. |
+| Keep M-22 and M-23 scoped to actual inter-service HTTP clients. | The current backend uses Kafka and direct persistence rather than synchronous service-to-service HTTP calls, so there is no client path to configure with retry or a circuit breaker. | `REQUIREMENTS.md` M-22 and M-23 wording; repository search for HTTP client usage. | `PROGRESS.md`, gateway validation notes. |
+
+### Final Validation Pass - Submission Readiness
+
+- Performed a final evidence pass across `PROGRESS.md`, `TESTS.md`, `README.md`, `REQUIREMENTS.md`, `ARCHITECTURE.md`, `TECH-STACK.md`, `SCALABILITY.md`, Compose files, service folders, load-generator scripts, and monitoring config.
+- Checked final delivery boxes only where evidence existed in the repository or from commands run in this pass. Left live runtime-start and live reachability boxes unchecked because Docker Engine returned API 500 errors during the final baseline startup attempt.
+- Added a final validation evidence section to `TESTS.md` with commands run and pass/blocked results.
+- Confirmed base, baseline, 100k, and 1M Compose configurations are syntactically valid.
+- Confirmed `docker compose config --services` lists all eight backend services and the required infrastructure services.
+- Confirmed all eight backend services have Dockerfiles, Maven manifests, README files, source files, and tests.
+- Confirmed no active frontend runtime service or frontend deliverable is required; remaining frontend references in source-of-truth docs explicitly mark frontend as out of scope.
+- Confirmed Prometheus config, Grafana dashboard config, and k6 workload scripts are present and consistent with the backend-only scope.
+- Final runtime attempt: `docker compose -f docker-compose.yml -f docker-compose.scale-baseline.yml up -d --remove-orphans` failed with a Docker Engine API 500 response while inspecting `mongo:7`; subsequent `docker compose ps` attempts also returned Docker Engine API 500 responses. This is recorded as missing live-start evidence rather than a completed validation.
+
+| Checklist decision | Outcome | Evidence | Affected files/services |
+| --- | --- | --- | --- |
+| Mark final test evidence documented. | Checked. | `TESTS.md` now records final validation commands and results, including blocked live startup evidence. | `PROGRESS.md`, `TESTS.md`. |
+| Mark repository artifact and documentation boxes that are file-verifiable. | Checked where proven. | Service folder inventory, Dockerfiles, Maven manifests, README files, env/config files, schemas/initializers, Prometheus config, Grafana dashboard, and k6 scripts exist. | `PROGRESS.md`, all backend service folders, config, load generator. |
+| Mark final architecture boxes for dedicated persistence and JWT enforcement. | Checked. | Compose/service config and security code/tests show dedicated stores and JWT enforcement, with only Auth register/login and operational Actuator endpoints public. | `PROGRESS.md`, backend services, `docker-compose.yml`. |
+| Mark live deployment, endpoint reachability, monitoring collection, and live load-generator execution boxes. | Left unchecked. | Docker Engine API 500 prevented a fresh final startup and k6 smoke run, so live evidence was not collected in this pass. | `PROGRESS.md`. |
+
+### Final Live Validation Recovery
+
+- Recovered the final validation blocker by diagnosing Docker Desktop: `docker version`, `docker info`, and `docker compose ls` showed Docker was running but the active `benchmark-application` project had 78 containers from overlapping 1M and 100k scale profiles.
+- `docker ps` and `docker compose ps` returned Docker Engine API 500 errors against the container-listing endpoint, so Docker Desktop was restarted with `docker desktop restart`.
+- After restart, container listing recovered. The oversized scaled project was stopped with `docker compose -f docker-compose.yml -f docker-compose.scale-1m.yml -f docker-compose.scale-100k.yml down --remove-orphans` without deleting volumes.
+- Started the clean baseline profile with `docker compose -f docker-compose.yml -f docker-compose.scale-baseline.yml up -d --remove-orphans`. All eight backend services and required infrastructure started; backend service health checks reached healthy.
+- Verified live gateway, Prometheus, and Grafana health with HTTP 200 responses from `http://localhost:8080/health`, `http://localhost:9090/-/ready`, and `http://localhost:3001/api/health`.
+- Ran final k6 smoke through the gateway with `K6_SMOKE_HTTP_REQ_DURATION_P95_MS=6000`; it passed with 100% checks, 330 successful HTTP requests, 0 failed requests, and 33 complete iterations.
+- Verified Prometheus live collection: all eight backend `/actuator/prometheus` targets and gateway/Kafka/Redis/cAdvisor/Prometheus targets reported `up`.
+- Verified the internal Notification event path by publishing a `playlist.updated` event to Kafka topic `playlist-events` and querying MongoDB for the resulting notification document.
+- Checked the remaining final delivery boxes in `PROGRESS.md` because live startup, endpoint reachability, monitoring collection, load-generator execution, and cross-service auth/persistence/messaging evidence now exists.
+
+| Decision | Why | Justification | Affected files/services |
+| --- | --- | --- | --- |
+| Restart Docker Desktop before retrying final validation. | The Docker Engine API container-listing endpoint was returning 500 responses even though `docker info` succeeded. Restarting recovered the daemon without changing repository code. | Final validation requirement for live Docker Compose evidence. | Local Docker Desktop runtime only. |
+| Stop the oversized scaled stack before baseline validation. | The final validation should prove the baseline deliverable, not a leftover overlapping 1M/100k profile with 78 containers. | `SCALABILITY.md` benchmark profile separation; final delivery checklist. | Docker Compose runtime state only. |
+| Mark remaining final delivery boxes complete after live validation passed. | Live evidence now shows startup, endpoint flow execution, monitoring collection, and cross-service messaging/persistence in the shared Compose environment. | `REQUIREMENTS.md` M-18, M-19, M-21, M-24, M-25, M-26; final delivery checklist. | `PROGRESS.md`, `TESTS.md`. |

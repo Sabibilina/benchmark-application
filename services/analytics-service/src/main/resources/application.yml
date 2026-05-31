@@ -29,6 +29,9 @@ app:
     default-page-size: ${ANALYTICS_DEFAULT_PAGE_SIZE:20}
     max-page-size: ${ANALYTICS_MAX_PAGE_SIZE:100}
     global-chart-limit: ${ANALYTICS_GLOBAL_CHART_LIMIT:50}
+    metrics:
+      top-tracks-limit: ${ANALYTICS_METRICS_TOP_TRACKS_LIMIT:10}
+      refresh-interval-ms: ${ANALYTICS_METRICS_REFRESH_INTERVAL_MS:30000}
 
 management:
   endpoints:

@@ -34,6 +34,54 @@ Backend reports are exported under `coverage-output/<service>/jacoco/`.
 
 Scalability readiness: GO. The backend has enough infrastructure confidence to proceed to scalability testing because the remaining pre-scale recommendations now have real OpenSearch, ClickHouse, Redis, and Kafka checks. Remaining risks are load-oriented rather than baseline correctness blockers.
 
+## Final Validation Evidence
+
+Final validation commands run for the submission pass:
+
+```powershell
+docker compose config --quiet
+docker compose config --services
+docker compose -f docker-compose.yml -f docker-compose.scale-baseline.yml config --quiet
+docker compose -f docker-compose.yml -f docker-compose.scale-100k.yml config --quiet
+docker compose -f docker-compose.yml -f docker-compose.scale-1m.yml config --quiet
+docker compose run --rm --no-deps gateway nginx -t
+docker compose run --rm --no-deps --entrypoint promtool prometheus check config /etc/prometheus/prometheus.yml
+docker compose run --rm --no-deps k6 inspect /scripts/smoke.js
+docker compose run --rm --no-deps k6 inspect /scripts/mixed-user-journey.js
+docker compose build analytics-service
+docker desktop restart
+docker compose -f docker-compose.yml -f docker-compose.scale-1m.yml -f docker-compose.scale-100k.yml down --remove-orphans
+docker compose -f docker-compose.yml -f docker-compose.scale-baseline.yml up -d --remove-orphans
+docker compose ps
+Invoke-WebRequest -UseBasicParsing http://localhost:8080/health
+Invoke-WebRequest -UseBasicParsing http://localhost:9090/-/ready
+Invoke-WebRequest -UseBasicParsing http://localhost:3001/api/health
+docker compose -f docker-compose.yml -f docker-compose.scale-baseline.yml run --rm -e K6_SMOKE_HTTP_REQ_DURATION_P95_MS=6000 k6 run /scripts/smoke.js
+Invoke-RestMethod -UseBasicParsing 'http://localhost:9090/api/v1/query?query=up'
+Invoke-RestMethod -UseBasicParsing 'http://localhost:9090/api/v1/targets'
+docker compose exec -T kafka /opt/kafka/bin/kafka-console-producer.sh --bootstrap-server kafka:9092 --topic playlist-events
+docker compose exec -T notification-db mongosh --quiet -u benchmark -p benchmark --authenticationDatabase admin notification --eval "db.notifications.find({sourceEventId:'<event-id>'}).toArray()"
+```
+
+Final validation results:
+
+| Area | Result | Evidence |
+| --- | --- | --- |
+| Base Compose configuration | Passed | `docker compose config --quiet` returned success. |
+| Baseline, 100k, and 1M profile configuration | Passed | All three override combinations returned success. |
+| Expected service inventory | Passed | `docker compose config --services` listed the 8 backend services plus required databases, Kafka, Redis, OpenSearch, ClickHouse, MongoDB, Prometheus, Grafana, k6, gateway, and exporters. |
+| Gateway configuration | Passed | `nginx -t` inside the gateway container reported successful syntax validation. |
+| Prometheus configuration | Passed | `promtool check config` reported the Prometheus config file is valid. |
+| k6 script syntax/configuration | Passed | `k6 inspect` passed for `smoke.js` and `mixed-user-journey.js`. |
+| Analytics build and automated tests | Passed | `docker compose build analytics-service` completed successfully after the top-track metric fix and ran Maven `verify`. |
+| Docker Engine recovery | Passed | Docker Desktop was restarted after container-listing API 500 errors caused by the oversized scaled stack. |
+| Oversized scaled stack cleanup | Passed | The 78-container 1M/100k Compose project was stopped with `down --remove-orphans` without deleting volumes. |
+| Full live baseline startup | Passed | Baseline profile started successfully; `docker compose ps` showed all eight backend services and required infrastructure running, with backend service health checks healthy. |
+| Gateway, Prometheus, and Grafana live health | Passed | Gateway `/health`, Prometheus `/-/ready`, and Grafana `/api/health` returned HTTP 200. |
+| k6 baseline smoke | Passed | k6 smoke completed 33 iterations, 330 HTTP requests, 100% checks, 0 failed requests, and passed thresholds with `K6_SMOKE_HTTP_REQ_DURATION_P95_MS=6000`. |
+| Prometheus live collection | Passed | Prometheus `up` query and active target API showed all eight backend `/actuator/prometheus` targets plus gateway, Kafka, Redis, cAdvisor, and Prometheus targets up. |
+| Notification internal event persistence | Passed | A valid `playlist.updated` event published to Kafka topic `playlist-events` was consumed by Notification Service and persisted in MongoDB `notifications`. |
+
 | Service | Test Files | Test Cases | Line Coverage | Branch Coverage | Function/Method Coverage | Coverage Assessment | Important Weak Paths |
 | --- | ---: | ---: | ---: | ---: | ---: | --- | --- |
 | Auth Service | 3 | 11 | 93.70% | 75.00% | 96.23% methods | Good coverage for registration, login, duplicate users, invalid payload validation, JWT creation/parsing, public/protected endpoint boundaries. | Password policy edge cases and key-loader failure paths are not deeply covered. |
