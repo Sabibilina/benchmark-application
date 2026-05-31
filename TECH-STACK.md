@@ -176,9 +176,9 @@ Java + Spring Boot is the preferred backend stack for all services for the follo
 - Notification data is document-like and event-derived.
 - MongoDB keeps the persistence model simple and flexible for this internal service.
 
-## 5. Frontend Scope
+## 5. UI Scope
 
-Frontend UI work is intentionally out of scope for this version. No React, Vite, browser UI, frontend runtime container, frontend tests, frontend health endpoint, or client-side metrics stack is required. The implementation scope remains backend microservices, infrastructure, observability, load generation, and Docker Compose-based scalability benchmarking.
+Frontend work is intentionally out of scope for this version. No client framework, client build tool, frontend UI, frontend runtime container, frontend tests, frontend health endpoint, or frontend metrics stack is required. The implementation scope remains backend microservices, infrastructure, observability, load generation, and Docker Compose-based scalability benchmarking.
 ## 6. Cross-Cutting Technical Decisions
 
 ### API and Service Communication

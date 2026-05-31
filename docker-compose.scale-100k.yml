@@ -1,13 +1,13 @@
 services:
   auth-service:
     ports: !reset []
-    cpus: ${AUTH_SERVICE_CPUS:-1.00}
+    cpus: ${AUTH_SERVICE_CPUS:-1.50}
     mem_limit: ${AUTH_SERVICE_MEMORY:-768m}
     environment:
-      SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: ${AUTH_DB_POOL_SIZE:-8}
+      SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: ${AUTH_DB_POOL_SIZE:-12}
       JAVA_TOOL_OPTIONS: ${AUTH_JAVA_TOOL_OPTIONS:--XX:MaxRAMPercentage=70}
     deploy:
-      replicas: 2
+      replicas: 4
 
   catalog-service:
     ports: !reset []
@@ -111,38 +111,11 @@ services:
       - --maxmemory-policy
       - ${REDIS_MAXMEMORY_POLICY:-allkeys-lru}
 
-  frontend:
-    build:
-      args:
-        VITE_AUTH_API_BASE_URL: ${GATEWAY_PUBLIC_URL:-http://localhost:8080}
-        VITE_CATALOG_API_BASE_URL: ${GATEWAY_PUBLIC_URL:-http://localhost:8080}
-        VITE_STREAMING_API_BASE_URL: ${GATEWAY_PUBLIC_URL:-http://localhost:8080}
-        VITE_PLAYLIST_API_BASE_URL: ${GATEWAY_PUBLIC_URL:-http://localhost:8080}
-        VITE_SEARCH_API_BASE_URL: ${GATEWAY_PUBLIC_URL:-http://localhost:8080}
-        VITE_ANALYTICS_API_BASE_URL: ${GATEWAY_PUBLIC_URL:-http://localhost:8080}
-        VITE_RECOMMENDATION_API_BASE_URL: ${GATEWAY_PUBLIC_URL:-http://localhost:8080}
-    environment:
-      VITE_AUTH_API_BASE_URL: ${GATEWAY_PUBLIC_URL:-http://localhost:8080}
-      VITE_CATALOG_API_BASE_URL: ${GATEWAY_PUBLIC_URL:-http://localhost:8080}
-      VITE_STREAMING_API_BASE_URL: ${GATEWAY_PUBLIC_URL:-http://localhost:8080}
-      VITE_PLAYLIST_API_BASE_URL: ${GATEWAY_PUBLIC_URL:-http://localhost:8080}
-      VITE_SEARCH_API_BASE_URL: ${GATEWAY_PUBLIC_URL:-http://localhost:8080}
-      VITE_ANALYTICS_API_BASE_URL: ${GATEWAY_PUBLIC_URL:-http://localhost:8080}
-      VITE_RECOMMENDATION_API_BASE_URL: ${GATEWAY_PUBLIC_URL:-http://localhost:8080}
-
   gateway:
-    cpus: ${GATEWAY_CPUS:-1.50}
-    mem_limit: ${GATEWAY_MEMORY:-384m}
+    cpus: ${GATEWAY_CPUS:-2.00}
+    mem_limit: ${GATEWAY_MEMORY:-1g}
 
   k6:
-    cpus: ${K6_CPUS:-2.00}
-    mem_limit: ${K6_MEMORY:-2g}
-    environment:
-      K6_DURATION: ${K6_DURATION:-10m}
-      K6_USER_POOL_SIZE: ${K6_USER_POOL_SIZE:-1000}
-      K6_PREALLOCATED_VUS: ${K6_PREALLOCATED_VUS:-2000}
-      K6_MAX_VUS: ${K6_MAX_VUS:-3000}
-      K6_AUTH_LOGIN_RATE: ${K6_AUTH_LOGIN_RATE:-50}
-      K6_CATALOG_SEARCH_ITER_RATE: ${K6_CATALOG_SEARCH_ITER_RATE:-400}
-      K6_STREAMING_SESSION_RATE: ${K6_STREAMING_SESSION_RATE:-2000}
-      K6_PLAYLIST_MUTATION_ITER_RATE: ${K6_PLAYLIST_MUTATION_ITER_RATE:-20}
+    cpus: ${K6_CPUS:-4.00}
+    mem_limit: ${K6_MEMORY:-6g}
+

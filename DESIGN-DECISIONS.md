@@ -1,4 +1,4 @@
-﻿# Design Decisions
+# Design Decisions
 
 This file records planning decisions, generation decisions, review decisions, corrections, assumptions, validation narratives, and implementation rationale moved from PROGRESS.md.
 
@@ -61,7 +61,7 @@ benchmark-application/
 The planned Compose file should define:
 
 * Eight application services: `auth-service`, `catalog-service`, `streaming-service`, `playlist-service`, `search-service`, `analytics-service`, `recommendation-service`, and `notification-service`.
-* Frontend service: `frontend`.
+* frontend service: `frontend`.
 * Messaging infrastructure: Kafka, plus any Kafka runtime dependency required by the selected Kafka container image.
 * Dedicated persistence components:
   * `auth-db` using PostgreSQL.
@@ -125,7 +125,7 @@ services/<service-name>/
 
 Service-specific database initialization or migration files should live either under the service directory when owned by application startup, or under `infrastructure/<database>/<service>/` when mounted directly into infrastructure containers during local Compose startup. The final choice should be made during each service's generation phase based on the service's migration approach.
 
-The frontend directory should use the React + TypeScript + Vite stack from `TECH-STACK.md`:
+The frontend directory used the former frontend stack from `TECH-STACK.md`:
 
 ```text
 frontend/
@@ -215,7 +215,7 @@ Because this step is plan-only, validation is limited to document and plan verif
 | --- | --- | --- | --- |
 | Use inert long-running placeholder containers for application services and frontend. | The shared topology must be runnable before service logic exists, while avoiding fake endpoint or business behavior. | User instruction not to implement service business logic; `PROGRESS.md` Phase 0 Generate step. | `services/*/Dockerfile`, `frontend/Dockerfile`, `docker-compose.yml`. |
 | Use `eclipse-temurin:21-jre-alpine` for backend placeholders. | The backend implementation stack is Java 21, so placeholders should align with the future runtime without adding Spring Boot code yet. | `TECH-STACK.md` Shared Backend Standard. | All backend placeholder Dockerfiles. |
-| Use `node:20-alpine` for the frontend placeholder. | The frontend will later use React, TypeScript, and Vite, so a Node runtime placeholder fits the planned frontend toolchain. | `TECH-STACK.md` Frontend Stack. | `frontend/Dockerfile`. |
+| Use `node:20-alpine` for the frontend placeholder. | The frontend will later use client framework, TypeScript, and client build tool, so a Node runtime placeholder fits the planned frontend toolchain. | `TECH-STACK.md` Frontend Stack. | `frontend/Dockerfile`. |
 | Reserve Spring Boot source and test directory layouts with `.gitkeep` files. | Later service phases need a consistent Maven/Spring structure without adding source code in Phase 0. | `TECH-STACK.md` Shared Backend Standard; user instruction not to implement service business logic yet. | `services/*/src/main/java`, `services/*/src/main/resources`, `services/*/src/test/java`. |
 | Define every required service in `docker-compose.yml` from the start. | The shared deployment environment must start all eight application services and required infrastructure. | `REQUIREMENTS.md` M-19. | `docker-compose.yml`. |
 | Use `apache/kafka:3.7.0` for the Kafka container. | The planned `bitnami/kafka:3.7` tag was not available from Docker Hub during validation; `apache/kafka:3.7.0` is available and keeps Kafka aligned with the selected technology. | `TECH-STACK.md` Messaging choice: Apache Kafka. | `docker-compose.yml`, Kafka service. |
@@ -1775,7 +1775,7 @@ Planned service variables:
 | Use OpenSearch as the dedicated Search persistence/index layer. | The Search Service needs full-text matching and structured filters, and the stack document selects OpenSearch for this service. | `TECH-STACK.md` Search backend; `ARCHITECTURE.md` Search persistence and indexing. | `search-opensearch`, `services/search-service`, `docker-compose.yml`. |
 | Protect `GET /search` with local JWT validation using the shared public key. | All protected endpoints require JWT and only Auth register/login may be public. | `REQUIREMENTS.md` M-25. | `SecurityConfig`, `PemKeyLoader`, `.env.example`, integration tests, Compose key mount. |
 | Expose only the required `GET /search` application endpoint in this phase. | The source documents require song search and filters; autocomplete and expanded result types are optional. | `ARCHITECTURE.md` Search Service; `REQUIREMENTS.md` M-12, C-05, C-06. | `SearchController`, DTOs, tests. |
-| Exclude autocomplete, expanded artist/album/playlist search, and explicit fuzzy/faceted endpoints from this phase. | These are could-have or optional features and are not required for the minimum Search phase. | `REQUIREMENTS.md` C-04, C-05, C-06; `ARCHITECTURE.md` optional Search behavior. | No optional Search endpoints or UI-specific APIs. |
+| Exclude autocomplete, expanded artist/album/playlist search, and explicit fuzzy/faceted endpoints from this phase. | These are could-have or optional features and are not required for the minimum Search phase. | `REQUIREMENTS.md` C-04, C-05, C-06; `ARCHITECTURE.md` optional Search behavior. | No optional Search endpoints or frontend-specific APIs. |
 | Populate the OpenSearch index from a read-only mounted catalog CSV at startup. | The documents require use of the Kaggle dataset but do not define a Search synchronization API or event contract. CSV startup indexing keeps the phase runnable without sharing the Catalog database. | `ARCHITECTURE.md` Catalog dataset requirements; `REQUIREMENTS.md` M-12 and M-26; missing synchronization detail recorded above. | `SearchIndexInitializer`, `CatalogCsvReader`, `application.yml`, `.env.example`, `docker-compose.yml`, README. |
 | Treat the OpenSearch index as derived data, not the song metadata system of record. | Catalog owns song metadata persistence, while Search owns search-specific indexes. | `ARCHITECTURE.md` Catalog and Search service boundaries; `REQUIREMENTS.md` M-26. | Search index, Search README, no Catalog DB access. |
 | Do not add Kafka messaging to Search in this phase. | The source documents do not define Search event production or consumption. | `ARCHITECTURE.md` Search Service; `TECH-STACK.md` Messaging Infrastructure per Service. | `pom.xml`, `application.yml`, no Search Kafka config. |
@@ -2905,14 +2905,14 @@ Reviewed the Notification Service implementation against `ARCHITECTURE.md`, `REQ
 # Phase 9 Scope Change - Frontend Removed From Active Application Scope
 
 ## Decision
-Frontend UI work is no longer part of the active application scope for this version. The repository now focuses on backend services, infrastructure, observability, load generation, and scalability benchmarking. Any earlier frontend planning or implementation notes in this historical decision log are superseded by this scope decision.
+Frontend work is no longer part of the active application scope for this version. The repository now focuses on backend services, infrastructure, observability, load generation, and scalability benchmarking. Any earlier frontend planning or implementation notes in this historical decision log are superseded by this scope decision.
 
 ## Why
-The current phase explicitly requested removal of frontend functionality and frontend runtime artifacts so the project can focus only on backend behavior, infrastructure, and scalability. This also prevents Docker Compose, validation, and final delivery criteria from requiring a browser UI or frontend tests.
+The current phase explicitly requested removal of frontend functionality and frontend runtime artifacts so the project can focus only on backend behavior, infrastructure, and scalability. This also prevents Docker Compose, validation, and final delivery criteria from requiring a frontend UI or frontend tests.
 
 ## Justification
-- `REQUIREMENTS.md` now places frontend UI work and frontend-specific validation in the "Will not have" scope.
-- `ARCHITECTURE.md` now defines frontend UI work as out of scope.
+- `REQUIREMENTS.md` now places Frontend work and Frontend validation in the "Will not have" scope.
+- `ARCHITECTURE.md` now defines Frontend work as out of scope.
 - `TECH-STACK.md` now states that no frontend stack is required for this version.
 
 ## Affected Files And Services
@@ -2927,7 +2927,7 @@ The current phase explicitly requested removal of frontend functionality and fro
 - `SCALABILITY.md` was referenced by the task but is not present in the current repository baseline, so no scalability document could be updated in this phase.
 - Historical frontend entries that remain in this decision log are retained as past project history and are superseded by this section.
 
-### Validation Update - Frontend Scope Removal
+### Validation Update - UI Scope Removal
 
 - `docker compose config --quiet` passed after removing the frontend service. Docker emitted host config access warnings, but Compose returned success.
 - `docker compose config --services` listed backend services and infrastructure only; no `frontend` service is present.
@@ -2968,3 +2968,24 @@ The existing Docker Compose scalability plan described a 1,000,000-user directio
 Validation for this alignment step was performed with Docker Compose static configuration checks for the base file and scale overrides, plus k6 script syntax inspection through the k6 container where available.
 
 `docker compose run --rm k6 inspect ...` could not complete because the local Docker daemon pipe was unavailable in the execution environment. The k6 scripts were still syntax-checked with the bundled Node runtime, and all Compose files passed static configuration validation.
+### Follow-Up Cleanup - Removed UI Scope References From Scale Artifacts
+
+- Removed obsolete UI service override blocks from `docker-compose.scale-baseline.yml`, `docker-compose.scale-100k.yml`, and `docker-compose.scale-1m.yml`.
+- Removed obsolete UI-origin CORS environment variables from `docker-compose.yml`.
+- Updated `SCALABILITY.md` so the gateway and k6 load generator are described as backend benchmark traffic only.
+- Updated `COST-AWARE-PROMPTS.md`, `ARCHITECTURE.md`, `REQUIREMENTS.md`, `TECH-STACK.md`, `PROGRESS.md`, and this decision log so the removed UI scope is not referenced by its prior service name or toolchain.
+- Validation searches found no remaining references to the removed frontend service name, former JavaScript frontend toolchain, removed frontend port, or frontend-specific environment variable prefixes outside irrelevant substring matches in paths such as `WORKDIR /workspace`.
+
+### Validation Fix - k6 Script Compatibility
+
+- During the clean-removal validation pass, `docker compose run --rm --no-deps k6 inspect /scripts/smoke.js` failed because k6 rejected JavaScript object spread syntax in request-header objects.
+- Replaced object spread usage in `load-generator/k6/smoke.js` and `load-generator/k6/mixed-user-journey.js` with `Object.assign(...)`, preserving the same request headers while using syntax accepted by the k6 runtime.
+- Re-ran `k6 inspect` for both `smoke.js` and `mixed-user-journey.js`; both commands passed.
+
+### Validation Fix - Baseline Scale Smoke Startup And Streaming Kafka Producer
+
+- A baseline run with `docker compose run --rm k6 run /scripts/smoke.js` initially failed all checks because the k6 one-off container could begin traffic before the gateway and backend services were ready. The gateway now waits for healthy backend services, k6 waits for a healthy gateway, and application/gateway health checks use explicit IPv4 loopback addresses inside their own containers.
+- After readiness was fixed, the remaining k6 failures were limited to Streaming endpoints returning 500 because Kafka rejected the producer config: `delivery.timeout.ms` was not greater than or equal to `linger.ms + request.timeout.ms`. The Streaming producer now exposes an explicit request timeout and uses a 120000 ms delivery timeout default.
+- These fixes are justified by `REQUIREMENTS.md` M-18, M-20, and M-21 because the shared Docker Compose deployment and load generator must run repeatably against the backend service topology.
+- Affected files: `docker-compose.yml`, `.env.example`, `PROGRESS.md`, and this decision log.
+- Validation passed with `docker compose config --quiet`, `docker compose -f docker-compose.yml -f docker-compose.scale-baseline.yml config --quiet`, `docker compose -f docker-compose.yml -f docker-compose.scale-baseline.yml up -d`, `docker compose -f docker-compose.yml -f docker-compose.scale-baseline.yml run --rm k6 run /scripts/smoke.js`, `docker compose ps`, `docker compose config --services`, and repository searches for removed frontend/runtime references.

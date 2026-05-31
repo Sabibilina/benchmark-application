@@ -62,7 +62,7 @@ Decisions:
 - **Redis max-memory and eviction policy are now explicit.** This makes recommendation cache behavior repeatable and prevents hidden memory growth during long benchmark runs.
 - **Prometheus now scrapes gateway, Kafka, Redis, and container metrics in addition to Spring Boot metrics.** This gives the minimum signal needed to decide whether the next bottleneck is request routing, service code, Kafka lag, Redis cache pressure, or container saturation.
 - **A Grafana backend scalability dashboard was provisioned.** It focuses on request rate, p95 latency, container CPU, JVM heap, Kafka lag, Redis hit/miss behavior, gateway connections, and Hikari active connections.
-- **k6 scripts now target the gateway by default.** This keeps load-test traffic on the same path real users and the frontend should use during scaled benchmark runs.
+- **k6 scripts now target the gateway by default.** This keeps load-test traffic on the same gateway path used during scaled benchmark runs.
 - **Database index migrations were added only for existing hot paths.** Catalog gets filter/sort indexes, Playlist gets owner/track lookup indexes, and Recommendation gets positive interaction lookup indexes. No new behavior was invented.
 
 Validation performed:
@@ -77,14 +77,14 @@ Recommended first benchmark command:
 
 ```powershell
 docker compose -f docker-compose.yml -f docker-compose.scale-baseline.yml up -d --build
-docker compose run --rm k6 run /scripts/smoke.js
+docker compose -f docker-compose.yml -f docker-compose.scale-baseline.yml run --rm k6 run /scripts/smoke.js
 ```
 
 Recommended scaled benchmark command shape:
 
 ```powershell
-docker compose -f docker-compose.yml -f docker-compose.scale-100k.yml up -d --build --scale streaming-service=6 --scale catalog-service=3 --scale search-service=3 --scale recommendation-service=3 --scale analytics-service=2 --scale auth-service=2 --scale playlist-service=2
-docker compose run --rm -e K6_DURATION=10m -e K6_AUTH_LOGIN_RATE=50 -e K6_CATALOG_SEARCH_ITER_RATE=400 -e K6_STREAMING_SESSION_RATE=2000 -e K6_PLAYLIST_MUTATION_ITER_RATE=20 k6 run /scripts/mixed-user-journey.js
+docker compose -f docker-compose.yml -f docker-compose.scale-100k.yml up -d --build --scale streaming-service=6 --scale catalog-service=3 --scale search-service=3 --scale recommendation-service=3 --scale analytics-service=2 --scale auth-service=4 --scale playlist-service=2
+docker compose -f docker-compose.yml -f docker-compose.scale-100k.yml run --rm -e BENCHMARK_DURATION=10m -e K6_AUTH_LOGIN_RATE=50 -e K6_AUTH_PREALLOCATED_VUS=100 -e K6_AUTH_MAX_VUS=250 -e K6_CATALOG_SEARCH_ITER_RATE=400 -e K6_CATALOG_SEARCH_PREALLOCATED_VUS=300 -e K6_CATALOG_SEARCH_MAX_VUS=700 -e K6_STREAMING_SESSION_RATE=2000 -e K6_STREAMING_PREALLOCATED_VUS=1500 -e K6_STREAMING_MAX_VUS=3000 -e K6_PLAYLIST_MUTATION_ITER_RATE=20 -e K6_PLAYLIST_PREALLOCATED_VUS=100 -e K6_PLAYLIST_MAX_VUS=250 k6 run /scripts/mixed-user-journey.js
 ```
 
 ## Assumptions
@@ -121,7 +121,7 @@ A reverse proxy layer is recommended before scaling service replicas with Docker
 
 Role:
 
-- expose stable external ports for k6 and the frontend
+- expose a stable external port for k6
 - route `/auth`, `/catalog`, `/stream`, `/playlists`, `/search`, `/analytics`, and `/recommend` to internal service replica groups
 - provide round-robin load distribution across `docker compose up --scale` replicas
 - centralize request logging, timeouts, body size limits, and simple rate limiting
@@ -394,7 +394,7 @@ Pressure points:
 
 - playlist event fan-in
 - notification insert rate
-- unread notification query if frontend inbox is enabled later
+- unread notification query if a protected notification read API is enabled later
 
 Optimizations:
 
@@ -938,17 +938,21 @@ Example commands, non-final:
 
 ```powershell
 docker compose -f docker-compose.yml -f docker-compose.scale-100k.yml up -d --scale streaming-service=6 --scale search-service=3 --scale catalog-service=3
-docker compose run --rm k6 run /scripts/mixed-user-journey.js
+docker compose -f docker-compose.yml -f docker-compose.scale-100k.yml run --rm k6 run /scripts/mixed-user-journey.js
 ```
 
 Target-shape command, resource-heavy:
 
 ```powershell
 docker compose -f docker-compose.yml -f docker-compose.scale-1m.yml up -d --build --scale auth-service=4 --scale catalog-service=8 --scale streaming-service=20 --scale playlist-service=4 --scale search-service=8 --scale analytics-service=8 --scale recommendation-service=8 --scale notification-service=2
-docker compose run --rm -e K6_DURATION=10m -e K6_AUTH_LOGIN_RATE=500 -e K6_CATALOG_SEARCH_ITER_RATE=2000 -e K6_STREAMING_SESSION_RATE=20000 -e K6_PLAYLIST_MUTATION_ITER_RATE=100 k6 run /scripts/mixed-user-journey.js
+docker compose -f docker-compose.yml -f docker-compose.scale-1m.yml run --rm -e BENCHMARK_DURATION=10m -e K6_AUTH_LOGIN_RATE=500 -e K6_CATALOG_SEARCH_ITER_RATE=2000 -e K6_STREAMING_SESSION_RATE=20000 -e K6_PLAYLIST_MUTATION_ITER_RATE=100 k6 run /scripts/mixed-user-journey.js
 ```
 
 In the target k6 command, each catalog/search iteration issues one catalog request and one search request, so 2,000 iterations per second models about 4,000 combined catalog/search requests per second. Each streaming iteration starts a stream and then emits an ended or skipped terminal event, so 20,000 streaming iterations per second models about 40,000 playback events per second. Each playlist mutation iteration creates a playlist and adds a track, so 100 iterations per second models about 200 playlist mutations per second.
+
+For any scaled profile, treat `dropped_iterations` as a load-generator capacity signal, not backend throughput. A valid benchmark run should have near-zero dropped iterations. If k6 reports `Insufficient VUs`, raise the scenario-specific VU limits for the saturated scenario before interpreting service latency or throughput. Playback-heavy runs usually need the largest `K6_STREAMING_PREALLOCATED_VUS` and `K6_STREAMING_MAX_VUS` values. The 100k and 1M scale overrides also raise k6 and gateway container CPU/memory limits, because the base local defaults are intentionally too small for thousands of VUs. The 100k profile gives Auth more replicas and CPU than the first attempt because password verification is CPU-bound, and it lets Nginx cache protected Catalog reads because those responses are user-neutral.
+
+When a profile fails with high dropped iterations, do not keep raising k6 VUs as the first response. Use `K6_RATE_SCALE` to run the same traffic mix at lower fractions of the target shape, then increase toward `1.0` only while `dropped_iterations` remains zero and latency/error thresholds pass. This distinguishes the Docker host's sustainable throughput from the aspirational target shape.
 
 ## Risks And Trade-Offs
 
