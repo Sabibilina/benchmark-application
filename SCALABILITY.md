@@ -61,7 +61,7 @@ Decisions:
 - **Bounded DB and Kafka client tuning was added through environment variables.** Hikari pool sizes, connection timeouts, Kafka producer batching, listener concurrency, and JVM memory percentages are now profile-tunable without code changes.
 - **Redis max-memory and eviction policy are now explicit.** This makes recommendation cache behavior repeatable and prevents hidden memory growth during long benchmark runs.
 - **Prometheus now scrapes gateway, Kafka, Redis, and container metrics in addition to Spring Boot metrics.** This gives the minimum signal needed to decide whether the next bottleneck is request routing, service code, Kafka lag, Redis cache pressure, or container saturation.
-- **A Grafana backend scalability dashboard was provisioned.** It focuses on request rate, p95 latency, container CPU, JVM heap, Kafka lag, Redis hit/miss behavior, gateway connections, and Hikari active connections.
+- **A Grafana backend scalability dashboard was provisioned.** It focuses on request rate, p95 latency, error rate, top tracks, container CPU, JVM heap, Kafka lag, Redis hit/miss behavior, gateway connections, and Hikari active connections.
 - **k6 scripts now target the gateway by default.** This keeps load-test traffic on the same gateway path used during scaled benchmark runs.
 - **Database index migrations were added only for existing hot paths.** Catalog gets filter/sort indexes, Playlist gets owner/track lookup indexes, and Recommendation gets positive interaction lookup indexes. No new behavior was invented.
 
@@ -976,7 +976,7 @@ The system is ready to claim a successful 1M-user Docker benchmark only when:
 - k6 scripts cover the required flows from `REQUIREMENTS.md`.
 - all traffic enters through the Compose reverse proxy.
 - Prometheus captures service, JVM, container, Kafka, Redis, OpenSearch, ClickHouse, PostgreSQL, and MongoDB metrics.
-- Grafana dashboards show latency, error rate, saturation, and queue lag.
+- Grafana dashboards show latency, error rate, top tracks, saturation, and queue lag.
 - Streaming-heavy and read-heavy tests pass separately before the mixed test.
 - Kafka consumer lag stabilizes instead of growing without bound.
 - p95/p99 latency targets are defined and met for each critical endpoint.
