@@ -128,7 +128,7 @@ The Docker build runs the Analytics Maven test suite, including the new embedded
 
 Useful manual smoke command:
 
-```powershell
+```bash
 docker compose up -d --build kafka analytics-db analytics-service
 docker compose logs --no-color --tail=100 analytics-service
 ```
@@ -147,7 +147,7 @@ docker compose logs --no-color --tail=100 analytics-service
 
 The baseline scale smoke command could report every k6 check as failed when run with:
 
-```powershell
+```bash
 docker compose -f docker-compose.yml -f docker-compose.scale-baseline.yml run --rm k6 run /scripts/smoke.js
 ```
 
@@ -206,7 +206,7 @@ A pasted 100k benchmark run showed scaled services being removed, for example ex
 
 The benchmark documentation now uses the same Compose override files for both `up` and `run`, so k6 is launched against the scaled profile without shrinking the topology:
 
-```powershell
+```bash
 docker compose -f docker-compose.yml -f docker-compose.scale-100k.yml run --rm ...
 ```
 

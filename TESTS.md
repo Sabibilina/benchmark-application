@@ -38,7 +38,7 @@ Scalability readiness: GO. The backend has enough infrastructure confidence to p
 
 Final validation commands run for the submission pass:
 
-```powershell
+```bash
 docker compose config --quiet
 docker compose config --services
 docker compose -f docker-compose.yml -f docker-compose.scale-baseline.yml config --quiet
@@ -53,12 +53,12 @@ docker desktop restart
 docker compose -f docker-compose.yml -f docker-compose.scale-1m.yml -f docker-compose.scale-100k.yml down --remove-orphans
 docker compose -f docker-compose.yml -f docker-compose.scale-baseline.yml up -d --remove-orphans
 docker compose ps
-Invoke-WebRequest -UseBasicParsing http://localhost:8080/health
-Invoke-WebRequest -UseBasicParsing http://localhost:9090/-/ready
-Invoke-WebRequest -UseBasicParsing http://localhost:3001/api/health
+curl -i http://localhost:8080/health
+curl -i http://localhost:9090/-/ready
+curl -i http://localhost:3001/api/health
 docker compose -f docker-compose.yml -f docker-compose.scale-baseline.yml run --rm -e K6_SMOKE_HTTP_REQ_DURATION_P95_MS=6000 k6 run /scripts/smoke.js
-Invoke-RestMethod -UseBasicParsing 'http://localhost:9090/api/v1/query?query=up'
-Invoke-RestMethod -UseBasicParsing 'http://localhost:9090/api/v1/targets'
+curl -s 'http://localhost:9090/api/v1/query?query=up'
+curl -s 'http://localhost:9090/api/v1/targets'
 docker compose exec -T kafka /opt/kafka/bin/kafka-console-producer.sh --bootstrap-server kafka:9092 --topic playlist-events
 docker compose exec -T notification-db mongosh --quiet -u benchmark -p benchmark --authenticationDatabase admin notification --eval "db.notifications.find({sourceEventId:'<event-id>'}).toArray()"
 ```

@@ -75,14 +75,14 @@ Validation performed:
 
 Recommended first benchmark command:
 
-```powershell
+```bash
 docker compose -f docker-compose.yml -f docker-compose.scale-baseline.yml up -d --build
 docker compose -f docker-compose.yml -f docker-compose.scale-baseline.yml run --rm k6 run /scripts/smoke.js
 ```
 
 Recommended scaled benchmark command shape:
 
-```powershell
+```bash
 docker compose -f docker-compose.yml -f docker-compose.scale-100k.yml up -d --build --scale streaming-service=6 --scale catalog-service=3 --scale search-service=3 --scale recommendation-service=3 --scale analytics-service=2 --scale auth-service=4 --scale playlist-service=2
 docker compose -f docker-compose.yml -f docker-compose.scale-100k.yml run --rm -e BENCHMARK_DURATION=10m -e K6_AUTH_LOGIN_RATE=50 -e K6_AUTH_PREALLOCATED_VUS=100 -e K6_AUTH_MAX_VUS=250 -e K6_CATALOG_SEARCH_ITER_RATE=400 -e K6_CATALOG_SEARCH_PREALLOCATED_VUS=300 -e K6_CATALOG_SEARCH_MAX_VUS=700 -e K6_STREAMING_SESSION_RATE=2000 -e K6_STREAMING_PREALLOCATED_VUS=1500 -e K6_STREAMING_MAX_VUS=3000 -e K6_PLAYLIST_MUTATION_ITER_RATE=20 -e K6_PLAYLIST_PREALLOCATED_VUS=100 -e K6_PLAYLIST_MAX_VUS=250 k6 run /scripts/mixed-user-journey.js
 ```
@@ -936,14 +936,14 @@ Each profile should set:
 
 Example commands, non-final:
 
-```powershell
+```bash
 docker compose -f docker-compose.yml -f docker-compose.scale-100k.yml up -d --scale streaming-service=6 --scale search-service=3 --scale catalog-service=3
 docker compose -f docker-compose.yml -f docker-compose.scale-100k.yml run --rm k6 run /scripts/mixed-user-journey.js
 ```
 
 Target-shape command, resource-heavy:
 
-```powershell
+```bash
 docker compose -f docker-compose.yml -f docker-compose.scale-1m.yml up -d --build --scale auth-service=4 --scale catalog-service=8 --scale streaming-service=20 --scale playlist-service=4 --scale search-service=8 --scale analytics-service=8 --scale recommendation-service=8 --scale notification-service=2
 docker compose -f docker-compose.yml -f docker-compose.scale-1m.yml run --rm -e BENCHMARK_DURATION=10m -e K6_AUTH_LOGIN_RATE=500 -e K6_CATALOG_SEARCH_ITER_RATE=2000 -e K6_STREAMING_SESSION_RATE=20000 -e K6_PLAYLIST_MUTATION_ITER_RATE=100 k6 run /scripts/mixed-user-journey.js
 ```
