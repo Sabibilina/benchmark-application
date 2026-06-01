@@ -162,3 +162,9 @@ Review the generated load-test implementation against the integration tests and 
 - Do not mark the phase complete if the smoke run fails, any threshold is absent, or any API field name is wrong.
 
 Before closing, update `PROGRESS.md` to mark all validated checklist items and update `DECISIONS.md` to record every fix, deviation, or unresolved issue found during validation, and `LOAD.md`.
+
+---
+
+## Prompt 4 — Test
+
+Execute the full load-test suite against the running application stack, collect all metrics produced during the run, and write a structured report to LOAD-RESULTS.md.

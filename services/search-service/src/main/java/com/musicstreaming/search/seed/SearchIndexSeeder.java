@@ -10,6 +10,7 @@ import org.opensearch.action.bulk.BulkResponse;
 import org.opensearch.action.index.IndexRequest;
 import org.opensearch.client.RequestOptions;
 import org.opensearch.client.RestHighLevelClient;
+import org.opensearch.action.admin.indices.settings.put.UpdateSettingsRequest;
 import org.opensearch.client.indices.CreateIndexRequest;
 import org.opensearch.client.indices.GetIndexRequest;
 import org.opensearch.common.xcontent.XContentType;
@@ -133,9 +134,26 @@ public class SearchIndexSeeder implements ApplicationRunner {
         if (!exists) {
             CreateIndexRequest createReq = new CreateIndexRequest(indexName);
             createReq.mapping(INDEX_MAPPING, XContentType.JSON);
+            createReq.settings("""
+                    {
+                      "index": {
+                        "number_of_replicas": 0
+                      }
+                    }
+                    """, XContentType.JSON);
             client.indices().create(createReq, RequestOptions.DEFAULT);
             log.info("Created OpenSearch index '{}'", indexName);
         }
+
+        UpdateSettingsRequest updateSettings = new UpdateSettingsRequest(indexName);
+        updateSettings.settings("""
+                {
+                  "index": {
+                    "number_of_replicas": 0
+                  }
+                }
+                """, XContentType.JSON);
+        client.indices().putSettings(updateSettings, RequestOptions.DEFAULT);
     }
 
     private long countDocuments() throws IOException {

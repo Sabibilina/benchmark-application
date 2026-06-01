@@ -9,6 +9,8 @@ opensearch:
   host: ${OPENSEARCH_HOST:localhost}
   port: ${OPENSEARCH_PORT:9200}
   index-name: ${OPENSEARCH_INDEX_NAME:songs}
+  connect-timeout-ms: ${OPENSEARCH_CONNECT_TIMEOUT_MS:1000}
+  socket-timeout-ms: ${OPENSEARCH_SOCKET_TIMEOUT_MS:15000}
 
 search:
   max-results: ${SEARCH_MAX_RESULTS:20}

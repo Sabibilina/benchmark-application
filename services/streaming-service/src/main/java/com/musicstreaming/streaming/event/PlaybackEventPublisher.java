@@ -22,12 +22,16 @@ public class PlaybackEventPublisher {
     }
 
     public void publish(PlaybackEvent event) {
-        kafkaTemplate.send(topic, event.songId(), event)
-                .whenComplete((result, ex) -> {
-                    if (ex != null) {
-                        log.warn("Failed to publish {} event for song {}: {}",
-                                event.type(), event.songId(), ex.getMessage());
-                    }
-                });
+        try {
+            kafkaTemplate.send(topic, event.songId(), event)
+                    .whenComplete((result, ex) -> {
+                        if (ex != null) {
+                            log.warn("Failed to publish {} event for song {}: {}",
+                                    event.type(), event.songId(), ex.getMessage());
+                        }
+                    });
+        } catch (Exception e) {
+            log.warn("Failed to send {} event for song {}: {}", event.type(), event.songId(), e.getMessage());
+        }
     }
 }

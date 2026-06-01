@@ -262,7 +262,7 @@ services:
       - opensearch-data:/usr/share/opensearch/data
     environment:
       discovery.type: single-node
-      OPENSEARCH_JAVA_OPTS: "${OPENSEARCH_JAVA_OPTS:--Xms1g -Xmx1g}"
+      OPENSEARCH_JAVA_OPTS: "${OPENSEARCH_JAVA_OPTS:--Xms768m -Xmx768m -XX:G1ReservePercent=10}"
       DISABLE_SECURITY_PLUGIN: "true"
       DISABLE_INSTALL_DEMO_CONFIG: "true"
     ulimits:
@@ -575,7 +575,6 @@ services:
     build:
       context: ./services/auth-service
       dockerfile: Dockerfile
-    container_name: auth-service
     networks: [music-net]
     depends_on:
       auth-db:
@@ -592,6 +591,7 @@ services:
       JWT_KEY_DIR: /jwt-keys
       JWT_EXPIRATION_MS: ${JWT_EXPIRATION_MS:-3600000}
     deploy:
+      replicas: ${AUTH_SERVICE_REPLICAS:-1}
       resources:
         limits:
           cpus: "${AUTH_SERVICE_CPU_LIMIT:-1.5}"
@@ -917,8 +917,6 @@ services:
         condition: service_healthy
       search-service:
         condition: service_healthy
-      analytics-service:
-        condition: service_healthy
       recommendation-service:
         condition: service_healthy
     environment:
@@ -932,14 +930,13 @@ services:
       SEARCH_SERVICE_URL: http://search-service:8080
       ANALYTICS_SERVICE_URL: http://analytics-service:8080
       RECOMMENDATION_SERVICE_URL: http://recommendation-service:8080
-      # k6 scenario selector
+      # k6 scenario selector (K6_SCENARIOS read by main.js; no K6_VUS/K6_DURATION to avoid overriding options.scenarios)
       K6_SCENARIO: ${K6_SCENARIO:-ramp}
-      K6_VUS: ${K6_VUS:-50}
-      K6_DURATION: ${K6_DURATION:-5m}
+      K6_SCENARIOS: ${K6_SCENARIOS:-all}
     profiles:
       - load-test
     deploy:
       resources:
         limits:
           cpus: "${LOAD_GENERATOR_CPU_LIMIT:-2.0}"
-          memory: "${LOAD_GENERATOR_MEMORY_LIMIT:-512m}"
+          memory: "${LOAD_GENERATOR_MEMORY_LIMIT:-2048m}"

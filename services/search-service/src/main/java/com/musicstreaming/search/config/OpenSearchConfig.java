@@ -16,10 +16,19 @@ public class OpenSearchConfig {
     @Value("${opensearch.port:9200}")
     private int port;
 
+    @Value("${opensearch.connect-timeout-ms:1000}")
+    private int connectTimeoutMs;
+
+    @Value("${opensearch.socket-timeout-ms:5000}")
+    private int socketTimeoutMs;
+
     @Bean
     public RestHighLevelClient restHighLevelClient() {
         return new RestHighLevelClient(
                 RestClient.builder(new HttpHost(host, port, "http"))
+                        .setRequestConfigCallback(config -> config
+                                .setConnectTimeout(connectTimeoutMs)
+                                .setSocketTimeout(socketTimeoutMs))
         );
     }
 }

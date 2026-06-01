@@ -10,6 +10,8 @@ spring:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
       acks: all
+      properties:
+        max.block.ms: 1000
 
 jwt:
   public-key-path: ${JWT_PUBLIC_KEY_PATH:/jwt-keys/public.pem}
