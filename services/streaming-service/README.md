@@ -29,13 +29,13 @@ Operational endpoints:
 
 Run the service tests:
 
-```powershell
+```bash
 docker compose build streaming-service
 ```
 
 Run the service with Kafka:
 
-```powershell
+```bash
 docker compose up -d --build kafka streaming-service
 ```
 

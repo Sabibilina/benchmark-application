@@ -26,13 +26,13 @@ Kafka producer type headers are ignored and valid JSON is deserialized into the 
 
 From the repository root:
 
-```powershell
+```bash
 docker compose build recommendation-service
 docker compose up -d --build kafka recommendation-db recommendation-redis recommendation-service
 ```
 
 Run tests through the Docker build or directly from this directory:
 
-```powershell
+```bash
 mvn test
 ```

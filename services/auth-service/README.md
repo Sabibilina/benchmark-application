@@ -57,13 +57,13 @@ See `.env.example` for required environment variables. Auth Service needs the pr
 
 From this directory, run tests with Maven:
 
-```powershell
+```bash
 mvn test
 ```
 
 From the repository root, build and start Auth with Compose:
 
-```powershell
+```bash
 docker compose up -d --build auth-db auth-service
 ```
 

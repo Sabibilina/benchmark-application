@@ -128,7 +128,7 @@ The Docker build runs the Analytics Maven test suite, including the new embedded
 
 Useful manual smoke command:
 
-```powershell
+```bash
 docker compose up -d --build kafka analytics-db analytics-service
 docker compose logs --no-color --tail=100 analytics-service
 ```

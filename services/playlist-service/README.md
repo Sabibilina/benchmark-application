@@ -33,13 +33,13 @@ Operational endpoints:
 
 Run the service tests:
 
-```powershell
+```bash
 docker compose build playlist-service
 ```
 
 Run the service with its database:
 
-```powershell
+```bash
 docker compose up -d --build playlist-db playlist-service
 ```
 

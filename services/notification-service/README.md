@@ -36,10 +36,10 @@ Malformed events and unsupported event types are skipped. Duplicate `eventId` va
 
 ## Local Commands
 
-```powershell
+```bash
 docker compose build notification-service
 docker compose up -d kafka notification-db notification-service
-Invoke-RestMethod http://localhost:8088/actuator/health
+curl -s http://localhost:8088/actuator/health
 ```
 
 ## Configuration

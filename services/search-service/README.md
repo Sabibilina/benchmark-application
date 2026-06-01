@@ -20,13 +20,13 @@ On startup, `SEARCH_INDEXING_ENABLED=true` causes the service to create or valid
 
 From the repository root:
 
-```powershell
+```bash
 docker compose build search-service
 docker compose up -d --build search-opensearch search-service
 ```
 
 Run the service tests through the Docker build or directly with Maven from this directory:
 
-```powershell
+```bash
 mvn test
 ```

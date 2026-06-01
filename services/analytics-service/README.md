@@ -24,13 +24,13 @@ Global charts count `play.started` events by song id. Listen history returns sto
 
 From the repository root:
 
-```powershell
+```bash
 docker compose build analytics-service
 docker compose up -d --build kafka analytics-db analytics-service
 ```
 
 Run tests through the Docker build or directly from this directory:
 
-```powershell
+```bash
 mvn test
 ```

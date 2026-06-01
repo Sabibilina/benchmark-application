@@ -39,7 +39,7 @@ See `.env.example` for service variables. Catalog application endpoints require 
 
 From the repository root:
 
-```powershell
+```bash
 docker compose build catalog-service
 docker compose up -d --build catalog-db catalog-service
 ```

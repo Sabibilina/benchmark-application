@@ -6,7 +6,7 @@ This file inventories the current test coverage by test role. Unit tests cover i
 
 Backend coverage and validation commands used for the current review:
 
-```powershell
+```bash
 docker compose build auth-service catalog-service playlist-service streaming-service search-service analytics-service recommendation-service notification-service
 docker build --target coverage --output "type=local,dest=coverage-output/auth-service" "services/auth-service"
 docker build --target coverage --output "type=local,dest=coverage-output/catalog-service" "services/catalog-service"
@@ -20,12 +20,12 @@ docker build --target coverage --output "type=local,dest=coverage-output/notific
 
 Infrastructure confidence commands used for the current review:
 
-```powershell
+```bash
 docker compose up -d search-opensearch analytics-db recommendation-redis kafka
-$env:DOCKER_BUILDKIT='0'; docker build --target infra-test --network benchmark-network --build-arg INFRA_TEST=OpenSearchInfrastructureIT services/search-service
-$env:DOCKER_BUILDKIT='0'; docker build --target infra-test --network benchmark-network --build-arg INFRA_TEST=AnalyticsClickHouseInfrastructureIT services/analytics-service
-$env:DOCKER_BUILDKIT='0'; docker build --target infra-test --network benchmark-network --build-arg INFRA_TEST=RecommendationCacheInfrastructureIT services/recommendation-service
-$env:DOCKER_BUILDKIT='0'; docker build --target infra-test --network benchmark-network --build-arg INFRA_TEST=PlaybackEventPublisherInfrastructureIT services/streaming-service
+DOCKER_BUILDKIT=0 docker build --target infra-test --network benchmark-network --build-arg INFRA_TEST=OpenSearchInfrastructureIT services/search-service
+DOCKER_BUILDKIT=0 docker build --target infra-test --network benchmark-network --build-arg INFRA_TEST=AnalyticsClickHouseInfrastructureIT services/analytics-service
+DOCKER_BUILDKIT=0 docker build --target infra-test --network benchmark-network --build-arg INFRA_TEST=RecommendationCacheInfrastructureIT services/recommendation-service
+DOCKER_BUILDKIT=0 docker build --target infra-test --network benchmark-network --build-arg INFRA_TEST=PlaybackEventPublisherInfrastructureIT services/streaming-service
 ```
 
 Result: passed. The Java service Docker build path runs `mvn -q verify`, which executes default tests and generates JaCoCo XML/HTML reports. The infrastructure checks are explicit `*InfrastructureIT` runs against real Docker Compose services and are not included in the default JaCoCo totals.
