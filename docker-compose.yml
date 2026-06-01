@@ -378,8 +378,8 @@ services:
       start_period: 30s
 
   # ── nginx load balancer ───────────────────────────────────────────────────
-  # Single entry point for all backend API traffic (both browser via the
-  # frontend nginx, and k6 direct).  Uses Docker's embedded DNS resolver
+  # Single entry point for all backend API traffic (k6 direct).
+  # Uses Docker's embedded DNS resolver
   # (127.0.0.11) with a 5-second TTL so newly scaled replicas are picked up
   # without an nginx reload.  Rate limiting and access logging are applied here.
 
@@ -863,33 +863,6 @@ services:
       timeout: 5s
       retries: 10
       start_period: 60s
-
-  # ── Frontend ──────────────────────────────────────────────────────────────
-  # Depends on nginx-lb so that the baked-in nginx.conf can resolve `nginx-lb`
-  # at startup (nginx resolves static proxy_pass hostnames once on start).
-
-  frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
-    container_name: frontend
-    networks: [music-net]
-    depends_on:
-      nginx-lb:
-        condition: service_healthy
-    ports:
-      - "${FRONTEND_HOST_PORT:-3000}:80"
-    deploy:
-      resources:
-        limits:
-          cpus: "${FRONTEND_CPU_LIMIT:-0.5}"
-          memory: "${FRONTEND_MEMORY_LIMIT:-256m}"
-    healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:80/health | grep -q UP || exit 1"]
-      interval: 15s
-      timeout: 5s
-      retries: 5
-      start_period: 10s
 
   # ── Load generator (opt-in profile) ──────────────────────────────────────
   # Routes all benchmark traffic through nginx-lb (NGINX_LB_URL) to measure
