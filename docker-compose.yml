@@ -563,27 +563,6 @@ services:
       retries: 10
       start_period: 60s
 
-  # ── Frontend ──────────────────────────────────────────────────────────────
-
-  frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
-    container_name: frontend
-    networks: [music-net]
-    ports:
-      - "${FRONTEND_HOST_PORT:-3000}:80"
-    deploy:
-      resources:
-        limits:
-          cpus: "${FRONTEND_CPU_LIMIT:-0.5}"
-          memory: "${FRONTEND_MEMORY_LIMIT:-256m}"
-    healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:80/health | grep -q UP || exit 1"]
-      interval: 15s
-      timeout: 5s
-      retries: 5
-      start_period: 10s
 
   # ── Load generator (opt-in profile) ──────────────────────────────────────
 
