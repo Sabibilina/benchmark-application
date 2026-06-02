@@ -348,14 +348,14 @@ Frontend work has been intentionally moved out of scope for this version so deli
 This extra session is defined in `REFACTORED-PROMPTS.md`. It is intentionally scoped after the integrated backend-only application so cloud cost-saving decisions can be evaluated against the current backend, infrastructure, observability, load-generator, and scalability artifacts.
 
 ### Steps
-- [ ] **Step 1 - Plan**: Identify the main cloud cost drivers in the current backend-only app, prioritize realistic cloud cost-saving opportunities, and define validation against the workload in `SCALABILITY.md`
+- [x] **Step 1 - Plan**: Identify the main cloud cost drivers in the current backend-only app, prioritize realistic cloud cost-saving opportunities, and define validation against the workload in `SCALABILITY.md`
 - [ ] **Step 2 - Generate**: Implement the approved cloud cost-efficiency changes while preserving required backend behavior, service boundaries, and documented workload assumptions
 - [ ] **Step 3 - Validate/Fix**: Verify the changes against the source documents, the approved plan, relevant tests, and the workload/performance characteristics in `SCALABILITY.md`
 
 ### Acceptance Criteria
-- [ ] Cloud cost-saving changes are justified by the current repository and `SCALABILITY.md`
-- [ ] The plan accounts for the documented performance characteristics: 1,000,000 registered users, about 100,000 DAU, about 20,000 peak concurrent users, about 10 songs streamed per session, about 40,000 playback events/s, about 500 auth logins/s, about 4,000 catalog/search requests/s, about 200 playlist mutations/s, and the benchmark phases
-- [ ] Expected cloud cost impact, trade-offs, assumptions, and validation evidence are documented in `COST-AWARE-DECISIONS.md`
+- [x] Cloud cost-saving changes are justified by the current repository and `SCALABILITY.md`
+- [x] The plan accounts for the documented performance characteristics: 1,000,000 registered users, about 100,000 DAU, about 20,000 peak concurrent users, about 10 songs streamed per session, about 40,000 playback events/s, about 500 auth logins/s, about 4,000 catalog/search requests/s, about 200 playlist mutations/s, and the benchmark phases
+- [x] Expected cloud cost impact, trade-offs, assumptions, and validation evidence are documented in `COST-AWARE-DECISIONS.md`
 - [ ] Relevant Compose checks and focused backend tests pass
 
 ---
