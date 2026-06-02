@@ -343,37 +343,54 @@ Frontend work has been intentionally moved out of scope for this version so deli
 
 ---
 
+## Phase 11 - Cloud Cost-Efficiency Improvement
+
+This extra session is defined in `REFACTORED-PROMPTS.md`. It is intentionally scoped after the integrated backend-only application so cloud cost-saving decisions can be evaluated against the current backend, infrastructure, observability, load-generator, and scalability artifacts.
+
+### Steps
+- [ ] **Step 1 - Plan**: Identify the main cloud cost drivers in the current backend-only app, prioritize realistic cloud cost-saving opportunities, and define validation against the workload in `SCALABILITY.md`
+- [ ] **Step 2 - Generate**: Implement the approved cloud cost-efficiency changes while preserving required backend behavior, service boundaries, and documented workload assumptions
+- [ ] **Step 3 - Validate/Fix**: Verify the changes against the source documents, the approved plan, relevant tests, and the workload/performance characteristics in `SCALABILITY.md`
+
+### Acceptance Criteria
+- [ ] Cloud cost-saving changes are justified by the current repository and `SCALABILITY.md`
+- [ ] The plan accounts for the documented performance characteristics: 1,000,000 registered users, about 100,000 DAU, about 20,000 peak concurrent users, about 10 songs streamed per session, about 40,000 playback events/s, about 500 auth logins/s, about 4,000 catalog/search requests/s, about 200 playlist mutations/s, and the benchmark phases
+- [ ] Expected cloud cost impact, trade-offs, assumptions, and validation evidence are documented in `COST-AWARE-DECISIONS.md`
+- [ ] Relevant Compose checks and focused backend tests pass
+
+---
+
 ## Final Delivery Checklist
 
 ### Architecture
-- [x] Each application service that persists state uses its own dedicated persistence layer (M-26)
-- [x] All protected endpoints require JWT; only `/auth/register` and `/auth/login` are public (M-25)
+- [ ] Each application service that persists state uses its own dedicated persistence layer (M-26)
+- [ ] All protected endpoints require JWT; only `/auth/register` and `/auth/login` are public (M-25)
 
 ### Artifacts
-- [x] `docker-compose.yml` starts all 8 application services and the required infrastructure
-- [x] Source code complete and runnable for all 8 backend services (no pseudocode or placeholders)
-- [x] Dockerfiles present and building for all 8 backend services
-- [x] `.env.example` present and complete for all 8 backend services
-- [x] Database schemas / migrations present for all services with persistence
-- [x] Catalog CSV seed script included and runs automatically at startup
-- [x] Prometheus config file included
-- [x] Grafana dashboard config included if Grafana dashboards are implemented
-- [x] Load generator script and workload definition included
+- [ ] `docker-compose.yml` starts all 8 application services and the required infrastructure
+- [ ] Source code complete and runnable for all 8 backend services (no pseudocode or placeholders)
+- [ ] Dockerfiles present and building for all 8 backend services
+- [ ] `.env.example` present and complete for all 8 backend services
+- [ ] Database schemas / migrations present for all services with persistence
+- [ ] Catalog CSV seed script included and runs automatically at startup
+- [ ] Prometheus config file included
+- [ ] Grafana dashboard config included if Grafana dashboards are implemented
+- [ ] Load generator script and workload definition included
 
 ### Documentation
-- [x] Top-level README with setup, run, validation, and testing instructions
+- [ ] Top-level README with setup, run, validation, and testing instructions
 
 ### Testing Deliverables
-- [x] All backend unit tests pass
-- [x] All backend integration tests pass
-- [x] Integrated system tests show that the services run correctly together
-- [x] End-to-end test results are documented
+- [ ] All backend unit tests pass
+- [ ] All backend integration tests pass
+- [ ] Integrated system tests show that the services run correctly together
+- [ ] End-to-end test results are documented
 
 ### Minimum Completion Criteria
-- [x] All 8 services start successfully in the local deployment environment
-- [x] All required endpoints are implemented and reachable
-- [x] Protected endpoints enforce JWT authentication
-- [x] Metrics are exposed and collected through the monitoring stack
-- [x] Load generator can execute the main application flows end-to-end
-- [x] Integrated system tests show that all services run correctly together in the shared deployment environment
-- [x] Cross-service authentication, persistence, and messaging behavior are verified end-to-end
+- [ ] All 8 services start successfully in the local deployment environment
+- [ ] All required endpoints are implemented and reachable
+- [ ] Protected endpoints enforce JWT authentication
+- [ ] Metrics are exposed and collected through the monitoring stack
+- [ ] Load generator can execute the main application flows end-to-end
+- [ ] Integrated system tests show that all services run correctly together in the shared deployment environment
+- [ ] Cross-service authentication, persistence, and messaging behavior are verified end-to-end

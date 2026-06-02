@@ -4,7 +4,7 @@ Backend microservices, Docker Compose deployment, observability, and scalability
 
 ## Branch Scope
 
-This branch contains the backend of the eight microservices, the shared Docker Compose deployment, and Docker Compose scalability/load-testing support. It does not include the cost-efficiency branch or cost-optimization implementation work.
+This branch contains the backend of the eight microservices, the shared Docker Compose deployment, the Docker Compose scalability/load-testing support and the cloud cost-optimization implementation work.
 
 The application is backend-only in this branch: there is no frontend UI deliverable.
 
@@ -39,6 +39,8 @@ Use these documents for system shape and validation:
 | `SCALABILITY.md` | Docker Compose scaling plan, target workload, and benchmark guidance. |
 | `PROGRESS.md` | Checklist and phase completion tracking. |
 | `DESIGN-DECISIONS.md` | Decision log, rationale, assumptions, and validation notes. |
+| `REFACTORED-PROMPTS.md` | Extra Session 11 prompt for backend cost-efficiency improvement. |
+| `COST-AWARE-DECISIONS.md` | Decision log for the cost-efficiency improvement session. |
 | `TESTS.md` | Test inventory, coverage, and validation evidence. |
 | `BUGS.md` | Bugs found during development and their fixes. |
 

@@ -32,7 +32,7 @@ The plan should:
 
 State assumptions explicitly.
 
-Update `PROGRESS.md` only to mark checklist/task completion status for this planning step. Document every decision, assumption, cost trade-off, source of evidence, affected file or service, and any other relevant observation in `COST-AWARE-DECISIONS.md`.
+Update `PROGRESS.md` only to mark checklist/task completion status for this planning step. Document every decision, assumption, cost trade-off, source of evidence, affected file or service, and any other relevant observation in `COST-AWARE-DECISIONS.md`. For each planned change, make the entry easy to analyze later by explicitly recording: what would be modified, where it would be modified, why the change is proposed, which cost driver it targets, what evidence supports it, expected cost impact, expected behavior/performance risk, validation method, and status.
 
 ### **Prompt 2 - Generate**
 
@@ -42,7 +42,7 @@ Use `ARCHITECTURE.md`, `REQUIREMENTS.md`, `TECH-STACK.md`, and `SCALABILITY.md`.
 
 Update code, configuration, tests, and documentation where needed. Keep changes focused and avoid speculative optimizations that are not connected to the current app or the performance characteristics in `SCALABILITY.md`.
 
-After generating the changes, update `PROGRESS.md` only to reflect checklist/task completion status for this phase. Document every implementation decision, assumption, cost trade-off, source of evidence, affected file or service, and any other relevant observation in `COST-AWARE-DECISIONS.md`.
+After generating the changes, update `PROGRESS.md` only to reflect checklist/task completion status for this phase. Document every implementation decision, assumption, cost trade-off, source of evidence, affected file or service, and any other relevant observation in `COST-AWARE-DECISIONS.md`. For each implemented change, explicitly record: what was modified, where it was modified, why it was modified, which cost driver it targets, what evidence supports it, expected cost impact, behavior/performance risk, validation performed or still needed, and status.
 
 ### **Prompt 3 - Validate/Fix**
 
@@ -55,4 +55,4 @@ Validate that:
 
 Run the relevant checks for this phase, including Compose configuration checks and focused tests for any behavior touched by the implementation. Fix missing or incorrect parts. Output only the changed files. Do not modify unrelated files. Do not consider the phase complete if validation fails or if a cost-saving change removes required behavior.
 
-Before considering the phase complete, update `PROGRESS.md` only to mark validated checklist items and phase status. Document every fix, decision, correction, deviation, cost trade-off, unresolved issue, source of evidence, affected file or service, and any other relevant observation in `COST-AWARE-DECISIONS.md`.
+Before considering the phase complete, update `PROGRESS.md` only to mark validated checklist items and phase status. Document every fix, decision, correction, deviation, cost trade-off, unresolved issue, source of evidence, affected file or service, and any other relevant observation in `COST-AWARE-DECISIONS.md`. For each validation or fix entry, explicitly record: what was checked or changed, where it was checked or changed, why it mattered for cost efficiency, validation result, remaining risk, and status.
