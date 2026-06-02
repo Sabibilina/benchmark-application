@@ -19,7 +19,6 @@ monitoring stack — all deployable with a single `docker compose up`.
 | analytics-service | ClickHouse | Playback event ingestion and charts |
 | recommendation-service | PostgreSQL + Redis | Daily mix and similar-songs recommendations |
 | notification-service | MongoDB | Playlist-event-driven notification feed |
-| frontend | — | React SPA served by nginx |
 
 **Infrastructure:** Kafka + Zookeeper, Prometheus, Grafana, nginx load balancer.
 
@@ -58,7 +57,6 @@ All services should show `healthy`. Services that consume Kafka (`streaming-serv
 `init-kafka` to finish creating topics before starting.
 
 **Open in browser:**
-- Frontend: http://localhost:3000
 - Grafana (admin / admin): http://localhost:3001
 - Prometheus: http://localhost:9090
 

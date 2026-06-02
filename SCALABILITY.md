@@ -55,13 +55,7 @@ The **streaming-service** and **search-service** face the highest steady-state r
 `docker compose up --scale streaming-service=8` creates eight containers all named
 `streaming-service` (internally `streaming-service-1` … `streaming-service-8`). Docker's
 embedded DNS resolver (`127.0.0.11`) returns all IPs for the service name, but only if the
-client **re-queries DNS for every connection**. The existing frontend nginx does a single DNS
-lookup at startup and caches it — after scaling, it will keep routing to the original single
-container.
-
-The current nginx inside the `frontend` container is purpose-built as an SPA host and API
-proxy for a single-instance deployment. Adding another nginx container exclusively as a
-**backend load balancer** keeps concerns separated and avoids modifying the SPA host.
+client **re-queries DNS for every connection**. Without a dedicated load balancer, any proxy that resolves a service hostname once at startup will keep routing to the original single container after scaling.
 
 ### Recommended approach: dedicated nginx LB container
 
@@ -97,12 +91,6 @@ server {
     }
 }
 ```
-
-> **Note on the frontend nginx:** The existing `frontend` container's nginx continues to serve
-> the React SPA and can keep its `/api/*` proxy rules for development convenience. In the
-> scaled deployment the frontend nginx should proxy to `nginx-lb:80` (or to the internal
-> service names if the LB handles all routing). Do not remove the frontend nginx — the health
-> endpoint (`GET /health`) and SPA fallback must remain.
 
 ### What the LB does NOT need to do
 
@@ -159,7 +147,6 @@ Based on the traffic shape in Section 1, with a 3-broker Kafka cluster and PgBou
 | `recommendation-service` | **3** (≤ partition count) | Redis hides most latency; scale conservatively |
 | `playlist-service` | **3** | Lower write frequency; connection pool pressure manageable |
 | `notification-service` | **2** (≤ partition count) | `playlist-events` volume is low; 2 is sufficient |
-| `frontend` (nginx SPA) | **2** | Serves static files; second instance for redundancy only |
 
 > **Hard constraint for Kafka consumers:** `analytics-service`, `recommendation-service`, and
 > `notification-service` each form a consumer group. Adding a replica beyond the partition
@@ -1007,7 +994,6 @@ Each item references the affected file so the rationale can be traced directly t
 |---|---|---|
 | **Kafka partitions** | `init-kafka` one-shot service creates `playback-events` (12 partitions) and `playlist-events` (6 partitions) before any producer/consumer starts. `KAFKA_AUTO_CREATE_TOPICS_ENABLE` disabled to prevent accidental 1-partition creation. | `docker-compose.yml` |
 | **nginx-lb** | Dedicated nginx load balancer on port 80. Uses `resolver 127.0.0.11 valid=5s` + `set $upstream` variables so new replicas are discovered within 5 s without an nginx reload. Per-path rate limiting (auth: 20 r/s, streaming: 200 r/s, API: 500 r/s). | `infra/nginx-lb/nginx.conf`, `docker-compose.yml` |
-| **Frontend routing** | Frontend nginx now proxies all `/api/*` to `nginx-lb` instead of directly to individual services. Eliminates single-IP DNS caching at the SPA proxy layer. | `frontend/nginx.conf` |
 | **Service replicas** | `deploy.replicas` set per service: streaming 3, catalog 2, search 2, playlist 2, analytics 2, recommendation 2, notification 1, auth 1 (JWT key race constraint). All configurable via `.env`. | `docker-compose.yml`, `.env.example` |
 | **container_name removed** | All 8 application services lose `container_name`, enabling `docker compose up --scale <service>=N`. Auth-service retains its name because it must stay at 1 on fresh volumes. | `docker-compose.yml` |
 | **Service host ports removed** | Application services no longer bind host ports (8081–8088). All API traffic enters on port 80 via nginx-lb. Databases and observability keep host ports for direct debugging. | `docker-compose.yml` |

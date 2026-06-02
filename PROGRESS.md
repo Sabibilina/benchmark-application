@@ -269,48 +269,6 @@ Services are built **one at a time** in the order below. Each service goes throu
 
 ---
 
-## Phase 9 — Frontend (React + TypeScript SPA)
-
-### Steps
-- [ ] **Step 1 — Plan**: File tree for `frontend/`, routing strategy, global state shape (session, playback, queue), API client design (JWT injection, retry, error normalization), view inventory, env vars, build/containerization approach, validation steps
-- [ ] **Step 2 — Generate**: All source files, Dockerfile, `package.json`, `.env.example`, build config, unit/component tests, integration tests, README section covering build, run, and backend configuration
-- [ ] **Step 3 — Validate/Fix**: Review against acceptance criteria; fix and return only changed files
-
-### Views to Implement
-- [ ] **Home / Discovery** — Daily Mix cards and "Because you listened to…" rails; trending tracks from Analytics global charts if implemented
-- [ ] **Search** — Full-text search bar; optional real-time autocomplete; results filterable by genre, BPM range, and release year; song results with optional artist/album/playlist sections
-- [ ] **Catalog Browse** — Paginated song grid/list with sort controls (title, artist, BPM); artist detail/top tracks only if implemented
-- [ ] **Now Playing / Player Bar** — Persistent bottom bar with track title, artist, album art placeholder, play/pause/skip/previous controls, progress scrubber, and volume control; visible across all views
-- [ ] **Playlists** — Sidebar list of user's playlists including "Liked Songs"; playlist detail with drag-and-drop reordering, track removal, add-from-search/catalog; playlist creation and deletion
-- [ ] **Listening History** — Chronological log of play events from Analytics Service, grouped by date
-- [ ] **Notifications** — Optional inbox panel for in-app notifications if notification retrieval is exposed to the frontend in the implemented version
-
-### Acceptance Criteria
-- [ ] Registration and login flows work end-to-end against the Auth Service; JWT stored in memory (not `localStorage`)
-- [ ] JWT is attached via `Authorization: Bearer` header on all protected API requests
-- [ ] Required frontend views are present and navigable via client-side routing (no full-page reload between views)
-- [ ] Now Playing bar persists across all route changes
-- [ ] Player calls `GET /stream/:songId` to initiate a stream session; playback state machine transitions correctly (`idle → loading → playing → paused → ended/skipped`)
-- [ ] Skip and completion actions explicitly trigger the appropriate state transitions and backend event payloads
-- [ ] API client handles JWT injection, exponential backoff retry, and error normalization centrally
-- [ ] Search returns results and filters (genre, BPM range, year) work in combination
-- [ ] Playlist drag-and-drop reorder calls `PATCH /playlists/:id/tracks/reorder`
-- [ ] "Liked Songs" playlist is visible but the delete control is hidden or disabled
-- [ ] Notifications are retrievable and viewable from the frontend if the notification inbox is implemented in the current version
-- [ ] Frontend exposes a `/health` route or static response for uptime checks
-- [ ] Key client-side metrics tracked: page load time, API error rates, playback failure counts
-- [ ] Dockerfile builds and container starts without errors; frontend is added to `docker-compose.yml`
-- [ ] `.env.example` documents all `VITE_` / `REACT_APP_` variables (API base URLs, etc.)
-- [ ] No requirements from the brief are missing; no extra requirements added
-- [ ] Automated tests cover critical UI flows and route behavior
-- [ ] Authentication flow is tested
-- [ ] Playback state transitions are tested
-- [ ] Search filtering behavior is tested
-- [ ] Playlist reorder interaction is tested
-- [ ] Test suite passes successfully
-
----
-
 ## Phase 10 — Monitoring, Load Generator & Integration
 
 ### Monitoring
@@ -345,9 +303,9 @@ Services are built **one at a time** in the order below. Each service goes throu
 
 ### Artifacts
 - [ ] `docker-compose.yml` starts all 8 application services and the required infrastructure
-- [ ] Source code complete and runnable for all 8 services and the frontend (no pseudocode or placeholders)
-- [ ] Dockerfiles present and building for all 8 services and the frontend
-- [ ] `.env.example` present and complete for all 8 services and the frontend
+- [ ] Source code complete and runnable for all 8 services (no pseudocode or placeholders)
+- [ ] Dockerfiles present and building for all 8 services
+- [ ] `.env.example` present and complete for all 8 services
 - [ ] Database schemas / migrations present for all services with persistence
 - [ ] Catalog CSV seed script included and runs automatically at startup
 - [ ] Prometheus config file included
@@ -360,13 +318,11 @@ Services are built **one at a time** in the order below. Each service goes throu
 ### Testing Deliverables
 - [ ] All backend unit tests pass
 - [ ] All backend integration tests pass
-- [ ] Frontend automated tests pass
 - [ ] Integrated system tests show that the services run correctly together
 - [ ] End-to-end test results are documented
 
 ### Minimum Completion Criteria
 - [ ] All 8 services start successfully in the local deployment environment
-- [ ] Frontend starts and is reachable in the browser via `docker-compose up`
 - [ ] All required endpoints are implemented and reachable
 - [ ] Protected endpoints enforce JWT authentication
 - [ ] Metrics are exposed and collected through the monitoring stack
@@ -387,7 +343,6 @@ configuration capable of driving 1,000,000-user load tests, without leaving Dock
 |---|---|
 | **Kafka** | `init-kafka` one-shot service creates `playback-events` (12 partitions) and `playlist-events` (6 partitions). `KAFKA_AUTO_CREATE_TOPICS_ENABLE=false` prevents accidental 1-partition auto-creation. |
 | **nginx-lb** | New `nginx-lb` compose service (port 80) with `resolver 127.0.0.11 valid=5s` for dynamic replica discovery. Per-path rate limiting. |
-| **Frontend proxy** | `frontend/nginx.conf` now routes all `/api/*` through nginx-lb instead of directly to service names. |
 | **Service replicas** | `deploy.replicas` set per service in `docker-compose.yml`: streaming=3, catalog=2, search=2, playlist=2, analytics=2, recommendation=2, notification=1. Auth stays at 1 (JWT key race constraint on fresh volumes). |
 | **`container_name` removed** | All 8 application services; enables `docker compose up --scale <service>=N`. |
 | **Host ports removed** | Application services (8081–8088) removed; nginx-lb:80 is the single API entry point. |

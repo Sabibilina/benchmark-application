@@ -82,7 +82,6 @@ Tests were executed against the full Docker Compose stack (`mvn verify` in `e2e-
 | **Coverage measurement** | JaCoCo reports generated 2026-05-20 for all 8 services. HTML reports at `services/<name>/target/site/jacoco/index.html`. Coverage table populated with real numbers; re-run `mvn verify` to refresh after code changes. |
 | **Auth service confirmed test run** | Phase 1 validation deferred (no Docker/Maven at the time). Run `cd services/auth-service && mvn verify` to produce a confirmed pass record (see FINDINGS.md F-008). |
 | **Inter-service resilience** | No retry or circuit-breaker logic is implemented for inter-service HTTP calls. Requirements M-22 and M-23 in `REQUIREMENTS.md` remain open. |
-| **Frontend tests** | All Phase 9 test acceptance criteria are unchecked. No frontend test files exist. Auth flow, playback state machine, search filtering, and playlist reorder need automated coverage. |
 | **Monitoring validation** | Prometheus scrape targets, Grafana dashboard panels, and CPU/memory limits in `docker-compose.yml` have not been end-to-end validated (Phase 10). |
 | **Load generator** | No K6 script or workload definition exists yet. Phase 10 requires coverage of: registration, login, catalog browsing, search, streaming, playlist operations, and history queries. |
 | **Uncommitted docker-compose.yml changes** | `git status` shows `docker-compose.yml` is locally modified. The change has not been reviewed or committed. |

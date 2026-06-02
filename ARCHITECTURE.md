@@ -225,7 +225,7 @@ The system is composed of eight independent microservices. Each service owns its
 * **Purpose:** stores internal in-app notifications generated from application events.
 * **Exposure:**
   * Internal service only; no public client-facing API is required.
-  * If notification retrieval is implemented for the optional frontend inbox, it must be exposed through a protected read interface or another explicitly defined access layer.
+  * If notification retrieval is implemented, it must be exposed through a protected read interface.
 * **Required behavior:**
   * Consumes internal events.
   * Stores in-app notifications retrievable from its own storage.
@@ -252,49 +252,6 @@ The system is composed of eight independent microservices. Each service owns its
 The system is intended to function not only as a music streaming application, but also as a benchmarkable reference system for experimental evaluation. Its fixed service boundaries, dedicated persistence per service, and observable interactions make it suitable for controlled comparison across implementations, deployment setups, and resilience strategies.
  
 The architecture is designed to support benchmarking of performance, scalability, fault tolerance, observability, and cloud cost awareness under representative workloads. For that reason, the system structure described in this document is expected to remain stable so that benchmark results can be compared meaningfully across different runs, configurations, and infrastructure choices.
- 
-## 5. Frontend Architecture
- 
-### 5.1. Technology & Architecture
- 
-The frontend is a single-page application (SPA) with client-side routing.
- 
-| Component | Technology |
-|---|---|
-| UI Framework | React + TypeScript |
-| Build Tool | Vite |
-| Routing | React Router |
-| Global State | Zustand (session, playback state, queue) |
-| Server State | TanStack Query |
-| HTTP Client | Axios (centralized, JWT injection + retry) |
-| Forms / Validation | React Hook Form + Zod |
-| Drag & Drop | dnd-kit (playlist reordering) |
-| Styling | Tailwind CSS |
- 
-### 5.2. Authentication
- 
-The app must support registration and login flows backed by the Auth Service. On login, the issued JWT must be stored in memory (not localStorage) and attached to all subsequent API requests via an `Authorization: Bearer` header.
- 
-### 5.3. Core Views
- 
-* **Home/Discovery** — Personalized landing page showing Daily Mix cards, "Because you listened to…" rails, and, if implemented, trending tracks from the Analytics Service global charts.
-* **Search** — A full-text search bar with optional real-time autocomplete suggestions. Results should be filterable by genre, BPM range, and release year. Results should display songs, with optional expanded sections for artists, albums, and playlists.
-* **Catalog Browse** — Paginated song grid/list with sort controls (title, artist, BPM). Clicking an artist name may navigate to an artist detail page showing their top tracks.
-* **Now Playing/Player Bar** — A persistent bottom bar showing the current track's title, artist, album art placeholder, playback controls (play/pause, skip, previous), a progress scrubber, and volume control. This bar must remain visible across all views.
-* **Playlists** — A sidebar list of the user's playlists (including the special "Liked Songs" playlist). A playlist detail view allows track reordering (drag-and-drop), removal, and adding tracks from search or catalog. Playlist creation and deletion must be supported.
-* **Listening History** — A chronological log of the user's play events fetched from the Analytics Service, grouped by date.
-* **Notifications** — An optional inbox panel (accessible from a bell icon in the nav) listing in-app notifications from the Notification Service, such as playlist updates from collaborators.
-### 5.4. Playback Integration
- 
-The player must call the Streaming Service (`GET /stream/:songId`) to initiate a stream session. Since the service returns a simulated HLS manifest, the frontend should treat playback as a state machine: `idle → loading → playing → paused → ended/skipped`. State transitions must emit the appropriate events (the backend handles event publishing). Skip and completion actions must be explicitly triggered.
- 
-### 5.5. API Communication
- 
-All HTTP calls to backend services must go through a centralized API client that handles JWT injection, retry with exponential backoff, and error normalization. This should follow the same resilience pattern used for backend service-to-service communication.
- 
-### 5.6. Observability
- 
-The frontend should expose a `/health` route (or equivalent static response) and track key client-side metrics: page load time, API error rates, and playback failure counts. These can be reported to the Analytics Service or logged for Prometheus scraping via a lightweight metrics endpoint.
  
 ## 6. System Verification Deliverable
  

@@ -219,7 +219,6 @@ Caused by: java.net.SocketException: Unexpected end of file from server
 
 The following items are not bugs in the current code but represent missing coverage or deferred work that may surface bugs later.
 
-- **P-001** — Frontend tests: Phase 9 acceptance criteria for automated frontend tests (auth flow, playback state machine, search filtering, playlist reorder) are all unchecked in `PROGRESS.md`. No frontend test files exist yet.
 - **P-002** — JaCoCo coverage: No `jacoco-maven-plugin` is configured. Actual line/branch/function coverage is unmeasured.
 - **P-003** — Phase 10 Monitoring: Prometheus scrape targets, Grafana dashboard wiring, and CPU/memory limits in `docker-compose.yml` are not yet validated end-to-end.
 - **P-004** — Phase 10 Load Generator: K6 load generator script and workload documentation are not yet present.
@@ -234,7 +233,7 @@ This document will be updated as new issues are found. Sources to monitor:
 
 - **E2E test failures:** Any new failure in `e2e-tests/target/surefire-reports/` should be logged here.
 - **`mvn verify` output per service:** Any new `ERROR` or `FAIL` in surefire output should be logged here.
-- **Code review of remaining phases:** Frontend (Phase 9) and integration (Phase 10) have not been reviewed yet.
+- **Code review of remaining phases:** Integration (Phase 10) has not been reviewed yet.
 - **`ClaudeChats/` log files:** The decision IDs referenced throughout this document correspond to entries in those files where additional context is available.
 
 ---
@@ -255,14 +254,13 @@ now declare `init-kafka: service_completed_successfully` in `depends_on`.
 
 ### F-S02 — nginx single-IP DNS cache prevented load distribution across replicas
 
-**Observed:** The frontend nginx resolved `http://streaming-service:8080` once at startup
-and cached a single IP. When `streaming-service` scaled to 3 replicas, all browser traffic
-continued going to the first replica.
+**Observed:** nginx resolved `http://streaming-service:8080` once at startup and cached a
+single IP. When `streaming-service` scaled to 3 replicas, all traffic continued going to
+the first replica.
 
 **Fix:** Added `nginx-lb` container with `resolver 127.0.0.11 valid=5s` and
 `set $upstream "streaming-service:8080"; proxy_pass http://$upstream;` pattern.
 Per-request re-resolution causes Docker DNS to return replica IPs in round-robin.
-Frontend nginx now routes all `/api/*` to nginx-lb.
 
 ---
 
