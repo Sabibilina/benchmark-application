@@ -70,7 +70,8 @@ services:
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
       # Disable auto-creation so init-kafka controls partition counts precisely.
       KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
-      KAFKA_LOG_RETENTION_HOURS: 24
+      KAFKA_LOG_RETENTION_HOURS: ${KAFKA_LOG_RETENTION_HOURS:-2}
+      KAFKA_LOG_RETENTION_BYTES: ${KAFKA_LOG_RETENTION_BYTES:-536870912}
       KAFKA_MESSAGE_MAX_BYTES: 1048576
       KAFKA_REPLICA_FETCH_MAX_BYTES: 1048576
     ports:
@@ -321,8 +322,9 @@ services:
   # maxmemory: recommendation cache peaks at ~200 MB for 100 K active users;
   #   512 MB gives 2.5× headroom before eviction kicks in.
   # allkeys-lru: evict least-recently-used keys when full, matching TTL workload.
-  # appendfsync everysec: 1-second durability window is acceptable for a cache;
-  #   avoids blocking 1-2 ms per write that 'always' would impose.
+  # --save "": RDB snapshots disabled; Redis is a pure in-memory cache.
+  # AOF persistence intentionally omitted: catalog and recommendation caches
+  #   are rebuilt automatically on restart (catalog from PG, recs from Kafka).
 
   redis:
     image: redis:${REDIS_VERSION:-7.2-alpine}
@@ -332,8 +334,6 @@ services:
       - redis-data:/data
     command: >
       redis-server
-        --appendonly yes
-        --appendfsync everysec
         --maxmemory ${REDIS_MAXMEMORY:-512mb}
         --maxmemory-policy allkeys-lru
         --save ""
@@ -415,7 +415,7 @@ services:
     command:
       - '--config.file=/etc/prometheus/prometheus.yml'
       - '--storage.tsdb.path=/prometheus'
-      - '--storage.tsdb.retention.time=15d'
+      - '--storage.tsdb.retention.time=3d'
       - '--web.enable-lifecycle'
     ports:
       - "${PROMETHEUS_HOST_PORT:-9090}:9090"
@@ -586,7 +586,7 @@ services:
       SPRING_DATASOURCE_USERNAME: ${AUTH_DB_USER:-authuser}
       SPRING_DATASOURCE_PASSWORD: ${AUTH_DB_PASSWORD:-authpass}
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: ${AUTH_DB_POOL_SIZE:-20}
-      SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE: 5
+      SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE: 2
       SPRING_DATASOURCE_HIKARI_CONNECTION_TIMEOUT: 30000
       JWT_KEY_DIR: /jwt-keys
       JWT_EXPIRATION_MS: ${JWT_EXPIRATION_MS:-3600000}
@@ -611,6 +611,8 @@ services:
     depends_on:
       catalog-db:
         condition: service_healthy
+      redis:
+        condition: service_healthy
       auth-service:
         condition: service_healthy
     volumes:
@@ -620,9 +622,12 @@ services:
       SPRING_DATASOURCE_USERNAME: ${CATALOG_DB_USER:-cataloguser}
       SPRING_DATASOURCE_PASSWORD: ${CATALOG_DB_PASSWORD:-catalogpass}
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: ${CATALOG_DB_POOL_SIZE:-20}
-      SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE: 5
+      SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE: 2
       SPRING_DATASOURCE_HIKARI_CONNECTION_TIMEOUT: 30000
       JWT_PUBLIC_KEY_PATH: /jwt-keys/public.pem
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_PORT: 6379
+      CATALOG_CACHE_TTL_SECONDS: ${CATALOG_CACHE_TTL_SECONDS:-300}
     deploy:
       replicas: ${CATALOG_SERVICE_REPLICAS:-2}
       resources:
@@ -653,7 +658,7 @@ services:
     environment:
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       JWT_PUBLIC_KEY_PATH: /jwt-keys/public.pem
-      STREAM_SEGMENT_SIZE_BYTES: ${STREAM_SEGMENT_SIZE_BYTES:-65536}
+      STREAM_SEGMENT_SIZE_BYTES: ${STREAM_SEGMENT_SIZE_BYTES:-4096}
       STREAM_SEGMENT_COUNT: ${STREAM_SEGMENT_COUNT:-10}
       KAFKA_TOPIC_PLAYBACK_EVENTS: ${KAFKA_TOPIC_PLAYBACK_EVENTS:-playback-events}
     deploy:
@@ -690,7 +695,7 @@ services:
       SPRING_DATASOURCE_USERNAME: ${PLAYLIST_DB_USER:-playlistuser}
       SPRING_DATASOURCE_PASSWORD: ${PLAYLIST_DB_PASSWORD:-playlistpass}
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: ${PLAYLIST_DB_POOL_SIZE:-20}
-      SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE: 5
+      SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE: 2
       SPRING_DATASOURCE_HIKARI_CONNECTION_TIMEOUT: 30000
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       JWT_PUBLIC_KEY_PATH: /jwt-keys/public.pem
@@ -805,7 +810,7 @@ services:
       SPRING_DATASOURCE_USERNAME: ${RECOMMENDATION_DB_USER:-recommendationuser}
       SPRING_DATASOURCE_PASSWORD: ${RECOMMENDATION_DB_PASSWORD:-recommendationpass}
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: ${RECOMMENDATION_DB_POOL_SIZE:-20}
-      SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE: 5
+      SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE: 2
       SPRING_DATASOURCE_HIKARI_CONNECTION_TIMEOUT: 30000
       SPRING_DATA_REDIS_HOST: redis
       SPRING_DATA_REDIS_PORT: 6379

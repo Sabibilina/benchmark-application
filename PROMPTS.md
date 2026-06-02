@@ -56,8 +56,10 @@ Work in iterative prompts: plan → generate → validate/fix.
 - **Session 6:** Analytics Service
 - **Session 7:** Recommendation Service
 - **Session 8:** Notification Service
-- **Session 9:** Frontend
-- **Session 10:** Monitoring + load generator + integration fixes
+- **Session 9:** Integration Tests
+- **Session 10:** Scalability
+- **Session 11:** Monitoring + load generator + integration fixes
+- **Session 12:** Cloud cost-efficiency improvement
 
 ## Prompt pattern
 

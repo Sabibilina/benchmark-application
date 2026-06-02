@@ -1,21 +1,26 @@
 package com.musicstreaming.catalog.unit;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.musicstreaming.catalog.dto.PagedResponse;
 import com.musicstreaming.catalog.dto.SongResponse;
 import com.musicstreaming.catalog.entity.Song;
 import com.musicstreaming.catalog.exception.SongNotFoundException;
 import com.musicstreaming.catalog.repository.SongRepository;
 import com.musicstreaming.catalog.service.CatalogService;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.ValueOperations;
 
 import java.time.LocalDate;
 import java.util.List;
@@ -24,17 +29,41 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
+// Redis stubs in setUp() are not needed by findById or deep-page tests.
+// LENIENT avoids UnnecessaryStubbingException for those tests while keeping
+// strict mode for the stubs that are declared inside individual tests.
+@MockitoSettings(strictness = Strictness.LENIENT)
 class CatalogServiceTest {
 
     @Mock
     private SongRepository songRepository;
 
-    @InjectMocks
+    @Mock
+    private StringRedisTemplate redisTemplate;
+
+    @Mock
+    private ValueOperations<String, String> valueOps;
+
+    // Real ObjectMapper — avoids generic-type complications when mocking
+    // readValue(String, TypeReference<T>) and keeps the test honest about
+    // serialisation round-trips.
+    private final ObjectMapper objectMapper = new ObjectMapper();
+
     private CatalogService catalogService;
+
+    @BeforeEach
+    void setUp() {
+        when(redisTemplate.opsForValue()).thenReturn(valueOps);
+        // Default: cache miss → fall through to the DB
+        when(valueOps.get(anyString())).thenReturn(null);
+        catalogService = new CatalogService(songRepository, redisTemplate, objectMapper, 300L);
+    }
 
     @Test
     void findAll_returnsPagedResponse() {
@@ -92,6 +121,34 @@ class CatalogServiceTest {
         ArgumentCaptor<Pageable> captor = ArgumentCaptor.forClass(Pageable.class);
         verify(songRepository).findAll(captor.capture());
         assertThat(captor.getValue().getSort().getOrderFor("popularity").isDescending()).isTrue();
+    }
+
+    @Test
+    void findAll_deepPage_bypassesCache() {
+        // Pages >= CACHE_PAGE_DEPTH (5) must skip the Redis lookup and go straight to DB.
+        when(songRepository.findAll(any(Pageable.class))).thenReturn(Page.empty());
+
+        catalogService.findAll(5, 20, "id", "asc");
+
+        verify(songRepository).findAll(any(Pageable.class));
+        // opsForValue() must never be called for a deep page
+        verify(redisTemplate, never()).opsForValue();
+    }
+
+    @Test
+    void findAll_cacheHit_returnsWithoutDbCall() throws Exception {
+        // Serialise an empty PagedResponse so the real ObjectMapper can round-trip it.
+        PagedResponse<SongResponse> expected =
+                new PagedResponse<>(List.of(), 0, 20, 0L, 0, true);
+        String json = objectMapper.writeValueAsString(expected);
+
+        when(valueOps.get(anyString())).thenReturn(json);
+
+        PagedResponse<SongResponse> result = catalogService.findAll(0, 20, "id", "asc");
+
+        assertThat(result).isNotNull();
+        // DB must NOT have been called on a cache hit
+        verify(songRepository, never()).findAll(any(Pageable.class));
     }
 
     @Test

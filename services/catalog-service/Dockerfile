@@ -10,4 +10,9 @@ RUN apk add --no-cache curl
 WORKDIR /app
 COPY --from=build /app/target/*.jar app.jar
 EXPOSE 8080
-ENTRYPOINT ["java", "-jar", "app.jar"]
+ENTRYPOINT ["java", \
+  "-XX:+UseContainerSupport", \
+  "-XX:MaxRAMPercentage=50.0", \
+  "-XX:InitialRAMPercentage=25.0", \
+  "-XX:+UseG1GC", \
+  "-jar", "app.jar"]

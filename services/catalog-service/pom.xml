@@ -93,6 +93,12 @@
             <scope>runtime</scope>
         </dependency>
 
+        <!-- Redis (page-level catalog cache) -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-redis</artifactId>
+        </dependency>
+
         <!-- CSV parsing for dataset seed -->
         <dependency>
             <groupId>org.apache.commons</groupId>

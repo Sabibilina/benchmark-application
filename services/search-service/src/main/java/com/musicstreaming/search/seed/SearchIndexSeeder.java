@@ -141,19 +141,34 @@ public class SearchIndexSeeder implements ApplicationRunner {
                       }
                     }
                     """, XContentType.JSON);
-            client.indices().create(createReq, RequestOptions.DEFAULT);
-            log.info("Created OpenSearch index '{}'", indexName);
+            try {
+                client.indices().create(createReq, RequestOptions.DEFAULT);
+                log.info("Created OpenSearch index '{}'", indexName);
+            } catch (Exception e) {
+                // RestHighLevelClient wraps ResponseException (IOException) into
+                // OpenSearchStatusException (RuntimeException), so we catch Exception here.
+                // A sibling replica may have beaten our exists() check — treat
+                // resource_already_exists as success so both replicas start cleanly.
+                String msg = e.getMessage() != null ? e.getMessage() : "";
+                if (msg.contains("resource_already_exists_exception")) {
+                    log.info("OpenSearch index '{}' already created by another instance, continuing", indexName);
+                } else {
+                    throw new IOException("Unexpected error creating index '" + indexName + "'", e);
+                }
+            }
         }
 
         UpdateSettingsRequest updateSettings = new UpdateSettingsRequest(indexName);
         updateSettings.settings("""
                 {
                   "index": {
-                    "number_of_replicas": 0
+                    "number_of_replicas": 0,
+                    "requests.cache.enable": true
                   }
                 }
                 """, XContentType.JSON);
         client.indices().putSettings(updateSettings, RequestOptions.DEFAULT);
+        log.info("OpenSearch index '{}': request cache enabled, replicas=0", indexName);
     }
 
     private long countDocuments() throws IOException {

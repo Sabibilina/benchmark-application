@@ -16,6 +16,10 @@ spring:
   flyway:
     enabled: true
     locations: classpath:db/migration
+  data:
+    redis:
+      host: ${SPRING_DATA_REDIS_HOST:localhost}
+      port: ${SPRING_DATA_REDIS_PORT:6379}
 
 jwt:
   public-key-path: ${JWT_PUBLIC_KEY_PATH:/jwt-keys/public.pem}
@@ -26,6 +30,8 @@ catalog:
     batch-size: ${CATALOG_SEED_BATCH_SIZE:500}
   page:
     max-size: 100
+  cache:
+    ttl-seconds: ${CATALOG_CACHE_TTL_SECONDS:300}
 
 management:
   endpoints:

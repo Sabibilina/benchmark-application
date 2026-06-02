@@ -5,8 +5,8 @@ import com.musicstreaming.streaming.event.PlaybackEventPublisher;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
-import java.security.SecureRandom;
 import java.time.Instant;
+import java.util.concurrent.ThreadLocalRandom;
 
 @Service
 public class StreamingService {
@@ -18,7 +18,6 @@ public class StreamingService {
     private final PlaybackEventPublisher publisher;
     private final int segmentSizeBytes;
     private final int segmentCount;
-    private final SecureRandom random = new SecureRandom();
 
     public StreamingService(PlaybackEventPublisher publisher,
                             @Value("${stream.segment.size-bytes}") int segmentSizeBytes,
@@ -44,7 +43,7 @@ public class StreamingService {
 
     public byte[] generateSegmentPayload() {
         byte[] payload = new byte[segmentSizeBytes];
-        random.nextBytes(payload);
+        ThreadLocalRandom.current().nextBytes(payload);
         return payload;
     }
 
