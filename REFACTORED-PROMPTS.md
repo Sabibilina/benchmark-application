@@ -56,29 +56,3 @@ Validate that:
 Run the relevant checks for this phase, including Compose configuration checks and focused tests for any behavior touched by the implementation. Fix missing or incorrect parts. Output only the changed files. Do not modify unrelated files. Do not consider the phase complete if validation fails or if a cost-saving change removes required behavior.
 
 Before considering the phase complete, update `PROGRESS.md` only to mark validated checklist items and phase status. Document every fix, decision, correction, deviation, cost trade-off, unresolved issue, source of evidence, affected file or service, and any other relevant observation in `COST-AWARE-DECISIONS.md`.
-
-### **Prompt 4 - Load Test Validation**
-
-Validate the cost-efficiency changes on the current branch by running a smoke test followed by a full load test, then document the results in a `LOAD-RESULTS-REFACTORED.md` file.
-
-Use `ARCHITECTURE.md`, `SCALABILITY.md`, and `COST-AWARE-DECISIONS.md §6` as reference documents. Do not modify unrelated files.
-
-**Step 1 — Rebuild and restart with a clean slate**
-
-Rebuild all Docker images to pick up the changed Dockerfiles, then bring the stack down with volumes cleared and back up fresh. Wait until all services are healthy before proceeding.
-
-**Step 2 — Smoke test**
-
-Run the built-in smoke scenario. If the smoke test fails, stop, diagnose, fix, and re-run smoke before proceeding to the full load test.
-
-**Step 3 — Full load test**
-
-Seed users, then run the load test using the same configuration as Run 6 on the baseline branch (documented in `LOAD-RESULTS.md`) so the results are directly comparable.
-
-**Step 4 — Save and compare results**
-
-Create `LOAD-RESULTS-REFACTORED.md` following the same structure as `LOAD-RESULTS.md` and write the test results there.
-
-Then update `PROGRESS.md` to mark the load test validation step complete, and add a §9 to `COST-AWARE-DECISIONS.md` summarising what the results confirm or contradict from the validation plan in §6.
-
-Do not consider this phase complete if any service has a higher error rate than Run 6, or if a regression check from `COST-AWARE-DECISIONS.md §6` fails.

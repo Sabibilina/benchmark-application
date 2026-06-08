@@ -97,7 +97,6 @@ Whenever applicable, also generate:
 - unit tests for core business logic,
 - integration tests for required endpoints and persistence behavior,
 - event production or consumption tests for messaging-based services,
-- frontend component/integration tests for critical UI flows.
 
 After generating the implementation, update `PROGRESS.md` and `DECISIONS.md` to reflect what was completed in this phase and document every important decision taken during generation, including the reason, affected files, and any assumptions made.
 
