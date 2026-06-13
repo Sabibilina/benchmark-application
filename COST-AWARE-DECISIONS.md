@@ -249,3 +249,82 @@ Use this structure where applicable:
 
 - Docker config commands emitted Windows Docker config-file access warnings but returned success for static Compose validation.
 - Non-escalated Docker API access was blocked by the Windows Docker pipe. Docker-backed k6 inspection passed after using approved Docker access.
+
+### Step 3 - Validate/Fix
+
+#### Validation Entry 1 - Source Document And Approved Plan Review
+
+| Field | Content |
+| --- | --- |
+| What was checked or changed | Reviewed cost-efficiency implementation against `ARCHITECTURE.md`, `REQUIREMENTS.md`, `TECH-STACK.md`, `SCALABILITY.md`, and the approved Session 11 Step 1 plan. |
+| Where | Repository docs and cost-related Compose/k6 files. |
+| Why it mattered for cost efficiency | Cost changes must not remove required backend services, persistence isolation, monitoring/load-generator artifacts, Docker Compose runtime, or the 1M workload assumptions. |
+| Validation result | Passed. The implementation remains Docker Compose-only, keeps all eight backend services, preserves base monitoring/load-generator availability, and ties changes to cost drivers identified in `SCALABILITY.md` and Session 11 Step 1. |
+| Remaining risk | Cost impact is structurally measurable but not yet quantified by a before/after live benchmark run. |
+| Status | Validated. |
+
+#### Validation Entry 2 - Compose Configuration Checks
+
+| Field | Content |
+| --- | --- |
+| What was checked or changed | Validated base, baseline, 100k, 1M, cost-smoke, cost-smoke observability, and cost-smoke benchmark Compose models. |
+| Where | `docker-compose.yml`, `docker-compose.scale-baseline.yml`, `docker-compose.scale-100k.yml`, `docker-compose.scale-1m.yml`, `docker-compose.cost-smoke.yml`, `.env.cost-smoke.example`. |
+| Why it mattered for cost efficiency | Compose config checks prove the cost profile and retention/resource controls are syntactically valid and do not break the documented benchmark profiles. |
+| Validation result | Passed: `docker compose config --quiet`, all scale override config checks, `docker compose --env-file .env.cost-smoke.example -f docker-compose.yml -f docker-compose.cost-smoke.yml config --quiet`, and the same cost-smoke check with `--profile observability` and `--profile benchmark` returned success. |
+| Remaining risk | Commands emitted Windows Docker config-file access warnings, but exit codes were successful. |
+| Status | Validated. |
+
+#### Validation Entry 3 - Required Service Availability In Cost-Smoke Profile
+
+| Field | Content |
+| --- | --- |
+| What was checked or changed | Checked service list for the cost-smoke Compose model. |
+| Where | `docker-compose.cost-smoke.yml`. |
+| Why it mattered for cost efficiency | The lower-footprint profile must not remove required application behavior; it may profile-gate helpers, but backend services and required infrastructure must remain available. |
+| Validation result | Passed. `docker compose --env-file .env.cost-smoke.example -f docker-compose.yml -f docker-compose.cost-smoke.yml config --services` listed all eight backend services, gateway, Kafka, Kafka init, and required persistence/cache/search/analytics infrastructure. |
+| Remaining risk | Cost-smoke intentionally omits full observability unless `--profile observability` is enabled, so it is not final benchmark evidence by itself. |
+| Status | Validated. |
+
+#### Validation Entry 4 - k6 Script Inspection
+
+| Field | Content |
+| --- | --- |
+| What was checked or changed | Inspected both touched k6 scripts in the Compose k6 container. |
+| Where | `load-generator/k6/smoke.js`, `load-generator/k6/mixed-user-journey.js`, `load-generator/k6/cost-summary.js`. |
+| Why it mattered for cost efficiency | k6 cost evidence capture must not break the existing smoke and mixed benchmark workload definitions. |
+| Validation result | Passed. Docker-backed `k6 inspect /scripts/smoke.js` and `k6 inspect /scripts/mixed-user-journey.js` returned valid options/scenario output. |
+| Remaining risk | Inspection validates script structure, not a full live backend workload run. |
+| Status | Validated. |
+
+#### Fix Entry 1 - k6 Results Volume Permission
+
+| Field | Content |
+| --- | --- |
+| What was checked or changed | A temporary k6 helper run proved that `handleSummary` could execute but failed to write `/results/cost-helper-check.json` because the `grafana/k6` container user could not write to the named volume. Added configurable `K6_USER`, defaulting to `0:0`, to the k6 Compose service and environment examples. Removed the temporary validation script after the check. |
+| Where | `docker-compose.yml`, `.env.example`, `.env.cost-smoke.example`; temporary validation file `load-generator/k6/cost-summary-check.js` was created and then deleted. |
+| Why it mattered for cost efficiency | The cost-evidence feature is only useful if benchmark runs can actually persist their summary artifact for comparison. |
+| Validation result | Passed. Rerunning the temporary k6 helper wrote the cost evidence summary successfully to `/results/cost-helper-check.json`. Base and cost-smoke Compose config checks still passed after the fix. |
+| Remaining risk | Running k6 as root is broader than the default container user. The setting is configurable through `K6_USER`, and it affects only the load-generator container, not backend services. |
+| Status | Fixed and validated. |
+
+#### Validation Entry 5 - Diff Hygiene
+
+| Field | Content |
+| --- | --- |
+| What was checked or changed | Ran `git diff --check`. |
+| Where | Full repository diff. |
+| Why it mattered for cost efficiency | Prevents whitespace or patch-format issues from obscuring the validation changes. |
+| Validation result | Passed. Git emitted normal LF/CRLF working-copy warnings only. |
+| Remaining risk | None for diff hygiene. |
+| Status | Validated. |
+
+#### Phase 11 Validation Status
+
+| Field | Content |
+| --- | --- |
+| What was checked or changed | Marked Phase 11 Step 3 and the relevant validation acceptance item complete. |
+| Where | `PROGRESS.md`. |
+| Why it mattered for cost efficiency | The cost-efficiency phase should only be marked complete after the relevant static and focused runtime checks pass. |
+| Validation result | Passed after fixing the k6 results-volume permission issue. |
+| Remaining risk | A full live benchmark comparison remains future evidence; this phase validated correctness and measurability of the implemented cost controls. |
+| Status | Complete. |
