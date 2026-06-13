@@ -1,5 +1,6 @@
 import http from 'k6/http';
 import { check } from 'k6';
+import { buildCostSummary } from './cost-summary.js';
 
 const baseUrl = __ENV.BASE_URL || 'http://gateway:8080';
 const password = __ENV.K6_USER_PASSWORD || 'CorrectHorse123';
@@ -200,4 +201,8 @@ export function playlistMutation(data) {
 
 export default function () {
   throw new Error('mixed-user-journey.js requires its named scenarios; use BENCHMARK_DURATION instead of K6_DURATION so k6 does not replace the scenario configuration');
+}
+
+export function handleSummary(data) {
+  return buildCostSummary(data, 'mixed-user-journey.js');
 }

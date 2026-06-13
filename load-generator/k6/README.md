@@ -2,11 +2,19 @@
 
 This directory contains Docker Compose runnable k6 workloads for benchmark runs.
 
+Each script writes a cost evidence summary JSON file to `/results` in the `k6-results` Docker volume. The summary captures profile metadata, target workload variables, active k6 rates, key latency/error metrics, and dropped-iteration evidence for later cost comparison.
+
 Run all scripts through the Compose `k6` service so traffic stays on the shared Docker network and enters through the gateway:
 
 ```bash
 docker compose -f docker-compose.yml -f docker-compose.scale-baseline.yml run --rm k6 run /scripts/smoke.js
 docker compose -f docker-compose.yml -f docker-compose.scale-100k.yml run --rm -e BENCHMARK_DURATION=10m -e K6_AUTH_LOGIN_RATE=50 -e K6_AUTH_PREALLOCATED_VUS=100 -e K6_AUTH_MAX_VUS=250 -e K6_CATALOG_SEARCH_ITER_RATE=400 -e K6_CATALOG_SEARCH_PREALLOCATED_VUS=300 -e K6_CATALOG_SEARCH_MAX_VUS=700 -e K6_STREAMING_SESSION_RATE=2000 -e K6_STREAMING_PREALLOCATED_VUS=1500 -e K6_STREAMING_MAX_VUS=3000 -e K6_PLAYLIST_MUTATION_ITER_RATE=20 -e K6_PLAYLIST_PREALLOCATED_VUS=100 -e K6_PLAYLIST_MAX_VUS=250 k6 run /scripts/mixed-user-journey.js
+```
+
+Override the cost evidence output path when a run needs a stable artifact name:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.scale-baseline.yml run --rm -e K6_COST_SUMMARY_PATH=/results/baseline-smoke-cost-summary.json k6 run /scripts/smoke.js
 ```
 
 The default target is `http://gateway:8080`. Override it with `BASE_URL` when needed:

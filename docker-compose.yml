@@ -348,7 +348,7 @@ services:
     command:
       - redis-server
       - --appendonly
-      - "yes"
+      - ${REDIS_APPENDONLY:-no}
       - --maxmemory
       - ${REDIS_MAXMEMORY:-512mb}
       - --maxmemory-policy
@@ -448,10 +448,12 @@ services:
       KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
       KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
       KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
-      # MANUAL CHANGE
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
       KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_LOG_RETENTION_HOURS: ${KAFKA_LOG_RETENTION_HOURS:-24}
+      KAFKA_LOG_RETENTION_BYTES: ${KAFKA_LOG_RETENTION_BYTES:-1073741824}
+      KAFKA_LOG_SEGMENT_BYTES: ${KAFKA_LOG_SEGMENT_BYTES:-268435456}
     volumes:
       - kafka-data:/var/lib/kafka/data
 
@@ -515,6 +517,8 @@ services:
     command:
       - --config.file=/etc/prometheus/prometheus.yml
       - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=${PROMETHEUS_RETENTION_TIME:-12h}
+      - --storage.tsdb.retention.size=${PROMETHEUS_RETENTION_SIZE:-1GB}
     volumes:
       - ./config/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - prometheus-data:/prometheus
@@ -559,8 +563,11 @@ services:
       TARGET_AUTH_LOGINS_PER_SECOND: ${TARGET_AUTH_LOGINS_PER_SECOND:-500}
       TARGET_CATALOG_SEARCH_RPS: ${TARGET_CATALOG_SEARCH_RPS:-4000}
       TARGET_PLAYLIST_MUTATIONS_PER_SECOND: ${TARGET_PLAYLIST_MUTATIONS_PER_SECOND:-200}
+      COST_PROFILE: ${COST_PROFILE:-local}
+      K6_COST_SUMMARY_PATH: ${K6_COST_SUMMARY_PATH:-}
     volumes:
       - ./load-generator/k6:/scripts:ro
+      - k6-results:/results
     depends_on:
       gateway:
         condition: service_healthy
@@ -583,3 +590,4 @@ volumes:
   prometheus-data:
   grafana-data:
   gateway-cache:
+  k6-results:

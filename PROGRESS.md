@@ -349,7 +349,7 @@ This extra session is defined in `REFACTORED-PROMPTS.md`. It is intentionally sc
 
 ### Steps
 - [x] **Step 1 - Plan**: Identify the main cloud cost drivers in the current backend-only app, prioritize realistic cloud cost-saving opportunities, and define validation against the workload in `SCALABILITY.md`
-- [ ] **Step 2 - Generate**: Implement the approved cloud cost-efficiency changes while preserving required backend behavior, service boundaries, and documented workload assumptions
+- [x] **Step 2 - Generate**: Implement the approved cloud cost-efficiency changes while preserving required backend behavior, service boundaries, and documented workload assumptions
 - [ ] **Step 3 - Validate/Fix**: Verify the changes against the source documents, the approved plan, relevant tests, and the workload/performance characteristics in `SCALABILITY.md`
 
 ### Acceptance Criteria

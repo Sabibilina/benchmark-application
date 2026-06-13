@@ -921,6 +921,7 @@ Use Compose override files to keep experiments repeatable:
 - `docker-compose.scale-baseline.yml`
 - `docker-compose.scale-100k.yml`
 - `docker-compose.scale-1m.yml`
+- `docker-compose.cost-smoke.yml` for lower-footprint backend smoke runs before full benchmark evidence is needed
 - `docker-compose.observability.yml` if dashboards need additional exporters
 
 Each profile should set:
@@ -933,6 +934,20 @@ Each profile should set:
 - ClickHouse memory limits
 - Redis max memory and eviction policy
 - proxy routing and timeouts
+
+The cost-smoke override is not a replacement for benchmark validation. It keeps the gateway and backend path available while reducing idle support-container footprint and moving full observability/load generation behind explicit Compose profiles. Use the baseline, 100k, and 1M profiles when collecting benchmark evidence.
+
+Cost-smoke command:
+
+```bash
+docker compose --env-file .env.cost-smoke.example -f docker-compose.yml -f docker-compose.cost-smoke.yml up -d --build
+```
+
+Cost-smoke with full observability:
+
+```bash
+docker compose --env-file .env.cost-smoke.example -f docker-compose.yml -f docker-compose.cost-smoke.yml --profile observability up -d
+```
 
 Example commands, non-final:
 

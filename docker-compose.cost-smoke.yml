@@ -1,0 +1,141 @@
+services:
+  auth-service:
+    ports: !reset []
+    cpus: ${AUTH_SERVICE_CPUS:-0.35}
+    mem_limit: ${AUTH_SERVICE_MEMORY:-384m}
+
+  catalog-service:
+    ports: !reset []
+    cpus: ${CATALOG_SERVICE_CPUS:-0.35}
+    mem_limit: ${CATALOG_SERVICE_MEMORY:-384m}
+
+  streaming-service:
+    ports: !reset []
+    cpus: ${STREAMING_SERVICE_CPUS:-0.35}
+    mem_limit: ${STREAMING_SERVICE_MEMORY:-384m}
+
+  playlist-service:
+    ports: !reset []
+    cpus: ${PLAYLIST_SERVICE_CPUS:-0.35}
+    mem_limit: ${PLAYLIST_SERVICE_MEMORY:-384m}
+
+  search-service:
+    ports: !reset []
+    cpus: ${SEARCH_SERVICE_CPUS:-0.35}
+    mem_limit: ${SEARCH_SERVICE_MEMORY:-384m}
+
+  analytics-service:
+    ports: !reset []
+    cpus: ${ANALYTICS_SERVICE_CPUS:-0.35}
+    mem_limit: ${ANALYTICS_SERVICE_MEMORY:-384m}
+
+  recommendation-service:
+    ports: !reset []
+    cpus: ${RECOMMENDATION_SERVICE_CPUS:-0.35}
+    mem_limit: ${RECOMMENDATION_SERVICE_MEMORY:-384m}
+
+  notification-service:
+    ports: !reset []
+    cpus: ${NOTIFICATION_SERVICE_CPUS:-0.25}
+    mem_limit: ${NOTIFICATION_SERVICE_MEMORY:-384m}
+
+  gateway:
+    cpus: ${GATEWAY_CPUS:-0.35}
+    mem_limit: ${GATEWAY_MEMORY:-128m}
+
+  kafka:
+    ports: !reset []
+    cpus: ${KAFKA_CPUS:-0.50}
+    mem_limit: ${KAFKA_MEMORY:-768m}
+    environment:
+      KAFKA_LOG_RETENTION_HOURS: ${KAFKA_LOG_RETENTION_HOURS:-6}
+      KAFKA_LOG_RETENTION_BYTES: ${KAFKA_LOG_RETENTION_BYTES:-268435456}
+
+  search-opensearch:
+    ports: !reset []
+    cpus: ${OPENSEARCH_CPUS:-0.75}
+    mem_limit: ${OPENSEARCH_MEMORY:-1536m}
+    environment:
+      OPENSEARCH_JAVA_OPTS: ${OPENSEARCH_JAVA_OPTS:--Xms384m -Xmx384m}
+
+  analytics-db:
+    ports: !reset []
+    cpus: ${CLICKHOUSE_CPUS:-0.50}
+    mem_limit: ${CLICKHOUSE_MEMORY:-1g}
+
+  recommendation-redis:
+    ports: !reset []
+    cpus: ${REDIS_CPUS:-0.25}
+    mem_limit: ${REDIS_MEMORY:-256m}
+    command:
+      - redis-server
+      - --appendonly
+      - ${REDIS_APPENDONLY:-no}
+      - --maxmemory
+      - ${REDIS_MAXMEMORY:-128mb}
+      - --maxmemory-policy
+      - ${REDIS_MAXMEMORY_POLICY:-allkeys-lru}
+
+  notification-db:
+    ports: !reset []
+    cpus: ${MONGO_CPUS:-0.35}
+    mem_limit: ${MONGO_MEMORY:-512m}
+
+  auth-db:
+    ports: !reset []
+    cpus: ${POSTGRES_CPUS:-0.35}
+    mem_limit: ${POSTGRES_MEMORY:-512m}
+
+  catalog-db:
+    ports: !reset []
+    cpus: ${POSTGRES_CPUS:-0.35}
+    mem_limit: ${POSTGRES_MEMORY:-512m}
+
+  playlist-db:
+    ports: !reset []
+    cpus: ${POSTGRES_CPUS:-0.35}
+    mem_limit: ${POSTGRES_MEMORY:-512m}
+
+  recommendation-db:
+    ports: !reset []
+    cpus: ${POSTGRES_CPUS:-0.35}
+    mem_limit: ${POSTGRES_MEMORY:-512m}
+
+  prometheus:
+    profiles:
+      - observability
+    cpus: ${PROMETHEUS_CPUS:-0.25}
+    mem_limit: ${PROMETHEUS_MEMORY:-256m}
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=${PROMETHEUS_RETENTION_TIME:-2h}
+      - --storage.tsdb.retention.size=${PROMETHEUS_RETENTION_SIZE:-256MB}
+
+  grafana:
+    profiles:
+      - observability
+
+  nginx-exporter:
+    profiles:
+      - observability
+
+  redis-exporter:
+    profiles:
+      - observability
+
+  kafka-exporter:
+    profiles:
+      - observability
+
+  cadvisor:
+    profiles:
+      - observability
+
+  k6:
+    profiles:
+      - benchmark
+    cpus: ${K6_CPUS:-0.50}
+    mem_limit: ${K6_MEMORY:-512m}
+    environment:
+      COST_PROFILE: ${COST_PROFILE:-cost-smoke}

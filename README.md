@@ -49,10 +49,12 @@ Use these documents for system shape and validation:
 ```text
 benchmark-application/
   docker-compose.yml
+  docker-compose.cost-smoke.yml
   docker-compose.scale-baseline.yml
   docker-compose.scale-100k.yml
   docker-compose.scale-1m.yml
   .env.example
+  .env.cost-smoke.example
   config/
     grafana/
     jwt/
@@ -91,6 +93,13 @@ benchmark-application/
 * Prometheus, Grafana, gateway metrics, Kafka metrics, Redis metrics, and container metrics.
 * k6 load-generator service and workload scripts.
 * Named Docker network: `benchmark-network`.
+
+Cost controls included in this branch:
+
+* `docker-compose.cost-smoke.yml` for lower-footprint backend smoke runs.
+* Bounded Prometheus and Kafka retention defaults.
+* Redis cache persistence disabled by default because recommendation cache entries can be rebuilt.
+* k6 cost evidence summaries written under the `k6-results` Docker volume.
 
 ## Service Interfaces
 
@@ -205,6 +214,18 @@ Detailed test inventory, coverage numbers, infrastructure smoke tests, and final
 
 All benchmark traffic should enter through the gateway instead of direct service ports. Scaled profiles remove direct application host ports so service replicas can run behind Docker Compose service discovery.
 
+Lower-footprint backend smoke profile. This profile keeps the backend runnable through the gateway, removes direct service/infra host ports, and moves Grafana/exporters/cAdvisor/k6 behind optional Compose profiles:
+
+```bash
+docker compose --env-file .env.cost-smoke.example -f docker-compose.yml -f docker-compose.cost-smoke.yml up -d --build
+```
+
+Add full observability to the cost-smoke profile when you need Prometheus/Grafana/exporters:
+
+```bash
+docker compose --env-file .env.cost-smoke.example -f docker-compose.yml -f docker-compose.cost-smoke.yml --profile observability up -d
+```
+
 Baseline smoke profile:
 
 ```bash
@@ -235,6 +256,8 @@ docker compose -f docker-compose.yml -f docker-compose.scale-1m.yml run --rm -e 
 
 See `SCALABILITY.md` for the target workload table, scaling rationale, bottleneck analysis, recommended scaling order, and interpretation guidance.
 
+The k6 scripts write cost evidence summaries to `/results/*-cost-summary.json` inside the `k6-results` Docker volume. The summary includes selected profile, target workload variables, k6 rates, dropped iterations, request counts, latency metrics, and failure rates.
+
 ## Stop The Environment
 
 Stop containers without deleting volumes:
@@ -255,7 +278,6 @@ Use `down -v` only when you intentionally want to delete local database, cache, 
 
 This branch does not include:
 
-* Cost-efficiency implementation or cost-optimization experiments.
 * Frontend UI, frontend runtime containers, browser tests, or frontend metrics.
 * Kubernetes, Helm, Nomad, Swarm, Terraform, or cloud deployment code.
 * Real audio object storage. Streaming is simulated with generated segment payloads.

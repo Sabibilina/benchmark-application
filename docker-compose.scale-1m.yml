@@ -107,7 +107,7 @@ services:
     command:
       - redis-server
       - --appendonly
-      - "yes"
+      - ${REDIS_APPENDONLY:-no}
       - --maxmemory
       - ${REDIS_MAXMEMORY:-2gb}
       - --maxmemory-policy

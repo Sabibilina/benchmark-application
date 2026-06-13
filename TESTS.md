@@ -44,6 +44,7 @@ docker compose config --services
 docker compose -f docker-compose.yml -f docker-compose.scale-baseline.yml config --quiet
 docker compose -f docker-compose.yml -f docker-compose.scale-100k.yml config --quiet
 docker compose -f docker-compose.yml -f docker-compose.scale-1m.yml config --quiet
+docker compose --env-file .env.cost-smoke.example -f docker-compose.yml -f docker-compose.cost-smoke.yml config --quiet
 docker compose run --rm --no-deps gateway nginx -t
 docker compose run --rm --no-deps --entrypoint promtool prometheus check config /etc/prometheus/prometheus.yml
 docker compose run --rm --no-deps k6 inspect /scripts/smoke.js

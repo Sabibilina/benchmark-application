@@ -157,3 +157,95 @@ Use this structure where applicable:
 - k6 script inspection and smoke run when Docker is available.
 - Metrics evidence from Prometheus/Grafana for benchmark runs: request rates, p95/p99 latency, error rates, Kafka lag, Redis hit/miss and memory, DB connection pools, container CPU/memory, OpenSearch/ClickHouse pressure.
 - Documentation review to confirm each cost-saving claim names the workload assumption, expected impact, trade-off, and validation evidence.
+
+### Step 2 - Generate
+
+#### Implemented Change 1 - Cost-Smoke Compose Override
+
+| Field | Content |
+| --- | --- |
+| What changed | Added `docker-compose.cost-smoke.yml` and `.env.cost-smoke.example`. The override removes direct service and infrastructure host ports, lowers CPU/memory defaults for smoke usage, keeps gateway-based backend access, and moves Prometheus/Grafana/exporters/cAdvisor/k6 behind explicit Compose profiles. |
+| Where | `docker-compose.cost-smoke.yml`, `.env.cost-smoke.example`, `README.md`, `SCALABILITY.md`. |
+| Why | The full base stack is useful for benchmark validation but keeps observability/exporter/load-generator containers active even when a developer only needs a lower-footprint backend smoke runtime. |
+| Cost driver targeted | Idle CPU and memory from support containers, direct debug surfaces, and over-sized local smoke resources. |
+| Evidence | Step 1 identified always-on support components as a cost driver; `SCALABILITY.md` says benchmark traffic should enter through the gateway and that profile staging should precede full target runs. |
+| Expected cost impact | Lower local/cloud-like smoke footprint while keeping the full benchmark path unchanged. |
+| Risk or trade-off | Cost-smoke runs do not start full observability by default, so they must not be used as the final benchmark evidence profile. |
+| Validation | Passed `docker compose --env-file .env.cost-smoke.example -f docker-compose.yml -f docker-compose.cost-smoke.yml config --quiet`, plus the same command with `--profile observability` and `--profile benchmark`. |
+| Status | Implemented and statically validated. |
+
+#### Implemented Change 2 - Bounded Retention Defaults
+
+| Field | Content |
+| --- | --- |
+| What changed | Added Prometheus retention time/size flags and Kafka log retention/segment defaults. |
+| Where | `docker-compose.yml`, `.env.example`, `.env.cost-smoke.example`, `README.md`, `SCALABILITY.md`. |
+| Why | Long benchmark runs can grow Prometheus TSDB and Kafka logs even after the application path itself is healthy. |
+| Cost driver targeted | Persistent disk/storage growth for monitoring and broker data. |
+| Evidence | Step 1 identified Kafka and Prometheus named volumes as storage-cost risks; `SCALABILITY.md` requires benchmark runs to monitor Kafka and Prometheus while also warning against unbounded evidence collection. |
+| Expected cost impact | More predictable local and cloud disk usage during repeated benchmark runs. |
+| Risk or trade-off | Retention windows that are too short can remove old benchmark evidence or messages needed by very delayed consumers. Defaults remain conservative for normal benchmark loops. |
+| Validation | Base, baseline, 100k, 1M, and cost-smoke Compose config checks passed. |
+| Status | Implemented and statically validated. |
+
+#### Implemented Change 3 - Redis Cache Persistence Tuning
+
+| Field | Content |
+| --- | --- |
+| What changed | Made Redis append-only persistence configurable and defaulted it to `no` for recommendation cache usage while preserving max-memory and LRU eviction controls. |
+| Where | `docker-compose.yml`, `docker-compose.scale-100k.yml`, `docker-compose.scale-1m.yml`, `docker-compose.cost-smoke.yml`, `.env.example`, `.env.cost-smoke.example`. |
+| Why | Recommendation cache entries are derived from persisted interaction state and can be rebuilt after restart, so writing cache churn to disk is unnecessary for the current app behavior. |
+| Cost driver targeted | Redis disk I/O and persisted cache storage growth. |
+| Evidence | `TECH-STACK.md` defines Redis as a low-latency cache for Recommendation, not the durable recommendation system of record; Recommendation durable state remains in PostgreSQL. |
+| Expected cost impact | Lower write amplification and less cache-data persistence cost during recommendation-heavy benchmark runs. |
+| Risk or trade-off | Redis restarts begin with a cold cache, which can temporarily increase Recommendation PostgreSQL reads until cache entries refill. |
+| Validation | Compose config checks passed for base and scale profiles. No backend service test was required because service behavior and persistence model did not change. |
+| Status | Implemented and statically validated. |
+
+#### Implemented Change 4 - k6 Cost Evidence Summaries
+
+| Field | Content |
+| --- | --- |
+| What changed | Added `load-generator/k6/cost-summary.js` and wired `handleSummary` in `smoke.js` and `mixed-user-journey.js` to write run metadata and key metrics to `/results/*-cost-summary.json` in the `k6-results` Docker volume. |
+| Where | `load-generator/k6/cost-summary.js`, `load-generator/k6/smoke.js`, `load-generator/k6/mixed-user-journey.js`, `docker-compose.yml`, `load-generator/k6/README.md`, `README.md`. |
+| Why | Cost-efficiency comparisons need profile, workload, rate, target, dropped-iteration, latency, and failure-rate evidence captured with the benchmark run. |
+| Cost driver targeted | Analysis waste and over-provisioning caused by benchmark runs that cannot be compared after the fact. |
+| Evidence | Step 1 planned benchmark cost evidence capture; `SCALABILITY.md` says every benchmark run should record replica counts, CPU/memory limits, k6 profile, and host information. |
+| Expected cost impact | Indirect but important: makes later resource reductions evidence-based instead of guesswork. |
+| Risk or trade-off | k6 summary output now writes a JSON artifact; users running scripts outside Compose need a writable `/results` path or an explicit `K6_COST_SUMMARY_PATH`. |
+| Validation | Docker-backed `k6 inspect /scripts/smoke.js` and `k6 inspect /scripts/mixed-user-journey.js` passed after replacing unsupported optional chaining in the helper. |
+| Status | Implemented and validated by k6 script inspection. |
+
+#### Implemented Change 5 - Documentation And Checklist Updates
+
+| Field | Content |
+| --- | --- |
+| What changed | Updated README, load-generator docs, scalability docs, TESTS command evidence, and PROGRESS checklist status for Step 2. |
+| Where | `README.md`, `load-generator/k6/README.md`, `SCALABILITY.md`, `TESTS.md`, `PROGRESS.md`, `COST-AWARE-DECISIONS.md`. |
+| Why | The cost-efficiency changes need to be discoverable and must not be confused with the full benchmark validation path. |
+| Cost driver targeted | Operational waste from running the wrong profile or losing run evidence. |
+| Evidence | Step 1 required documentation of expected cost impact, trade-offs, assumptions, and validation evidence. |
+| Expected cost impact | Indirect: improves repeatability and reduces accidental over-provisioned smoke runs. |
+| Risk or trade-off | More profile options require clear documentation so users choose the correct path for smoke versus benchmark evidence. |
+| Validation | `git diff --check` passed; Markdown command examples remain bash-style. |
+| Status | Implemented and validated. |
+
+#### Validation Results For Step 2
+
+| Check | Result | Notes |
+| --- | --- | --- |
+| Base Compose config | Passed | `docker compose config --quiet` returned success. |
+| Baseline scale Compose config | Passed | `docker compose -f docker-compose.yml -f docker-compose.scale-baseline.yml config --quiet` returned success. |
+| 100k scale Compose config | Passed | `docker compose -f docker-compose.yml -f docker-compose.scale-100k.yml config --quiet` returned success. |
+| 1M scale Compose config | Passed | `docker compose -f docker-compose.yml -f docker-compose.scale-1m.yml config --quiet` returned success. |
+| Cost-smoke Compose config | Passed | Checked default, `--profile observability`, and `--profile benchmark`. |
+| Cost-smoke service list | Passed | `docker compose --env-file .env.cost-smoke.example -f docker-compose.yml -f docker-compose.cost-smoke.yml config --services` still includes all eight backend services, required persistence components, Kafka, gateway, and Kafka topic initialization. |
+| k6 smoke script inspection | Passed | Required Docker access. Initial optional-chaining syntax error was fixed. |
+| k6 mixed script inspection | Passed | Required Docker access. |
+| Full live smoke run | Not run | This generation step changed deployment and load-generator artifacts; live benchmark execution remains for validation/fix. |
+| Backend tests | Not run | No backend service business logic changed. |
+
+#### Observations
+
+- Docker config commands emitted Windows Docker config-file access warnings but returned success for static Compose validation.
+- Non-escalated Docker API access was blocked by the Windows Docker pipe. Docker-backed k6 inspection passed after using approved Docker access.

@@ -1,5 +1,6 @@
 import http from 'k6/http';
 import { check, sleep } from 'k6';
+import { buildCostSummary } from './cost-summary.js';
 
 const durationP95Ms = Number(__ENV.K6_SMOKE_HTTP_REQ_DURATION_P95_MS || 2000);
 
@@ -81,4 +82,8 @@ export default function () {
   });
 
   sleep(1);
+}
+
+export function handleSummary(data) {
+  return buildCostSummary(data, 'smoke.js');
 }
