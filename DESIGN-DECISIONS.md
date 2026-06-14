@@ -3229,3 +3229,36 @@ Reviewed the generated Session 9 output against `ARCHITECTURE.md`, `REQUIREMENTS
 - The live smoke validates integrated correctness and required flow coverage; it is not a 100k or 1m capacity claim.
 - Docker emitted `C:\Users\thele\.docker\config.json` access warnings during several commands, but the relevant validation commands returned success.
 - Existing Kafka topics are not repartitioned by `kafka-init` when they already exist. The rendered 100k and 1m configs pass the higher partition values to `kafka-init`, but existing volumes still need topic inspection before high-scale runs.
+
+# Final End-to-End Validation Pass
+
+## Review Result
+
+Performed a final submission-oriented validation pass against the current repository state. The backend-only Docker Compose system was validated through static repository checks, Compose rendering, backend image builds, live service inventory, Prometheus target checks, and k6 end-to-end smoke evidence.
+
+## Checklist Clarifications
+
+| Clarification | Why | Justification | Affected files/services |
+| --- | --- | --- | --- |
+| The final JWT checklist item now refers to public application endpoints and explicitly notes operational health/metrics endpoints. | Service security config intentionally permits `/actuator/health` and `/actuator/prometheus` so Docker health checks and Prometheus scraping can work. Treating those operational endpoints as application endpoints would conflict with M-24. | `REQUIREMENTS.md` M-24 requires Prometheus metrics; M-25 protects application endpoints. Service security configs permit only Auth register/login plus Actuator health/prometheus. | `PROGRESS.md`; all backend service security configs. |
+| The persistence artifact checklist now allows service-owned schema/index initializers and document models, not only SQL migrations. | The system uses heterogeneous persistence: PostgreSQL migrations, ClickHouse schema initializer, OpenSearch indexing initializer, Redis cache, and MongoDB documents. Requiring SQL migrations for every persistence type would not match `TECH-STACK.md`. | `TECH-STACK.md` assigns PostgreSQL, OpenSearch, ClickHouse, Redis, and MongoDB by service; `REQUIREMENTS.md` M-26 requires dedicated persistence, not one migration mechanism. | `PROGRESS.md`; Auth, Catalog, Playlist, Search, Analytics, Recommendation, Notification persistence artifacts. |
+
+## Validation Evidence
+
+- `docker compose config --quiet` passed.
+- `docker compose --profile benchmark config --quiet` passed.
+- `docker compose config --services` listed all eight backend services and required infrastructure.
+- Static artifact check confirmed each backend service has a Dockerfile, `.env.example`, Maven `pom.xml`, and test tree.
+- Endpoint mapping scan confirmed required controllers exist for Auth, Catalog, Streaming, Playlist, Search, Analytics, and Recommendation.
+- Security config scan confirmed application endpoints require authentication except Auth register/login; Actuator health/prometheus endpoints are public operational endpoints.
+- `docker compose build auth-service catalog-service streaming-service playlist-service search-service analytics-service recommendation-service notification-service` passed.
+- `docker compose ps` showed all eight backend services healthy/running with required infrastructure running.
+- Prometheus active targets included all eight backend service scrape targets as `up`.
+- Final k6 smoke passed with 33 iterations, 330 HTTP requests, 100% checks, 0 failed requests, and p95 1657 ms.
+- Final validation evidence was recorded in `TESTS.md`.
+
+## Remaining Risks
+
+- The final smoke is a correctness and integration check, not a high-scale capacity claim.
+- Backend Docker build reused cached Maven `verify` layers because Java service sources were unchanged; this is acceptable for this final pass, but a no-cache build can be run for stricter release reproducibility.
+- Existing Docker volumes can preserve Kafka topics and database contents across runs; high-scale benchmark runs should inspect topic partitions and data state before claiming capacity evidence.

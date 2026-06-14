@@ -92,6 +92,32 @@ docker compose exec -T kafka /opt/kafka/bin/kafka-topics.sh --bootstrap-server k
 | 24 | Session 9 k6 summary artifact check | Confirms the smoke run writes `/results/smoke-cost-summary.json`. | Load Generator | Docker Compose k6 container | Passed. |
 | 25 | Session 9 Kafka topic check | Confirms default live topic creation for `playback-events` and `playlist-events`. | Kafka / messaging infrastructure | Kafka CLI | Passed. `playback-events` had 12 partitions; `playlist-events` had 3 partitions. |
 
+## Final End-to-End Validation Pass
+
+Final validation was performed on June 14, 2026 against the backend-only Docker Compose system.
+
+Additional commands used:
+
+```bash
+docker compose build auth-service catalog-service streaming-service playlist-service search-service analytics-service recommendation-service notification-service
+docker compose ps
+docker compose exec -T prometheus wget -qO- "http://localhost:9090/api/v1/targets?state=active"
+docker compose run --rm k6 run /scripts/smoke.js
+```
+
+| No. | Name | Description | Service Tested | Runner / Framework | Result |
+| ---: | --- | --- | --- | --- | --- |
+| 26 | Final backend image build | Confirms all eight backend service Dockerfiles build and include Maven `verify` stages. | All backend services | Docker Compose build | Passed. Build completed for Auth, Catalog, Streaming, Playlist, Search, Analytics, Recommendation, and Notification. Maven `verify` layers were cached because service source files were unchanged. |
+| 27 | Final running-service inventory | Confirms all eight backend services and required infrastructure are running in Docker Compose. | Integrated deployment | Docker Compose | Passed. `docker compose ps` showed all eight backend services healthy plus required databases, Kafka, gateway, Prometheus, Grafana, Redis, OpenSearch, ClickHouse, and MongoDB running. |
+| 28 | Final Prometheus target check | Confirms metrics are collected from all eight backend services. | Monitoring and all backend services | Prometheus API | Passed. Active Prometheus targets included Auth, Catalog, Streaming, Playlist, Search, Analytics, Recommendation, and Notification with `health: up`. |
+| 29 | Final k6 end-to-end smoke | Confirms the load generator exercises the main backend flows through the gateway. | Integrated system | k6 | Passed. 33 iterations, 330 HTTP requests, 100% checks, 0 failed requests, p95 1657 ms. |
+
+Final validation notes:
+
+- The final smoke is correctness evidence, not a 100k or 1m capacity claim.
+- Application endpoints are JWT-protected; operational health and Prometheus endpoints remain unauthenticated by design so Docker health checks and Prometheus scraping can function.
+- The repository is backend-only. Frontend implementation, browser UI, frontend containers, frontend tests, and frontend metrics remain explicitly out of scope.
+
 ## Unit Tests
 
 | No. | Name | Description | Service Tested | Runner / Framework | File |
