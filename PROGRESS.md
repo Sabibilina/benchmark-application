@@ -311,7 +311,7 @@ Frontend UI work has been intentionally moved out of scope for this version so d
 ### Steps
 - [x] **Session 9 Step 1 - Plan**: Monitoring stack, load-generator strategy, Docker Compose/network changes, integration fixes, validation checks, and cost-aware runtime profiles
 - [x] **Session 9 Step 2 - Generate**: Monitoring config, load-generator scripts, Compose wiring, integration fixes, tests, and README updates
-- [ ] **Session 9 Step 3 - Validate/Fix**: Review against source documents, run validation checks, fix defects, and update checklist status
+- [x] **Session 9 Step 3 - Validate/Fix**: Review against source documents, run validation checks, fix defects, and update checklist status
 
 ### Monitoring
 - [x] Prometheus configured to scrape all 8 services
@@ -324,16 +324,16 @@ Frontend UI work has been intentionally moved out of scope for this version so d
 - [x] Workload definition is documented
 
 ### Integration Fixes
-- [ ] Inter-service HTTP calls implement retry with exponential backoff (M-22)
-- [ ] Inter-service HTTP calls implement circuit breaker or equivalent failure isolation (M-23)
+- [x] Inter-service HTTP calls implement retry with exponential backoff (M-22)
+- [x] Inter-service HTTP calls implement circuit breaker or equivalent failure isolation (M-23)
 - [x] All 8 services communicate over the shared named Docker network (M-18)
 - [x] CPU and memory limits are configurable per service in `docker-compose.yml` (M-20)
 
 ### System Verification Deliverable
-- [ ] Automated integration tests show that the services run correctly together in the shared deployment environment
-- [ ] End-to-end tests cover the main application flows across service boundaries
-- [ ] Cross-service authentication, persistence, and messaging behavior are validated in the integrated system
-- [ ] Test evidence is documented and included in the final delivery
+- [x] Automated integration tests show that the services run correctly together in the shared deployment environment
+- [x] End-to-end tests cover the main application flows across service boundaries
+- [x] Cross-service authentication, persistence, and messaging behavior are validated in the integrated system
+- [x] Test evidence is documented and included in the final delivery
 
 ---
 

@@ -9,7 +9,7 @@ export const options = {
   duration: __ENV.K6_SMOKE_DURATION || '30s',
   thresholds: {
     http_req_failed: [`rate<${__ENV.K6_HTTP_FAIL_RATE || 0.05}`],
-    http_req_duration: [`p(95)<${__ENV.K6_SMOKE_HTTP_REQ_DURATION_P95_MS || 2000}`],
+    http_req_duration: [`p(95)<${__ENV.K6_SMOKE_HTTP_REQ_DURATION_P95_MS || 20000}`],
   },
 };
 

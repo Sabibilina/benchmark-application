@@ -54,6 +54,44 @@ Scalability readiness: GO. The backend has enough infrastructure confidence to p
 | Recommendation Service | Proceed to scalability testing with attention on Redis latency during cache churn and consistency between Redis and PostgreSQL-backed recommendations. |
 | Streaming Service | Proceed to scalability testing with attention on Kafka producer throughput, partition behavior, and downstream consumer backpressure. |
 
+## Session 9 Monitoring And Load-Generator Smoke Checks
+
+Commands used for the Session 9 validation pass:
+
+```bash
+docker compose config --quiet
+docker compose --profile benchmark config --quiet
+docker compose -f docker-compose.yml -f docker-compose.scale-smoke.yml config --quiet
+docker compose -f docker-compose.yml -f docker-compose.scale-calibration.yml config --quiet
+docker compose -f docker-compose.yml -f docker-compose.scale-100k.yml config --quiet
+docker compose -f docker-compose.yml -f docker-compose.scale-1m.yml config --quiet
+docker run --rm --entrypoint promtool -v "${PWD}/config/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro" prom/prometheus:v2.52.0 check config /etc/prometheus/prometheus.yml
+docker run --rm -v "${PWD}/config/nginx/nginx.conf:/etc/nginx/nginx.conf:ro" nginx:1.27-alpine nginx -t
+docker compose run --no-deps --rm k6 inspect /scripts/smoke.js
+docker compose run --no-deps --rm k6 inspect /scripts/mixed-user-journey.js
+docker compose up -d --build
+docker compose ps
+docker compose exec -T prometheus wget -qO- http://localhost:9090/-/ready
+docker compose exec -T gateway wget -qO- http://127.0.0.1:8080/health
+docker compose exec -T prometheus wget -qO- "http://localhost:9090/api/v1/targets?state=active"
+docker compose run --rm k6 run /scripts/smoke.js
+docker compose run --no-deps --rm --entrypoint sh k6 -c "test -s /results/smoke-cost-summary.json && head -n 20 /results/smoke-cost-summary.json"
+docker compose exec -T kafka /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --describe --topic playback-events
+docker compose exec -T kafka /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --describe --topic playlist-events
+```
+
+| No. | Name | Description | Service Tested | Runner / Framework | Result |
+| ---: | --- | --- | --- | --- | --- |
+| 17 | Session 9 Compose configuration validation | Validates base, benchmark, smoke, calibration, 100k, and 1m Compose configurations. | Deployment environment | Docker Compose | Passed. Docker emitted local config access warnings but returned success. |
+| 18 | Session 9 Prometheus config validation | Validates Prometheus scrape config syntax. | Monitoring | Prometheus `promtool` | Passed. |
+| 19 | Session 9 gateway config validation | Validates Nginx gateway config syntax. | Gateway | `nginx -t` | Passed. |
+| 20 | Session 9 k6 script inspection | Validates smoke and mixed workload script syntax with the pinned k6 image. | Load Generator | k6 inspect | Passed. |
+| 21 | Session 9 live stack startup | Builds and starts the full Compose backend, infrastructure, gateway, monitoring, and load-generator environment. | Integrated system | Docker Compose | Passed. All eight backend services and required infrastructure were healthy or running. |
+| 22 | Session 9 live Prometheus target check | Confirms Prometheus sees all eight backend service `/actuator/prometheus` targets as `up`. | Monitoring and all backend services | Prometheus API | Passed. |
+| 23 | Session 9 k6 gateway smoke | Runs registration, login, catalog, search, recommendation, streaming, playlist, and history flows through the gateway. | Integrated system | k6 | Passed. 40 iterations, 400 HTTP requests, 100% checks, 0 failed requests, p95 1288 ms. |
+| 24 | Session 9 k6 summary artifact check | Confirms the smoke run writes `/results/smoke-cost-summary.json`. | Load Generator | Docker Compose k6 container | Passed. |
+| 25 | Session 9 Kafka topic check | Confirms default live topic creation for `playback-events` and `playlist-events`. | Kafka / messaging infrastructure | Kafka CLI | Passed. `playback-events` had 12 partitions; `playlist-events` had 3 partitions. |
+
 ## Unit Tests
 
 | No. | Name | Description | Service Tested | Runner / Framework | File |
