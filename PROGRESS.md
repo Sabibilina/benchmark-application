@@ -363,34 +363,34 @@ This extra session is defined in `REFACTORED-PROMPTS.md`. It is intentionally sc
 ## Final Delivery Checklist
 
 ### Architecture
-- [ ] Each application service that persists state uses its own dedicated persistence layer (M-26)
-- [ ] All protected endpoints require JWT; only `/auth/register` and `/auth/login` are public (M-25)
+- [x] Each application service that persists state uses its own dedicated persistence layer (M-26)
+- [x] All protected endpoints require JWT; only `/auth/register` and `/auth/login` are public (M-25)
 
 ### Artifacts
-- [ ] `docker-compose.yml` starts all 8 application services and the required infrastructure
-- [ ] Source code complete and runnable for all 8 backend services (no pseudocode or placeholders)
-- [ ] Dockerfiles present and building for all 8 backend services
-- [ ] `.env.example` present and complete for all 8 backend services
-- [ ] Database schemas / migrations present for all services with persistence
-- [ ] Catalog CSV seed script included and runs automatically at startup
-- [ ] Prometheus config file included
-- [ ] Grafana dashboard config included if Grafana dashboards are implemented
-- [ ] Load generator script and workload definition included
+- [x] `docker-compose.yml` starts all 8 application services and the required infrastructure
+- [x] Source code complete and runnable for all 8 backend services (no pseudocode or placeholders)
+- [x] Dockerfiles present and building for all 8 backend services
+- [x] `.env.example` present and complete for all 8 backend services
+- [x] Database schemas / migrations present for all services with persistence
+- [x] Catalog CSV seed script included and runs automatically at startup
+- [x] Prometheus config file included
+- [x] Grafana dashboard config included if Grafana dashboards are implemented
+- [x] Load generator script and workload definition included
 
 ### Documentation
-- [ ] Top-level README with setup, run, validation, and testing instructions
+- [x] Top-level README with setup, run, validation, and testing instructions
 
 ### Testing Deliverables
-- [ ] All backend unit tests pass
-- [ ] All backend integration tests pass
-- [ ] Integrated system tests show that the services run correctly together
-- [ ] End-to-end test results are documented
+- [x] All backend unit tests pass
+- [x] All backend integration tests pass
+- [x] Integrated system tests show that the services run correctly together
+- [x] End-to-end test results are documented
 
 ### Minimum Completion Criteria
-- [ ] All 8 services start successfully in the local deployment environment
-- [ ] All required endpoints are implemented and reachable
-- [ ] Protected endpoints enforce JWT authentication
-- [ ] Metrics are exposed and collected through the monitoring stack
-- [ ] Load generator can execute the main application flows end-to-end
-- [ ] Integrated system tests show that all services run correctly together in the shared deployment environment
-- [ ] Cross-service authentication, persistence, and messaging behavior are verified end-to-end
+- [x] All 8 services start successfully in the local deployment environment
+- [x] All required endpoints are implemented and reachable
+- [x] Protected endpoints enforce JWT authentication
+- [x] Metrics are exposed and collected through the monitoring stack
+- [x] Load generator can execute the main application flows end-to-end
+- [x] Integrated system tests show that all services run correctly together in the shared deployment environment
+- [x] Cross-service authentication, persistence, and messaging behavior are verified end-to-end

@@ -45,23 +45,22 @@ docker compose -f docker-compose.yml -f docker-compose.scale-baseline.yml config
 docker compose -f docker-compose.yml -f docker-compose.scale-100k.yml config --quiet
 docker compose -f docker-compose.yml -f docker-compose.scale-1m.yml config --quiet
 docker compose --env-file .env.cost-smoke.example -f docker-compose.yml -f docker-compose.cost-smoke.yml config --quiet
+docker compose --env-file .env.cost-smoke.example -f docker-compose.yml -f docker-compose.cost-smoke.yml --profile observability config --quiet
+docker compose --env-file .env.cost-smoke.example -f docker-compose.yml -f docker-compose.cost-smoke.yml --profile benchmark config --quiet
 docker compose run --rm --no-deps gateway nginx -t
 docker compose run --rm --no-deps --entrypoint promtool prometheus check config /etc/prometheus/prometheus.yml
 docker compose run --rm --no-deps k6 inspect /scripts/smoke.js
 docker compose run --rm --no-deps k6 inspect /scripts/mixed-user-journey.js
-docker compose build analytics-service
-docker desktop restart
-docker compose -f docker-compose.yml -f docker-compose.scale-1m.yml -f docker-compose.scale-100k.yml down --remove-orphans
+docker compose build auth-service catalog-service playlist-service streaming-service search-service analytics-service recommendation-service notification-service
 docker compose -f docker-compose.yml -f docker-compose.scale-baseline.yml up -d --remove-orphans
-docker compose ps
+docker compose -f docker-compose.yml -f docker-compose.scale-baseline.yml up -d --force-recreate gateway k6 cadvisor kafka-exporter redis-exporter nginx-exporter
+docker compose -f docker-compose.yml -f docker-compose.scale-baseline.yml ps
 curl -i http://localhost:8080/health
+curl -i http://localhost:8080/catalog/songs
 curl -i http://localhost:9090/-/ready
 curl -i http://localhost:3001/api/health
 docker compose -f docker-compose.yml -f docker-compose.scale-baseline.yml run --rm -e K6_SMOKE_HTTP_REQ_DURATION_P95_MS=6000 k6 run /scripts/smoke.js
 curl -s 'http://localhost:9090/api/v1/query?query=up'
-curl -s 'http://localhost:9090/api/v1/targets'
-docker compose exec -T kafka /opt/kafka/bin/kafka-console-producer.sh --bootstrap-server kafka:9092 --topic playlist-events
-docker compose exec -T notification-db mongosh --quiet -u benchmark -p benchmark --authenticationDatabase admin notification --eval "db.notifications.find({sourceEventId:'<event-id>'}).toArray()"
 ```
 
 Final validation results:
@@ -74,14 +73,16 @@ Final validation results:
 | Gateway configuration | Passed | `nginx -t` inside the gateway container reported successful syntax validation. |
 | Prometheus configuration | Passed | `promtool check config` reported the Prometheus config file is valid. |
 | k6 script syntax/configuration | Passed | `k6 inspect` passed for `smoke.js` and `mixed-user-journey.js`. |
-| Analytics build and automated tests | Passed | `docker compose build analytics-service` completed successfully after the top-track metric fix and ran Maven `verify`. |
-| Docker Engine recovery | Passed | Docker Desktop was restarted after container-listing API 500 errors caused by the oversized scaled stack. |
-| Oversized scaled stack cleanup | Passed | The 78-container 1M/100k Compose project was stopped with `down --remove-orphans` without deleting volumes. |
+| Backend image builds and automated tests | Passed | `docker compose build auth-service catalog-service playlist-service streaming-service search-service analytics-service recommendation-service notification-service` completed successfully; each service Dockerfile ran Maven `verify`. |
+| Backend-only scope | Passed | Compose service inventory contains no frontend runtime service; repository documentation keeps frontend only as explicitly out of scope. |
+| Cost-smoke configuration | Passed | Base, observability-profile, and benchmark-profile cost-smoke Compose configurations returned success. |
+| Docker support-container recovery | Passed | Stale gateway/k6/exporter containers attached to an old Docker network were force-recreated without deleting volumes; subsequent startup succeeded. |
 | Full live baseline startup | Passed | Baseline profile started successfully; `docker compose ps` showed all eight backend services and required infrastructure running, with backend service health checks healthy. |
 | Gateway, Prometheus, and Grafana live health | Passed | Gateway `/health`, Prometheus `/-/ready`, and Grafana `/api/health` returned HTTP 200. |
-| k6 baseline smoke | Passed | k6 smoke completed 33 iterations, 330 HTTP requests, 100% checks, 0 failed requests, and passed thresholds with `K6_SMOKE_HTTP_REQ_DURATION_P95_MS=6000`. |
-| Prometheus live collection | Passed | Prometheus `up` query and active target API showed all eight backend `/actuator/prometheus` targets plus gateway, Kafka, Redis, cAdvisor, and Prometheus targets up. |
-| Notification internal event persistence | Passed | A valid `playlist.updated` event published to Kafka topic `playlist-events` was consumed by Notification Service and persisted in MongoDB `notifications`. |
+| Protected endpoint enforcement | Passed | Unauthenticated `GET /catalog/songs` through the gateway returned HTTP 401 with `WWW-Authenticate: Bearer`. |
+| k6 baseline smoke | Passed | k6 smoke completed 17 iterations, 170 HTTP requests, 100% checks, 0 failed requests, and passed thresholds with `K6_SMOKE_HTTP_REQ_DURATION_P95_MS=6000`; it wrote `/results/smoke-cost-summary.json`. |
+| Focused playback history verification | Passed | A fresh user registered and logged in through the gateway, streamed a unique song, sent the terminal playback event, and the same song appeared in that authenticated user's `/analytics/me/history` response. |
+| Prometheus live collection | Passed | Prometheus `up` query showed all eight backend `/actuator/prometheus` targets plus gateway, Kafka, Redis, cAdvisor, and Prometheus targets up. |
 
 | Service | Test Files | Test Cases | Line Coverage | Branch Coverage | Function/Method Coverage | Coverage Assessment | Important Weak Paths |
 | --- | ---: | ---: | ---: | ---: | ---: | --- | --- |
