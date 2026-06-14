@@ -1,0 +1,122 @@
+services:
+  auth-service:
+    scale: 4
+    cpus: 1.00
+    mem_limit: 1g
+    environment:
+      AUTH_DB_POOL_MAX: 10
+
+  catalog-service:
+    scale: 6
+    cpus: 1.00
+    mem_limit: 1g
+    environment:
+      CATALOG_INGESTION_ENABLED: "false"
+      CATALOG_DB_POOL_MAX: 10
+
+  streaming-service:
+    scale: 12
+    cpus: 1.25
+    mem_limit: 1g
+    environment:
+      STREAMING_SEGMENT_COUNT: 5
+      STREAMING_SEGMENT_SIZE_BYTES: 65536
+      STREAMING_KAFKA_BATCH_SIZE: 262144
+      STREAMING_KAFKA_LINGER_MS: 15
+
+  playlist-service:
+    scale: 3
+    cpus: 1.00
+    mem_limit: 1g
+    environment:
+      PLAYLIST_DB_POOL_MAX: 10
+
+  search-service:
+    scale: 6
+    cpus: 1.25
+    mem_limit: 1536m
+    environment:
+      SEARCH_INDEXING_ENABLED: "false"
+
+  analytics-service:
+    scale: 6
+    cpus: 1.25
+    mem_limit: 1536m
+    environment:
+      ANALYTICS_KAFKA_CONCURRENCY: 4
+
+  recommendation-service:
+    scale: 5
+    cpus: 1.00
+    mem_limit: 1g
+    environment:
+      RECOMMENDATION_DB_POOL_MAX: 10
+      RECOMMENDATION_CACHE_TTL: PT10M
+      RECOMMENDATION_KAFKA_CONCURRENCY: 3
+
+  notification-service:
+    scale: 2
+    cpus: 0.75
+    mem_limit: 768m
+    environment:
+      NOTIFICATION_KAFKA_CONCURRENCY: 2
+
+  kafka:
+    cpus: 4.00
+    mem_limit: 4g
+    environment:
+      PLAYBACK_EVENTS_PARTITIONS: 48
+      PLAYLIST_EVENTS_PARTITIONS: 12
+      KAFKA_LOG_RETENTION_HOURS: 6
+      KAFKA_HEAP_OPTS: -Xms1536m -Xmx3072m
+
+  search-opensearch:
+    cpus: 4.00
+    mem_limit: 8g
+    environment:
+      OPENSEARCH_JAVA_OPTS: -Xms3g -Xmx3g
+
+  analytics-db:
+    cpus: 4.00
+    mem_limit: 8g
+
+  recommendation-redis:
+    mem_limit: 2g
+    command:
+      - redis-server
+      - --appendonly
+      - "no"
+      - --maxmemory
+      - "1536mb"
+      - --maxmemory-policy
+      - "allkeys-lru"
+
+  gateway:
+    cpus: 2.00
+    mem_limit: 1g
+
+  prometheus:
+    mem_limit: 2g
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=12h
+
+  k6:
+    cpus: 4.00
+    mem_limit: 4g
+    environment:
+      COST_PROFILE: 1m
+      K6_MIXED_DURATION: 10m
+      K6_AUTH_LOGIN_RATE: 500
+      K6_CATALOG_SEARCH_RATE: 4000
+      K6_PLAYLIST_MUTATION_RATE: 200
+      K6_STREAMING_SESSION_RATE: 20000
+      K6_AUTH_PREALLOCATED_VUS: 1000
+      K6_AUTH_MAX_VUS: 2500
+      K6_CATALOG_PREALLOCATED_VUS: 3000
+      K6_CATALOG_MAX_VUS: 7000
+      K6_PLAYLIST_PREALLOCATED_VUS: 1000
+      K6_PLAYLIST_MAX_VUS: 2500
+      K6_STREAMING_PREALLOCATED_VUS: 15000
+      K6_STREAMING_MAX_VUS: 30000

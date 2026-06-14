@@ -1,23 +1,23 @@
 # benchmark-application
 
-Backend microservices and Docker Compose deployment for a music streaming benchmark application.
+Backend microservices, Docker Compose deployment, observability, k6 load generation, and cost-aware scalability assets for a music streaming benchmark application.
 
 ## Branch Scope
 
-This branch contains the backend implementation of the eight microservices plus the shared Docker Compose deployment environment. It does not include the scalability branch or cost-efficiency work.
+This branch contains the backend implementation of the eight microservices plus the shared Docker Compose deployment environment and cost-aware scalability support. It does not include a frontend UI or an external cloud cost-efficiency implementation beyond Docker Compose-based tuning and benchmarking artifacts.
 
 The implemented backend services are:
 
-| Service | Purpose | Host port |
-| --- | --- | ---: |
-| Auth Service | Registers users, logs users in, and issues JWT access tokens. | 8081 |
-| Catalog Service | Stores and serves the song catalog loaded from `catalog.csv`. | 8082 |
-| Streaming Service | Simulates stream descriptors and segments, and publishes playback events. | 8083 |
-| Playlist Service | Manages user playlists, liked songs, tracks, and track ordering. | 8084 |
-| Search Service | Indexes catalog data into OpenSearch and exposes protected song search. | 8085 |
-| Analytics Service | Persists listening history and exposes user history plus global charts. | 8086 |
-| Recommendation Service | Consumes playback events and returns daily-mix and similar-song recommendations. | 8087 |
-| Notification Service | Internal service that consumes playlist update events and stores notifications in MongoDB. | 8088 |
+| Service | Purpose | Access path |
+| --- | --- | --- |
+| Auth Service | Registers users, logs users in, and issues JWT access tokens. | `/auth/**` through gateway |
+| Catalog Service | Stores and serves the song catalog loaded from `catalog.csv`. | `/catalog/**` through gateway |
+| Streaming Service | Simulates stream descriptors and segments, and publishes playback events. | `/stream/**` through gateway |
+| Playlist Service | Manages user playlists, liked songs, tracks, and track ordering. | `/playlists/**` through gateway |
+| Search Service | Indexes catalog data into OpenSearch and exposes protected song search. | `/search` through gateway |
+| Analytics Service | Persists listening history and exposes user history plus global charts. | `/analytics/**` through gateway |
+| Recommendation Service | Consumes playback events and returns daily-mix and similar-song recommendations. | `/recommend/**` through gateway |
+| Notification Service | Internal service that consumes playlist update events and stores notifications in MongoDB. | Internal Kafka consumer |
 
 ## Source Of Truth
 
@@ -30,6 +30,8 @@ Use these documents for project decisions and validation:
 * `DESIGN-DECISIONS.md` records decisions, rationale, assumptions, fixes, and validation notes.
 * `TESTS.md` records test inventory, coverage evidence, and final validation evidence.
 * `BUGS.md` records notable bugs and fixes discovered during development.
+* `SCALABILITY.md` records the Docker Compose-only cost-aware scaling plan.
+* `COST-AWARE-DECISIONS.md` records cost-aware implementation decisions and trade-offs.
 
 ## Repository Layout
 
@@ -40,6 +42,7 @@ benchmark-application/
   config/
     grafana/
     jwt/
+    nginx/
     prometheus/
   infrastructure/
     clickhouse/
@@ -73,7 +76,8 @@ Shared infrastructure:
 * Redis for Recommendation cache
 * MongoDB for Notification storage
 * Prometheus and Grafana for observability
-* k6 directory reserved for load-generation assets
+* Nginx gateway for Docker Compose horizontal scaling
+* k6 for load-generation assets and cost/performance summaries
 
 ## Service Interfaces
 
@@ -117,6 +121,8 @@ Kafka topics:
 * `playback-events` for Streaming playback events consumed by Analytics and Recommendation.
 * `playlist-events` for playlist update events consumed by Notification.
 
+The `kafka-init` Compose service creates the required topics with configurable partition counts before benchmark traffic begins.
+
 ## Catalog Dataset
 
 Catalog Service reads the CSV file at `services/catalog-service/data/catalog.csv` and ingests it automatically at startup when `CATALOG_INGESTION_ENABLED=true`.
@@ -133,11 +139,16 @@ cp .env.example .env
 
 Important configuration groups:
 
-* Host ports for all services and infrastructure
+* Gateway and infrastructure host ports
 * CPU and memory defaults
 * JWT key paths and issuer settings
 * Catalog and Search dataset settings
 * Kafka topic and consumer group settings
+* Kafka topic partition, retention, and producer tuning
+* Database connection pool caps
+* Redis cache memory policy
+* k6 workload rates and threshold settings
+* k6 container user for writing result summaries to the `k6-results` volume
 * Database credentials for local development containers
 
 JWT keys are stored under `config/jwt/` for local Docker Compose use.
@@ -160,10 +171,12 @@ docker compose ps
 
 Useful URLs:
 
+* Gateway: http://localhost:8080
 * Prometheus: http://localhost:9090
 * Grafana: http://localhost:3001
 * OpenSearch: http://localhost:9200
-* Gateway is not part of this branch; use each service host port directly.
+
+Application service ports are internal to Docker Compose so replicas can be scaled without host-port conflicts. Send application traffic through the gateway.
 
 Default Grafana credentials from `.env.example`:
 
@@ -193,6 +206,10 @@ Validate Compose configuration:
 ```bash
 docker compose config --quiet
 docker compose config --services
+docker compose -f docker-compose.yml -f docker-compose.scale-smoke.yml config --quiet
+docker compose -f docker-compose.yml -f docker-compose.scale-calibration.yml config --quiet
+docker compose -f docker-compose.yml -f docker-compose.scale-100k.yml config --quiet
+docker compose -f docker-compose.yml -f docker-compose.scale-1m.yml config --quiet
 ```
 
 Validate running containers:
@@ -204,8 +221,22 @@ docker compose ps
 Check observability endpoints:
 
 ```bash
+curl -i http://localhost:8080/health
 curl -i http://localhost:9090/-/ready
 curl -i http://localhost:3001/api/health
+```
+
+Run a gateway-based k6 smoke test:
+
+```bash
+docker compose run --rm k6 run /scripts/smoke.js
+```
+
+Run the mixed workload with a scale profile:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.scale-calibration.yml --profile benchmark up -d --build
+docker compose -f docker-compose.yml -f docker-compose.scale-calibration.yml --profile benchmark run --rm k6 run /scripts/mixed-user-journey.js
 ```
 
 Service-level test and coverage details are documented in `TESTS.md`. Docker image builds run Maven verification for each Java service.
@@ -222,11 +253,22 @@ docker compose build auth-service catalog-service streaming-service playlist-ser
 
 Infrastructure-facing test evidence is recorded in `TESTS.md`, including OpenSearch, ClickHouse, Redis, Kafka, and final live validation evidence where available.
 
+## Scalability Profiles
+
+Scale profiles keep benchmark cost explicit:
+
+| File | Purpose |
+| --- | --- |
+| `docker-compose.scale-smoke.yml` | Low-cost correctness checks with small payloads and short retention. |
+| `docker-compose.scale-calibration.yml` | Moderate bottleneck-discovery run before expensive profiles. |
+| `docker-compose.scale-100k.yml` | Mid-scale workload using service-specific replica counts. |
+| `docker-compose.scale-1m.yml` | Target-ratio profile for hosts with enough Docker CPU, memory, disk, and k6 capacity. |
+
+For scaled profiles, seed Catalog and Search once with the default profile first, then use the scale profile where `CATALOG_INGESTION_ENABLED=false` and `SEARCH_INDEXING_ENABLED=false` avoid repeated startup work across replicas.
+
 ## Out Of Scope
 
 This branch does not include:
 
 * Frontend UI, frontend runtime containers, browser tests, or frontend metrics.
-* Scalability implementation profiles.
-* Cost-efficiency implementation or cloud cost modeling.
 * Kubernetes, Helm, Nomad, Terraform, or cloud deployment code.

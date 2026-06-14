@@ -1,0 +1,52 @@
+services:
+  auth-service:
+    cpus: 0.35
+    mem_limit: 384m
+
+  catalog-service:
+    cpus: 0.35
+    mem_limit: 384m
+
+  streaming-service:
+    cpus: 0.40
+    mem_limit: 384m
+    environment:
+      STREAMING_SEGMENT_COUNT: 2
+      STREAMING_SEGMENT_SIZE_BYTES: 8192
+
+  playlist-service:
+    cpus: 0.35
+    mem_limit: 384m
+
+  search-service:
+    cpus: 0.40
+    mem_limit: 512m
+
+  analytics-service:
+    cpus: 0.40
+    mem_limit: 512m
+
+  recommendation-service:
+    cpus: 0.35
+    mem_limit: 384m
+
+  notification-service:
+    cpus: 0.25
+    mem_limit: 384m
+
+  kafka:
+    environment:
+      KAFKA_LOG_RETENTION_HOURS: 1
+      KAFKA_HEAP_OPTS: -Xms192m -Xmx384m
+
+  prometheus:
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=2h
+
+  k6:
+    environment:
+      COST_PROFILE: smoke
+      K6_SMOKE_VUS: 5
+      K6_SMOKE_DURATION: 30s

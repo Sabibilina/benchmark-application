@@ -7,15 +7,82 @@ scrape_configs:
       - targets:
           - prometheus:9090
 
-  - job_name: application-services
+  - job_name: auth-service
     metrics_path: /actuator/prometheus
-    static_configs:
-      - targets:
-          - auth-service:8080
-          - catalog-service:8080
-          - streaming-service:8080
-          - playlist-service:8080
-          - search-service:8080
-          - analytics-service:8080
-          - recommendation-service:8080
-          - notification-service:8080
+    dns_sd_configs:
+      - names: [auth-service]
+        type: A
+        port: 8080
+
+  - job_name: catalog-service
+    metrics_path: /actuator/prometheus
+    dns_sd_configs:
+      - names: [catalog-service]
+        type: A
+        port: 8080
+
+  - job_name: streaming-service
+    metrics_path: /actuator/prometheus
+    dns_sd_configs:
+      - names: [streaming-service]
+        type: A
+        port: 8080
+
+  - job_name: playlist-service
+    metrics_path: /actuator/prometheus
+    dns_sd_configs:
+      - names: [playlist-service]
+        type: A
+        port: 8080
+
+  - job_name: search-service
+    metrics_path: /actuator/prometheus
+    dns_sd_configs:
+      - names: [search-service]
+        type: A
+        port: 8080
+
+  - job_name: analytics-service
+    metrics_path: /actuator/prometheus
+    dns_sd_configs:
+      - names: [analytics-service]
+        type: A
+        port: 8080
+
+  - job_name: recommendation-service
+    metrics_path: /actuator/prometheus
+    dns_sd_configs:
+      - names: [recommendation-service]
+        type: A
+        port: 8080
+
+  - job_name: notification-service
+    metrics_path: /actuator/prometheus
+    dns_sd_configs:
+      - names: [notification-service]
+        type: A
+        port: 8080
+
+  - job_name: gateway
+    dns_sd_configs:
+      - names: [nginx-exporter]
+        type: A
+        port: 9113
+
+  - job_name: kafka
+    dns_sd_configs:
+      - names: [kafka-exporter]
+        type: A
+        port: 9308
+
+  - job_name: redis
+    dns_sd_configs:
+      - names: [redis-exporter]
+        type: A
+        port: 9121
+
+  - job_name: containers
+    dns_sd_configs:
+      - names: [cadvisor]
+        type: A
+        port: 8080

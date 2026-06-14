@@ -1,0 +1,92 @@
+services:
+  auth-service:
+    scale: 2
+    cpus: 0.50
+    mem_limit: 512m
+    environment:
+      AUTH_DB_POOL_MAX: 8
+
+  catalog-service:
+    scale: 2
+    cpus: 0.60
+    mem_limit: 512m
+    environment:
+      CATALOG_INGESTION_ENABLED: "false"
+      CATALOG_DB_POOL_MAX: 8
+
+  streaming-service:
+    scale: 3
+    cpus: 0.75
+    mem_limit: 512m
+    environment:
+      STREAMING_SEGMENT_COUNT: 3
+      STREAMING_SEGMENT_SIZE_BYTES: 16384
+      STREAMING_KAFKA_BATCH_SIZE: 65536
+      STREAMING_KAFKA_LINGER_MS: 10
+
+  playlist-service:
+    scale: 2
+    cpus: 0.50
+    mem_limit: 512m
+    environment:
+      PLAYLIST_DB_POOL_MAX: 8
+
+  search-service:
+    scale: 2
+    cpus: 0.75
+    mem_limit: 768m
+    environment:
+      SEARCH_INDEXING_ENABLED: "false"
+
+  analytics-service:
+    scale: 2
+    cpus: 0.75
+    mem_limit: 768m
+    environment:
+      ANALYTICS_KAFKA_CONCURRENCY: 2
+
+  recommendation-service:
+    scale: 2
+    cpus: 0.60
+    mem_limit: 512m
+    environment:
+      RECOMMENDATION_DB_POOL_MAX: 8
+      RECOMMENDATION_CACHE_TTL: PT10M
+      RECOMMENDATION_KAFKA_CONCURRENCY: 2
+
+  notification-service:
+    cpus: 0.35
+    mem_limit: 384m
+
+  kafka:
+    cpus: 1.50
+    mem_limit: 1536m
+    environment:
+      PLAYBACK_EVENTS_PARTITIONS: 12
+      KAFKA_LOG_RETENTION_HOURS: 3
+      KAFKA_HEAP_OPTS: -Xms512m -Xmx1024m
+
+  search-opensearch:
+    cpus: 1.50
+    mem_limit: 3g
+    environment:
+      OPENSEARCH_JAVA_OPTS: -Xms1g -Xmx1g
+
+  analytics-db:
+    cpus: 1.50
+    mem_limit: 3g
+
+  prometheus:
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=6h
+
+  k6:
+    environment:
+      COST_PROFILE: calibration
+      K6_MIXED_DURATION: 5m
+      K6_AUTH_LOGIN_RATE: 10
+      K6_CATALOG_SEARCH_RATE: 50
+      K6_PLAYLIST_MUTATION_RATE: 3
+      K6_STREAMING_SESSION_RATE: 100

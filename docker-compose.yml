@@ -6,8 +6,15 @@ x-placeholder-app: &placeholder-app
     - benchmark-network
   cpus: ${DEFAULT_SERVICE_CPUS:-0.50}
   mem_limit: ${DEFAULT_SERVICE_MEMORY:-512m}
+  expose:
+    - "8080"
   volumes:
     - ./config/jwt/public.pem:/run/config/jwt/public.pem:ro
+  healthcheck:
+    test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8080/actuator/health | grep -q UP"]
+    interval: 10s
+    timeout: 5s
+    retries: 30
 
 x-postgres: &postgres
   image: postgres:16-alpine
@@ -32,14 +39,13 @@ services:
       context: ./services/auth-service
       args:
         SERVICE_NAME: auth-service
-    ports:
-      - "${AUTH_SERVICE_HOST_PORT:-8081}:8080"
     environment:
       SERVICE_NAME: auth-service
       SERVER_PORT: 8080
       SPRING_DATASOURCE_URL: jdbc:postgresql://auth-db:5432/auth
       SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-benchmark}
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-benchmark}
+      SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: ${AUTH_DB_POOL_MAX:-10}
       JWT_PUBLIC_KEY_PATH: ${JWT_PUBLIC_KEY_PATH:-/run/config/jwt/public.pem}
       JWT_PRIVATE_KEY_PATH: ${JWT_PRIVATE_KEY_PATH:-/run/secrets/jwt/private.pem}
       JWT_ISSUER: ${JWT_ISSUER:-benchmark-auth}
@@ -57,14 +63,13 @@ services:
       context: ./services/catalog-service
       args:
         SERVICE_NAME: catalog-service
-    ports:
-      - "${CATALOG_SERVICE_HOST_PORT:-8082}:8080"
     environment:
       SERVICE_NAME: catalog-service
       SERVER_PORT: 8080
       SPRING_DATASOURCE_URL: jdbc:postgresql://catalog-db:5432/catalog
       SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-benchmark}
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-benchmark}
+      SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: ${CATALOG_DB_POOL_MAX:-10}
       JWT_PUBLIC_KEY_PATH: ${JWT_PUBLIC_KEY_PATH:-/run/config/jwt/public.pem}
       CATALOG_DATASET_PATH: ${CATALOG_DATASET_PATH:-/app/data/catalog.csv}
       CATALOG_INGESTION_ENABLED: ${CATALOG_INGESTION_ENABLED:-true}
@@ -80,8 +85,6 @@ services:
       context: ./services/streaming-service
       args:
         SERVICE_NAME: streaming-service
-    ports:
-      - "${STREAMING_SERVICE_HOST_PORT:-8083}:8080"
     environment:
       SERVICE_NAME: streaming-service
       SERVER_PORT: 8080
@@ -90,6 +93,11 @@ services:
       STREAMING_PLAYBACK_EVENTS_TOPIC: ${STREAMING_PLAYBACK_EVENTS_TOPIC:-playback-events}
       STREAMING_SEGMENT_COUNT: ${STREAMING_SEGMENT_COUNT:-5}
       STREAMING_SEGMENT_SIZE_BYTES: ${STREAMING_SEGMENT_SIZE_BYTES:-65536}
+      SPRING_KAFKA_PRODUCER_PROPERTIES_LINGER_MS: ${STREAMING_KAFKA_LINGER_MS:-5}
+      SPRING_KAFKA_PRODUCER_PROPERTIES_BATCH_SIZE: ${STREAMING_KAFKA_BATCH_SIZE:-32768}
+      SPRING_KAFKA_PRODUCER_PROPERTIES_COMPRESSION_TYPE: ${STREAMING_KAFKA_COMPRESSION_TYPE:-lz4}
+      SPRING_KAFKA_PRODUCER_PROPERTIES_DELIVERY_TIMEOUT_MS: ${STREAMING_KAFKA_DELIVERY_TIMEOUT_MS:-30000}
+      SPRING_KAFKA_PRODUCER_PROPERTIES_REQUEST_TIMEOUT_MS: ${STREAMING_KAFKA_REQUEST_TIMEOUT_MS:-10000}
     depends_on:
       kafka:
         condition: service_started
@@ -100,14 +108,13 @@ services:
       context: ./services/playlist-service
       args:
         SERVICE_NAME: playlist-service
-    ports:
-      - "${PLAYLIST_SERVICE_HOST_PORT:-8084}:8080"
     environment:
       SERVICE_NAME: playlist-service
       SERVER_PORT: 8080
       SPRING_DATASOURCE_URL: jdbc:postgresql://playlist-db:5432/playlist
       SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-benchmark}
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-benchmark}
+      SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: ${PLAYLIST_DB_POOL_MAX:-10}
       JWT_PUBLIC_KEY_PATH: ${JWT_PUBLIC_KEY_PATH:-/run/config/jwt/public.pem}
     depends_on:
       playlist-db:
@@ -119,8 +126,6 @@ services:
       context: ./services/search-service
       args:
         SERVICE_NAME: search-service
-    ports:
-      - "${SEARCH_SERVICE_HOST_PORT:-8085}:8080"
     environment:
       SERVICE_NAME: search-service
       SERVER_PORT: 8080
@@ -145,8 +150,6 @@ services:
       context: ./services/analytics-service
       args:
         SERVICE_NAME: analytics-service
-    ports:
-      - "${ANALYTICS_SERVICE_HOST_PORT:-8086}:8080"
     environment:
       SERVICE_NAME: analytics-service
       SERVER_PORT: 8080
@@ -160,6 +163,7 @@ services:
       ANALYTICS_DEFAULT_PAGE_SIZE: ${ANALYTICS_DEFAULT_PAGE_SIZE:-20}
       ANALYTICS_MAX_PAGE_SIZE: ${ANALYTICS_MAX_PAGE_SIZE:-100}
       ANALYTICS_GLOBAL_CHART_LIMIT: ${ANALYTICS_GLOBAL_CHART_LIMIT:-50}
+      SPRING_KAFKA_LISTENER_CONCURRENCY: ${ANALYTICS_KAFKA_CONCURRENCY:-1}
     depends_on:
       analytics-db:
         condition: service_healthy
@@ -172,14 +176,13 @@ services:
       context: ./services/recommendation-service
       args:
         SERVICE_NAME: recommendation-service
-    ports:
-      - "${RECOMMENDATION_SERVICE_HOST_PORT:-8087}:8080"
     environment:
       SERVICE_NAME: recommendation-service
       SERVER_PORT: 8080
       SPRING_DATASOURCE_URL: jdbc:postgresql://recommendation-db:5432/recommendation
       SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-benchmark}
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-benchmark}
+      SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: ${RECOMMENDATION_DB_POOL_MAX:-10}
       REDIS_URL: redis://recommendation-redis:6379
       KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-kafka:9092}
       JWT_PUBLIC_KEY_PATH: ${JWT_PUBLIC_KEY_PATH:-/run/config/jwt/public.pem}
@@ -188,6 +191,7 @@ services:
       RECOMMENDATION_DEFAULT_LIMIT: ${RECOMMENDATION_DEFAULT_LIMIT:-10}
       RECOMMENDATION_MAX_LIMIT: ${RECOMMENDATION_MAX_LIMIT:-50}
       RECOMMENDATION_CACHE_TTL: ${RECOMMENDATION_CACHE_TTL:-PT5M}
+      SPRING_KAFKA_LISTENER_CONCURRENCY: ${RECOMMENDATION_KAFKA_CONCURRENCY:-1}
     depends_on:
       recommendation-db:
         condition: service_healthy
@@ -202,8 +206,6 @@ services:
       context: ./services/notification-service
       args:
         SERVICE_NAME: notification-service
-    ports:
-      - "${NOTIFICATION_SERVICE_HOST_PORT:-8088}:8080"
     environment:
       SERVICE_NAME: notification-service
       SERVER_PORT: 8080
@@ -212,6 +214,7 @@ services:
       JWT_PUBLIC_KEY_PATH: ${JWT_PUBLIC_KEY_PATH:-/run/config/jwt/public.pem}
       NOTIFICATION_PLAYLIST_EVENTS_TOPIC: ${NOTIFICATION_PLAYLIST_EVENTS_TOPIC:-playlist-events}
       NOTIFICATION_KAFKA_CONSUMER_GROUP_ID: ${NOTIFICATION_KAFKA_CONSUMER_GROUP_ID:-notification-service}
+      SPRING_KAFKA_LISTENER_CONCURRENCY: ${NOTIFICATION_KAFKA_CONCURRENCY:-1}
     depends_on:
       notification-db:
         condition: service_started
@@ -263,6 +266,14 @@ services:
       - "${REDIS_HOST_PORT:-6379}:6379"
     cpus: ${INFRA_CPUS:-1.00}
     mem_limit: ${INFRA_MEMORY:-1g}
+    command:
+      - redis-server
+      - --appendonly
+      - "${REDIS_APPENDONLY:-no}"
+      - --maxmemory
+      - "${REDIS_MAXMEMORY:-512mb}"
+      - --maxmemory-policy
+      - "${REDIS_MAXMEMORY_POLICY:-allkeys-lru}"
     volumes:
       - recommendation-redis-data:/data
 
@@ -345,12 +356,40 @@ services:
       KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
       KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
       KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
-      # MANUAL CHANGE 
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
       KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_LOG_RETENTION_HOURS: ${KAFKA_LOG_RETENTION_HOURS:-6}
+      KAFKA_LOG_SEGMENT_BYTES: ${KAFKA_LOG_SEGMENT_BYTES:-134217728}
+      KAFKA_NUM_PARTITIONS: ${KAFKA_DEFAULT_PARTITIONS:-6}
+      KAFKA_HEAP_OPTS: ${KAFKA_HEAP_OPTS:--Xms256m -Xmx512m}
     volumes:
       - kafka-data:/var/lib/kafka/data
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list >/dev/null 2>&1"]
+      interval: 10s
+      timeout: 10s
+      retries: 30
+
+  kafka-init:
+    image: apache/kafka:3.7.0
+    restart: "no"
+    networks:
+      - benchmark-network
+    depends_on:
+      kafka:
+        condition: service_healthy
+    environment:
+      PLAYBACK_EVENTS_TOPIC: ${STREAMING_PLAYBACK_EVENTS_TOPIC:-playback-events}
+      PLAYBACK_EVENTS_PARTITIONS: ${PLAYBACK_EVENTS_PARTITIONS:-12}
+      PLAYLIST_EVENTS_TOPIC: ${NOTIFICATION_PLAYLIST_EVENTS_TOPIC:-playlist-events}
+      PLAYLIST_EVENTS_PARTITIONS: ${PLAYLIST_EVENTS_PARTITIONS:-3}
+    command:
+      - /bin/bash
+      - -c
+      - |
+        /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic "$${PLAYBACK_EVENTS_TOPIC}" --partitions "$${PLAYBACK_EVENTS_PARTITIONS}" --replication-factor 1
+        /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic "$${PLAYLIST_EVENTS_TOPIC}" --partitions "$${PLAYLIST_EVENTS_PARTITIONS}" --replication-factor 1
 
   prometheus:
     image: prom/prometheus:v2.52.0
@@ -364,6 +403,7 @@ services:
     command:
       - --config.file=/etc/prometheus/prometheus.yml
       - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=${PROMETHEUS_RETENTION_TIME:-6h}
     volumes:
       - ./config/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - prometheus-data:/prometheus
@@ -388,19 +428,104 @@ services:
       prometheus:
         condition: service_started
 
+  gateway:
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    networks:
+      - benchmark-network
+    ports:
+      - "${GATEWAY_HOST_PORT:-8080}:8080"
+    cpus: ${GATEWAY_CPUS:-0.50}
+    mem_limit: ${GATEWAY_MEMORY:-256m}
+    volumes:
+      - ./config/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      auth-service:
+        condition: service_healthy
+      catalog-service:
+        condition: service_healthy
+      streaming-service:
+        condition: service_healthy
+      playlist-service:
+        condition: service_healthy
+      search-service:
+        condition: service_healthy
+      analytics-service:
+        condition: service_healthy
+      recommendation-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8080/health | grep -q ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  nginx-exporter:
+    image: nginx/nginx-prometheus-exporter:1.1.0
+    restart: unless-stopped
+    profiles:
+      - benchmark
+    networks:
+      - benchmark-network
+    command:
+      - -nginx.scrape-uri=http://gateway:8080/nginx_status
+    depends_on:
+      gateway:
+        condition: service_healthy
+
+  kafka-exporter:
+    image: danielqsj/kafka-exporter:v1.7.0
+    restart: unless-stopped
+    profiles:
+      - benchmark
+    networks:
+      - benchmark-network
+    command:
+      - --kafka.server=kafka:9092
+    depends_on:
+      kafka:
+        condition: service_healthy
+
+  redis-exporter:
+    image: oliver006/redis_exporter:v1.61.0
+    restart: unless-stopped
+    profiles:
+      - benchmark
+    networks:
+      - benchmark-network
+    environment:
+      REDIS_ADDR: redis://recommendation-redis:6379
+    depends_on:
+      recommendation-redis:
+        condition: service_started
+
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:v0.49.1
+    restart: unless-stopped
+    profiles:
+      - benchmark
+    networks:
+      - benchmark-network
+    privileged: true
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker:/var/lib/docker:ro
+
   k6:
     image: grafana/k6:0.49.0
-    restart: unless-stopped
+    restart: "no"
+    user: ${K6_USER:-0:0}
     networks:
       - benchmark-network
     cpus: ${DEFAULT_SERVICE_CPUS:-0.50}
     mem_limit: ${K6_MEMORY:-512m}
-    entrypoint:
-      - /bin/sh
-      - -c
-      - echo 'k6 placeholder for Phase 0. Workload scripts are added in later phases.'; tail -f /dev/null
+    command:
+      - version
     volumes:
-      - ./load-generator/k6:/scripts:ro
+      - ./load-generator/k6/scripts:/scripts:ro
+      - k6-results:/results
 
 networks:
   benchmark-network:
@@ -419,3 +544,4 @@ volumes:
   kafka-data:
   prometheus-data:
   grafana-data:
+  k6-results:

@@ -371,6 +371,23 @@ This order avoids spending money on low-impact services before the dominant stre
 | 1m | Target benchmark | Highest | Full planned replica counts, highest infrastructure limits, explicit host requirements and evidence capture. |
 | Cost-smoke | Cheap regression check | Lowest practical | Required backend and infra only, optional exporters/profiled observability, short workload. |
 
+## First Implementation Version
+
+The first implementation version applies the plan in a practical Docker Compose form:
+
+- `docker-compose.yml` now exposes application services only on the shared Docker network and routes external application traffic through the Nginx `gateway` service on `GATEWAY_HOST_PORT`. This removes host-port conflicts when application services are replicated.
+- `config/nginx/nginx.conf` defines backend routes for Auth, Catalog, Streaming, Playlist, Search, Analytics, and Recommendation. Notification remains internal because the architecture does not require a public Notification API.
+- `kafka-init` creates `playback-events` and `playlist-events` with configurable partition counts, avoiding accidental single-partition topics during benchmark runs.
+- Kafka retention, segment size, heap, producer batching, producer compression, and producer timeouts are configurable through Compose environment variables.
+- Redis cache memory policy is configurable so recommendation caching can reduce PostgreSQL/CPU cost without unbounded memory growth.
+- PostgreSQL-backed services expose connection pool caps through environment variables so app replica growth does not silently exhaust database connections.
+- Prometheus uses DNS service discovery for each backend service name so scaled Compose replicas can be discovered without rewriting scrape targets.
+- Nginx, Kafka, Redis, and container exporters are placed behind the `benchmark` profile. This keeps normal runtime cheaper while preserving richer evidence collection for benchmark runs.
+- `docker-compose.scale-smoke.yml`, `docker-compose.scale-calibration.yml`, `docker-compose.scale-100k.yml`, and `docker-compose.scale-1m.yml` express different service counts and resource envelopes instead of scaling all services equally.
+- `load-generator/k6/scripts/smoke.js` and `mixed-user-journey.js` run through the gateway and write cost/performance summaries to the `k6-results` volume.
+
+Cost trade-off: scaled profiles disable repeated Catalog ingestion and Search indexing with `CATALOG_INGESTION_ENABLED=false` and `SEARCH_INDEXING_ENABLED=false`. This avoids expensive duplicate startup work across replicas, but it assumes the default profile has already seeded the Catalog database and OpenSearch index, or that persisted volumes already contain that data.
+
 ## Risks And Trade-Offs
 
 - Docker Compose does not provide production-grade orchestration or automatic rescheduling. This is acceptable because the project is a benchmarkable Docker-based system.
@@ -394,4 +411,3 @@ When implementation begins, each planned scaling change should be validated with
 - Prometheus target checks,
 - dashboard JSON/provisioning checks,
 - focused checks for Kafka lag, ClickHouse inserts, OpenSearch queries, Redis cache behavior, and PostgreSQL connection pools.
-

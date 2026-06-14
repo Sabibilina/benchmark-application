@@ -1,0 +1,111 @@
+services:
+  auth-service:
+    scale: 3
+    cpus: 0.75
+    mem_limit: 768m
+    environment:
+      AUTH_DB_POOL_MAX: 8
+
+  catalog-service:
+    scale: 4
+    cpus: 0.75
+    mem_limit: 768m
+    environment:
+      CATALOG_INGESTION_ENABLED: "false"
+      CATALOG_DB_POOL_MAX: 8
+
+  streaming-service:
+    scale: 8
+    cpus: 1.00
+    mem_limit: 768m
+    environment:
+      STREAMING_SEGMENT_COUNT: 3
+      STREAMING_SEGMENT_SIZE_BYTES: 32768
+      STREAMING_KAFKA_BATCH_SIZE: 131072
+      STREAMING_KAFKA_LINGER_MS: 10
+
+  playlist-service:
+    scale: 2
+    cpus: 0.75
+    mem_limit: 768m
+    environment:
+      PLAYLIST_DB_POOL_MAX: 8
+
+  search-service:
+    scale: 4
+    cpus: 1.00
+    mem_limit: 1g
+    environment:
+      SEARCH_INDEXING_ENABLED: "false"
+
+  analytics-service:
+    scale: 4
+    cpus: 1.00
+    mem_limit: 1g
+    environment:
+      ANALYTICS_KAFKA_CONCURRENCY: 3
+
+  recommendation-service:
+    scale: 3
+    cpus: 0.75
+    mem_limit: 768m
+    environment:
+      RECOMMENDATION_DB_POOL_MAX: 8
+      RECOMMENDATION_CACHE_TTL: PT10M
+      RECOMMENDATION_KAFKA_CONCURRENCY: 2
+
+  notification-service:
+    scale: 1
+    cpus: 0.50
+    mem_limit: 512m
+
+  kafka:
+    cpus: 2.00
+    mem_limit: 2g
+    environment:
+      PLAYBACK_EVENTS_PARTITIONS: 24
+      PLAYLIST_EVENTS_PARTITIONS: 6
+      KAFKA_LOG_RETENTION_HOURS: 3
+      KAFKA_HEAP_OPTS: -Xms768m -Xmx1536m
+
+  search-opensearch:
+    cpus: 2.00
+    mem_limit: 4g
+    environment:
+      OPENSEARCH_JAVA_OPTS: -Xms1536m -Xmx1536m
+
+  analytics-db:
+    cpus: 2.00
+    mem_limit: 4g
+
+  recommendation-redis:
+    mem_limit: 1536m
+    command:
+      - redis-server
+      - --appendonly
+      - "no"
+      - --maxmemory
+      - "1gb"
+      - --maxmemory-policy
+      - "allkeys-lru"
+
+  gateway:
+    cpus: 1.00
+    mem_limit: 512m
+
+  k6:
+    environment:
+      COST_PROFILE: 100k
+      K6_MIXED_DURATION: 10m
+      K6_AUTH_LOGIN_RATE: 50
+      K6_CATALOG_SEARCH_RATE: 400
+      K6_PLAYLIST_MUTATION_RATE: 20
+      K6_STREAMING_SESSION_RATE: 2000
+      K6_AUTH_PREALLOCATED_VUS: 100
+      K6_AUTH_MAX_VUS: 250
+      K6_CATALOG_PREALLOCATED_VUS: 300
+      K6_CATALOG_MAX_VUS: 700
+      K6_PLAYLIST_PREALLOCATED_VUS: 100
+      K6_PLAYLIST_MAX_VUS: 250
+      K6_STREAMING_PREALLOCATED_VUS: 1500
+      K6_STREAMING_MAX_VUS: 3000
