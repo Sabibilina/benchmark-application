@@ -51,7 +51,7 @@ Use Compose overrides and profiles to keep cost visible:
 - Smoke profile: minimal resources and short k6 smoke runs.
 - Calibration profile: moderate replicas and resource limits used to find bottlenecks before full benchmark scale.
 - Full benchmark profile: explicit per-service replica counts and larger infrastructure resource limits for the target workload.
-- Cost-smoke profile: reduced observability retention, optional exporters, small heap/memory values, and minimal k6 duration for low-cost correctness checks.
+- Low-cost smoke profile: reduced observability retention, optional exporters left disabled by default, small heap/memory values, and minimal k6 duration for low-cost correctness checks.
 
 Application replicas should be expressed with `docker compose up --scale <service>=N` or a Compose override that documents the intended count. Stateful infrastructure should not be blindly scaled with `--scale` because storage, clustering, partitions, and data ownership require deliberate configuration.
 
@@ -369,7 +369,7 @@ This order avoids spending money on low-impact services before the dominant stre
 | Calibration | Bottleneck discovery | Moderate | Gateway, selected scaled services, observability enabled, measured resource limits. |
 | 100k | Mid-scale benchmark | Higher | Service-specific replicas, tuned Kafka/OpenSearch/ClickHouse, k6 mixed workload. |
 | 1m | Target benchmark | Highest | Full planned replica counts, highest infrastructure limits, explicit host requirements and evidence capture. |
-| Cost-smoke | Cheap regression check | Lowest practical | Required backend and infra only, optional exporters/profiled observability, short workload. |
+| Smoke | Cheap regression check | Lowest practical | Required backend and infra only, optional exporters disabled by default, short workload. |
 
 ## First Implementation Version
 
