@@ -308,6 +308,11 @@ Frontend UI work has been intentionally moved out of scope for this version so d
 ---
 ## Phase 10 - Monitoring, Load Generator & Integration
 
+### Steps
+- [x] **Session 9 Step 1 - Plan**: Monitoring stack, load-generator strategy, Docker Compose/network changes, integration fixes, validation checks, and cost-aware runtime profiles
+- [ ] **Session 9 Step 2 - Generate**: Monitoring config, load-generator scripts, Compose wiring, integration fixes, tests, and README updates
+- [ ] **Session 9 Step 3 - Validate/Fix**: Review against source documents, run validation checks, fix defects, and update checklist status
+
 ### Monitoring
 - [ ] Prometheus configured to scrape all 8 services
 - [ ] If implemented, Grafana dashboard is configured with panels for traffic, latency, error rate, and top tracks (S-03)

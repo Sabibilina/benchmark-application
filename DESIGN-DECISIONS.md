@@ -2934,3 +2934,214 @@ The current phase explicitly requested removal of frontend functionality and fro
 - `frontend/` and `coverage-output/frontend/` were removed from the repository tree.
 - `docker compose build auth-service catalog-service playlist-service streaming-service search-service analytics-service recommendation-service notification-service` passed with escalated Docker access; the backend Maven verification suites completed during image builds.
 - `SCALABILITY.md` remains absent in the current repository baseline, so no scalability document was changed in this scope-removal pass.
+
+# Session 9 Step 1 Plan - Monitoring, Load Generator, and Integration Fixes
+
+## Review Result
+
+`ARCHITECTURE.md`, `REQUIREMENTS.md`, `TECH-STACK.md`, and `SCALABILITY.md` were reviewed as the planning baseline. No blocking conflict was found for this phase: the documents consistently require a backend-only, Docker Compose-based system with eight backend microservices, a shared named Docker network, Prometheus/Grafana observability, k6 load generation, Kafka-backed event flows, dedicated persistence per stateful service, and Docker Compose-based scalability benchmarking.
+
+## Chosen Stack
+
+| Area | Planned choice | Justification | Affected files/services |
+| --- | --- | --- | --- |
+| Metrics collection | Prometheus scraping Spring Boot Actuator Prometheus endpoints and infrastructure exporters where benchmark profiles need them. | `REQUIREMENTS.md` M-24 requires Prometheus-suitable metrics; `TECH-STACK.md` selects Prometheus. | `config/prometheus/prometheus.yml`, all backend services, Docker Compose. |
+| Dashboards | Grafana provisioned with Prometheus datasource and backend benchmark dashboards. | `REQUIREMENTS.md` S-03 expects traffic, latency, error rate, and top-tracks visibility; `TECH-STACK.md` selects Grafana. | `config/grafana/**`, Analytics metrics, gateway metrics. |
+| Load generation | k6 scripts run inside Docker Compose and target the gateway entrypoint. | `REQUIREMENTS.md` M-21 requires main user-flow load generation; `TECH-STACK.md` recommends k6; `SCALABILITY.md` requires a stable gateway entrypoint. | `load-generator/k6/**`, `docker-compose.yml`, scale overrides. |
+| Request routing | Docker Compose Nginx gateway/reverse proxy. | Scaled Compose replicas cannot all expose the same host ports; `SCALABILITY.md` identifies a gateway as needed for benchmark realism. | `config/nginx/nginx.conf`, `docker-compose.yml`, k6 scripts. |
+| Integration resilience | Bounded retry and circuit breaker only for actual synchronous inter-service HTTP calls found during implementation. | `REQUIREMENTS.md` M-22 and M-23 apply to inter-service HTTP calls; adding unused clients would invent behavior. | Any service with existing or required synchronous downstream HTTP calls. |
+
+## Proposed File Tree
+
+```text
+config/
+  grafana/
+    dashboards/
+      backend-scalability.json
+    provisioning/
+      dashboards/
+        dashboards.yml
+      datasources/
+        prometheus.yml
+  nginx/
+    nginx.conf
+  prometheus/
+    prometheus.yml
+docker-compose.yml
+docker-compose.scale-smoke.yml
+docker-compose.scale-calibration.yml
+docker-compose.scale-100k.yml
+docker-compose.scale-1m.yml
+load-generator/
+  k6/
+    README.md
+    scripts/
+      smoke.js
+      mixed-user-journey.js
+    results/
+      .gitkeep
+README.md
+TESTS.md
+PROGRESS.md
+DESIGN-DECISIONS.md
+COST-AWARE-DECISIONS.md
+```
+
+Existing backend service folders remain in place. No frontend directory, frontend service, browser UI, frontend metrics, or frontend tests are part of this phase.
+
+## Dependencies
+
+| Dependency | Planned use | Notes |
+| --- | --- | --- |
+| `prom/prometheus` | Metrics collection. | Required by `TECH-STACK.md` and M-24. |
+| `grafana/grafana` | Dashboard runtime. | Required by `TECH-STACK.md`; dashboard content should remain backend-only. |
+| `grafana/k6` | Containerized smoke and benchmark workloads. | Required by `TECH-STACK.md` and M-21. |
+| `nginx` | Gateway/reverse proxy and benchmark entrypoint. | Needed for Docker Compose replica routing. |
+| Spring Boot Actuator + Micrometer Prometheus registry | Service metrics endpoints. | Must exist or be added only where missing. |
+| Resilience4j | Retry/circuit breaker for synchronous inter-service HTTP calls. | Use only where an actual inter-service HTTP call exists or is introduced by a documented requirement. |
+| Kafka/OpenSearch/ClickHouse/Redis/MongoDB/PostgreSQL exporters | Optional benchmark evidence. | Keep behind benchmark-oriented profiles if used to avoid default runtime overhead. |
+
+## Exposed Monitoring Interfaces
+
+| Interface | Exposure plan | Purpose |
+| --- | --- | --- |
+| `/actuator/health` on each backend service | Internal Docker network and optionally documented manual checks. | Health validation and Compose readiness checks. |
+| `/actuator/prometheus` on each backend service | Scraped by Prometheus over the shared named network. | JVM, HTTP, datasource, Kafka, and application metrics where available. |
+| Gateway `/health` | Host-facing through the gateway port. | Stable smoke-test readiness signal. |
+| Gateway metrics endpoint or exporter | Benchmark profile only if implemented. | Request rate, latency, upstream failures, and connection pressure. |
+| Prometheus `:9090` | Host-facing for local validation. | Metrics inspection and target health. |
+| Grafana `:3000` or configured host port | Host-facing for local dashboards. | Dashboard review. |
+| k6 result artifacts | Docker volume or bind-mounted results directory. | Repeatable smoke and benchmark evidence. |
+
+## Environment Variables
+
+Planned environment variables should remain explicit and documented in `.env.example` where they affect runtime behavior:
+
+| Variable group | Examples | Purpose |
+| --- | --- | --- |
+| Gateway | `GATEWAY_HOST_PORT`, gateway timeout or worker settings if exposed. | Stable entrypoint and routing tuning. |
+| Monitoring | `PROMETHEUS_RETENTION_TIME`, `GRAFANA_ADMIN_USER`, `GRAFANA_ADMIN_PASSWORD`. | Observability runtime and retention control. |
+| k6 | `K6_BASE_URL`, `K6_PROFILE`, `K6_DURATION`, `K6_*_RATE`, `K6_*_VUS`, `K6_RESULTS_PATH`. | Smoke, calibration, 100k, and 1m workload tuning. |
+| Resource limits | Per-service CPU and memory variables. | Satisfy M-20 and make profile cost visible. |
+| Kafka | Topic names, partition counts, retention, producer batch/linger/compression/timeout settings. | Support playback-event throughput and bounded producer behavior. |
+| Service metrics | Actuator exposure settings where not already enabled. | Ensure Prometheus scraping works for every backend service. |
+
+## Docker Compose and Network Changes
+
+The implementation phase should keep the existing single shared named Docker network required by M-18. Compose should start all eight backend services plus required infrastructure, monitoring, and the load generator as required by M-19.
+
+Planned Compose work:
+
+- Add or verify a gateway service as the only required host-facing application entrypoint.
+- Keep backend services addressable on the shared Docker network by service name.
+- Keep Notification internal-only because `ARCHITECTURE.md` does not require a public client API.
+- Keep stateful infrastructure single-instance by default unless a scale profile explicitly documents a benchmark reason to change resource limits.
+- Use scale override files or documented `docker compose up --scale` commands for service-specific replica counts instead of scaling all services uniformly.
+- Keep exporter-heavy observability behind benchmark-oriented profiles where practical while preserving required Prometheus/Grafana availability.
+
+## Prometheus Scrape Strategy
+
+Prometheus should scrape every backend service's `/actuator/prometheus` endpoint over the shared named network. The scrape configuration should support Compose scaling by resolving service DNS names rather than hard-coding individual container names where possible.
+
+Infrastructure scrape jobs should include only evidence that is useful for this phase:
+
+- Gateway traffic and error metrics if the gateway exporter is enabled.
+- Kafka/broker or consumer-lag metrics if available in the benchmark profile.
+- Redis metrics for Recommendation cache validation if an exporter is enabled.
+- Container-level metrics in benchmark profiles where resource-limit behavior is being measured.
+
+## Grafana Dashboard Strategy
+
+Grafana should be provisioned from repository files so dashboards are repeatable. The first dashboard should focus on the minimum required benchmark evidence:
+
+- backend request rate,
+- HTTP latency percentiles,
+- HTTP error rate,
+- service health/target status,
+- JVM heap and GC pressure where available,
+- Kafka event throughput or lag where available,
+- top tracks/global chart evidence from Analytics if exposed as metrics or documented through API smoke evidence.
+
+Dashboard panels should not include frontend metrics because frontend runtime is out of scope.
+
+## k6 Workload Strategy
+
+k6 should use the gateway as its base URL and cover the M-21 flows:
+
+- registration,
+- login,
+- catalog browsing,
+- search,
+- streaming descriptor and terminal playback event,
+- playlist create and track mutation,
+- authenticated history query.
+
+Planned workload profiles:
+
+| Profile | Purpose | Expected behavior |
+| --- | --- | --- |
+| Smoke | Correctness, auth, persistence, and messaging proof at tiny scale. | Short duration, low VUs, strict functional checks. |
+| Calibration | Find first bottleneck before expensive benchmark runs. | Moderate rates, metrics capture, compare dropped iterations and backend saturation. |
+| 100k approximation | Exercise the `SCALABILITY.md` traffic ratios at reduced duration or local scale. | Validate relative service pressure without claiming 1m capacity. |
+| 1m target | Full target workload on a sufficiently sized Docker host. | Use target ratios from `SCALABILITY.md`; record resource and failure evidence. |
+
+The scripts should avoid high-cardinality k6 tags such as unique IDs in URL metric labels where possible.
+
+## Integration Fixes Needed
+
+The implementation phase should inspect the current code before changing behavior. Planned fixes are limited to cross-service runtime blockers:
+
+| Fix area | Planned action | Requirement/source |
+| --- | --- | --- |
+| Gateway routing | Route Auth, Catalog, Streaming, Playlist, Search, Analytics, and Recommendation through the gateway; keep Notification internal. | `ARCHITECTURE.md` service exposure; `SCALABILITY.md` gateway plan. |
+| JWT-protected flows | Ensure k6 uses Auth-issued JWTs and protected services validate locally. | M-03, M-25. |
+| Kafka topics | Ensure playback and playlist event topics exist with configurable partitions. | M-06, M-16, M-17; `SCALABILITY.md` event-volume plan. |
+| Consumer robustness | Confirm Analytics, Recommendation, and Notification consumers continue past malformed or incompatible records where their current behavior depends on Kafka. | Existing bug history and messaging reliability needs. |
+| Retry/circuit breaker | Add bounded retry and circuit breaker only to actual synchronous inter-service HTTP clients discovered during implementation. If none exist, document the inventory and leave behavior unchanged. | M-22, M-23; `TECH-STACK.md` WebClient/Resilience4j guidance. |
+| Startup duplication | Avoid duplicate Catalog ingestion and Search indexing across scaled replicas when scale profiles are used, while preserving automatic startup ingestion in the baseline path. | M-09; `SCALABILITY.md` cost and scaling plan. |
+| Result evidence | Ensure k6 can write summary artifacts from inside Docker. | System verification deliverable and final evidence requirements. |
+
+## Validation Steps
+
+Planned validation for the implementation phase:
+
+1. `docker compose config --quiet`
+2. `docker compose --profile benchmark config --quiet`
+3. `docker compose -f docker-compose.yml -f docker-compose.scale-smoke.yml config --quiet`
+4. Repeat Compose config validation for calibration, 100k, and 1m overrides if they are present or changed.
+5. `docker compose config --services` and benchmark-profile service inventory to confirm all eight backend services and required infrastructure remain available.
+6. Validate Nginx configuration if a gateway config is generated.
+7. Validate Prometheus configuration with `promtool check config` if Prometheus config changes.
+8. Parse Grafana dashboard JSON if dashboard files change.
+9. Inspect k6 scripts with `k6 inspect`.
+10. Run focused backend tests only for services whose code changes.
+11. Run a Docker Compose smoke path through the gateway if the environment supports Docker.
+12. Confirm Prometheus targets for all backend services are present during live validation.
+13. Confirm k6 result artifacts are written.
+
+## Required Tests or Smoke Checks
+
+| Test/check | Scope | Required evidence |
+| --- | --- | --- |
+| Backend service tests touched by this phase | Any service receiving integration-resilience or metrics code changes. | Maven test or Docker image build evidence. |
+| Gateway route smoke | Auth, Catalog, Streaming, Playlist, Search, Analytics, Recommendation. | HTTP requests through gateway return expected statuses. |
+| k6 smoke | M-21 main flows. | Functional checks pass and result summary is saved. |
+| Kafka messaging smoke | Streaming publication plus Analytics/Recommendation/Notification consumption paths where applicable. | Events are produced and consumers remain healthy. |
+| Prometheus target smoke | Monitoring stack. | All eight backend service targets are visible/up or failures are explained. |
+| Grafana provisioning check | Dashboard stack. | Dashboard JSON and datasource provisioning are valid. |
+
+## Explicit Assumptions
+
+- The current application remains backend-only; frontend references are not part of this phase.
+- Full 1m workload validation may require a host larger than the local development machine; local validation should not claim full-capacity success unless supported by measured evidence.
+- Notification remains internal and does not need a public gateway route.
+- The exact inventory of synchronous inter-service HTTP calls must be verified during implementation before adding retry/circuit-breaker code.
+- Existing persistent Docker volumes may retain Kafka topics or database state; profile validation must note when a result depends on pre-existing volumes.
+
+## Missing Details To Confirm During Implementation
+
+- Whether every service already exposes `/actuator/prometheus` with the correct dependency and management config.
+- Whether any synchronous inter-service HTTP calls currently exist and therefore require Resilience4j configuration.
+- Whether existing Kafka topics in persistent volumes need explicit partition-increase handling for larger profiles.
+- Which exact host ports are already occupied on the target machine.
+- Whether exporter images are already available locally or require a first-time pull.
