@@ -310,24 +310,24 @@ Frontend UI work has been intentionally moved out of scope for this version so d
 
 ### Steps
 - [x] **Session 9 Step 1 - Plan**: Monitoring stack, load-generator strategy, Docker Compose/network changes, integration fixes, validation checks, and cost-aware runtime profiles
-- [ ] **Session 9 Step 2 - Generate**: Monitoring config, load-generator scripts, Compose wiring, integration fixes, tests, and README updates
+- [x] **Session 9 Step 2 - Generate**: Monitoring config, load-generator scripts, Compose wiring, integration fixes, tests, and README updates
 - [ ] **Session 9 Step 3 - Validate/Fix**: Review against source documents, run validation checks, fix defects, and update checklist status
 
 ### Monitoring
-- [ ] Prometheus configured to scrape all 8 services
-- [ ] If implemented, Grafana dashboard is configured with panels for traffic, latency, error rate, and top tracks (S-03)
-- [ ] All services expose metrics suitable for Prometheus scraping
+- [x] Prometheus configured to scrape all 8 services
+- [x] If implemented, Grafana dashboard is configured with panels for traffic, latency, error rate, and top tracks (S-03)
+- [x] All services expose metrics suitable for Prometheus scraping
 
 ### Load Generator
-- [ ] Covers: registration, login, catalog browsing, search, streaming requests, playlist operations, and history queries (M-21)
-- [ ] Load generator starts as a service in `docker-compose.yml`
-- [ ] Workload definition is documented
+- [x] Covers: registration, login, catalog browsing, search, streaming requests, playlist operations, and history queries (M-21)
+- [x] Load generator starts as a service in `docker-compose.yml`
+- [x] Workload definition is documented
 
 ### Integration Fixes
 - [ ] Inter-service HTTP calls implement retry with exponential backoff (M-22)
 - [ ] Inter-service HTTP calls implement circuit breaker or equivalent failure isolation (M-23)
-- [ ] All 8 services communicate over the shared named Docker network (M-18)
-- [ ] CPU and memory limits are configurable per service in `docker-compose.yml` (M-20)
+- [x] All 8 services communicate over the shared named Docker network (M-18)
+- [x] CPU and memory limits are configurable per service in `docker-compose.yml` (M-20)
 
 ### System Verification Deliverable
 - [ ] Automated integration tests show that the services run correctly together in the shared deployment environment

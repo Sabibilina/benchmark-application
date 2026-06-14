@@ -20,6 +20,12 @@ function jsonHeaders(token) {
   };
 }
 
+function namedParams(name, params = {}) {
+  const nextParams = Object.assign({}, params);
+  nextParams.tags = Object.assign({}, params.tags || {}, { name });
+  return nextParams;
+}
+
 export default function () {
   const suffix = `${__VU}-${__ITER}-${Date.now()}`;
   const credentials = {
@@ -29,11 +35,13 @@ export default function () {
 
   const register = http.post(`${baseUrl}/auth/register`, JSON.stringify(credentials), {
     headers: { 'Content-Type': 'application/json' },
+    tags: { name: 'POST /auth/register' },
   });
   check(register, { 'register accepted': (response) => response.status === 201 || response.status === 409 });
 
   const login = http.post(`${baseUrl}/auth/login`, JSON.stringify(credentials), {
     headers: { 'Content-Type': 'application/json' },
+    tags: { name: 'POST /auth/login' },
   });
   check(login, { 'login ok': (response) => response.status === 200 && response.json('accessToken') });
 
@@ -46,26 +54,26 @@ export default function () {
   const songId = `spotify:track:benchmark-${__VU}`;
   const encodedSongId = encodeURIComponent(songId);
 
-  check(http.get(`${baseUrl}/catalog/songs?page=0&size=10`, { headers: authHeaders }), {
+  check(http.get(`${baseUrl}/catalog/songs?page=0&size=10`, namedParams('GET /catalog/songs', { headers: authHeaders })), {
     'catalog ok': (response) => response.status === 200,
   });
-  check(http.get(`${baseUrl}/search?q=love&size=10`, { headers: authHeaders }), {
+  check(http.get(`${baseUrl}/search?q=love&size=10`, namedParams('GET /search', { headers: authHeaders })), {
     'search ok': (response) => response.status === 200,
   });
-  check(http.get(`${baseUrl}/recommend/daily-mix`, { headers: authHeaders }), {
+  check(http.get(`${baseUrl}/recommend/daily-mix`, namedParams('GET /recommend/daily-mix', { headers: authHeaders })), {
     'recommend ok': (response) => response.status === 200,
   });
-  check(http.get(`${baseUrl}/stream/${encodedSongId}`, { headers: authHeaders }), {
+  check(http.get(`${baseUrl}/stream/${encodedSongId}`, namedParams('GET /stream/{songId}', { headers: authHeaders })), {
     'stream ok': (response) => response.status === 200,
   });
-  check(http.post(`${baseUrl}/stream/${encodedSongId}/ended`, null, { headers: authHeaders }), {
+  check(http.post(`${baseUrl}/stream/${encodedSongId}/ended`, null, namedParams('POST /stream/{songId}/ended', { headers: authHeaders })), {
     'stream ended ok': (response) => response.status === 202,
   });
 
   const playlist = http.post(
     `${baseUrl}/playlists`,
     JSON.stringify({ name: `k6 smoke ${suffix}` }),
-    { headers: jsonHeaders(token) },
+    namedParams('POST /playlists', { headers: jsonHeaders(token) }),
   );
   check(playlist, { 'playlist create ok': (response) => response.status === 201 });
 
@@ -74,13 +82,13 @@ export default function () {
     check(http.post(
       `${baseUrl}/playlists/${playlistId}/tracks`,
       JSON.stringify({ songId }),
-      { headers: jsonHeaders(token) },
+      namedParams('POST /playlists/{id}/tracks', { headers: jsonHeaders(token) }),
     ), {
       'playlist add track ok': (response) => response.status === 201 || response.status === 204,
     });
   }
 
-  check(http.get(`${baseUrl}/analytics/me/history?page=0&size=10`, { headers: authHeaders }), {
+  check(http.get(`${baseUrl}/analytics/me/history?page=0&size=10`, namedParams('GET /analytics/me/history', { headers: authHeaders })), {
     'history ok': (response) => response.status === 200,
   });
 

@@ -3145,3 +3145,46 @@ Planned validation for the implementation phase:
 - Whether existing Kafka topics in persistent volumes need explicit partition-increase handling for larger profiles.
 - Which exact host ports are already occupied on the target machine.
 - Whether exporter images are already available locally or require a first-time pull.
+
+# Session 9 Step 2 Implementation - Monitoring, Load Generator, and Integration Fixes
+
+## Implementation Summary
+
+Session 9 implementation was generated from the approved plan and the current repository baseline. Most required monitoring and scalability artifacts already existed in the repository; the implementation pass tightened the generated runtime behavior where validation showed gaps instead of replacing working files.
+
+## Decisions
+
+| Decision | Why | Justification | Affected files/services |
+| --- | --- | --- | --- |
+| Kept the existing Docker Compose gateway, Prometheus, Grafana, k6, scale overrides, and benchmark exporters as the implementation foundation. | These files already matched the approved Session 9 plan and the Docker Compose-only scalability architecture. | `REQUIREMENTS.md` M-18, M-19, M-21, M-24; `TECH-STACK.md` Observability and Load Generation; `SCALABILITY.md` Docker Compose scaling model. | `docker-compose.yml`, `config/nginx/nginx.conf`, `config/prometheus/prometheus.yml`, `config/grafana/**`, `load-generator/k6/**`, scale override files. |
+| Made Kafka-backed application services wait for `kafka-init` to complete successfully before startup. | Streaming, Analytics, Recommendation, and Notification depend on Kafka topics. Waiting for topic initialization reduces startup races during smoke and benchmark runs. | `REQUIREMENTS.md` M-06, M-16, M-17; `SCALABILITY.md` Kafka bottleneck and startup-order guidance. | `docker-compose.yml`; Streaming, Analytics, Recommendation, Notification, and k6 runtime startup order. |
+| Passed 100k and 1m partition counts to `kafka-init`, not only to the broker service. | `kafka-init` is the service that creates topics; setting partition variables only on `kafka` does not affect topic creation. | `SCALABILITY.md` Kafka partition strategy for scaled consumers and high playback-event volume. | `docker-compose.scale-100k.yml`, `docker-compose.scale-1m.yml`. |
+| Made the k6 service wait for the gateway health check and `kafka-init` before execution. | The load generator should run against the integrated backend path, not race service readiness or topic creation. | `REQUIREMENTS.md` M-21 and the system verification deliverable in `ARCHITECTURE.md`. | `docker-compose.yml`, `load-generator/k6/scripts/*.js`. |
+| Added stable k6 `name` tags for variable routes. | Stream IDs and playlist IDs create high-cardinality URLs; route-level names keep k6 metrics usable during scale tests. | `SCALABILITY.md` k6 evidence strategy and prior benchmark-output evidence showing high time-series cardinality risk. | `load-generator/k6/scripts/smoke.js`, `load-generator/k6/scripts/mixed-user-journey.js`. |
+| Changed the mixed auth workload to pre-register a bounded user pool and reuse it for login pressure. | The target workload is login throughput, not continuous registration writes. Registration remains covered by setup and smoke checks. | `SCALABILITY.md` target workload table; `REQUIREMENTS.md` M-21 requires registration and login coverage. | `load-generator/k6/scripts/mixed-user-journey.js`, `.env.example`, `load-generator/k6/README.md`. |
+| Added `K6_AUTH_USER_POOL_SIZE` as an explicit workload control. | The registration setup volume should be visible and tunable for local and benchmark profiles. | `SCALABILITY.md` cost-aware workload staging; `TECH-STACK.md` k6 load generation. | `.env.example`, `mixed-user-journey.js`, `load-generator/k6/README.md`. |
+| Added a Grafana "Top Tracks Evidence" panel that points to the Analytics chart endpoint rather than adding per-song Prometheus metrics. | `REQUIREMENTS.md` S-03 asks for top-track dashboard visibility, but per-song Prometheus labels would create high-cardinality metrics under benchmark traffic. | `REQUIREMENTS.md` S-03; `SCALABILITY.md` observability cost trade-offs. | `config/grafana/dashboards/backend-scalability.json`; Analytics API evidence remains `GET /analytics/charts/global`. |
+| Did not add Resilience4j retry/circuit-breaker code in this generation step. | The implementation pass found no required synchronous inter-service HTTP client path in the current source scan. Adding unused resilience dependencies would invent behavior. | `REQUIREMENTS.md` M-22 and M-23 apply to inter-service HTTP calls; `TECH-STACK.md` says to apply WebClient/Resilience4j where synchronous service-to-service traffic exists. | No service code changed for retry/circuit breaker. |
+
+## Validation Performed
+
+- `docker compose config --quiet` passed.
+- `docker compose --profile benchmark config --quiet` passed.
+- `docker compose -f docker-compose.yml -f docker-compose.scale-smoke.yml config --quiet` passed.
+- `docker compose -f docker-compose.yml -f docker-compose.scale-calibration.yml config --quiet` passed.
+- `docker compose -f docker-compose.yml -f docker-compose.scale-100k.yml config --quiet` passed.
+- `docker compose -f docker-compose.yml -f docker-compose.scale-1m.yml config --quiet` passed.
+- Rendered 100k and 1m Compose configs show `kafka-init` receives `PLAYBACK_EVENTS_PARTITIONS` and `PLAYLIST_EVENTS_PARTITIONS`.
+- `docker compose --profile benchmark config --services` listed all eight backend services, required persistence, Kafka, `kafka-init`, gateway, Prometheus, Grafana, k6, and benchmark exporters.
+- `docker compose run --no-deps --rm k6 inspect /scripts/smoke.js` passed after replacing unsupported object spread syntax with `Object.assign`.
+- `docker compose run --no-deps --rm k6 inspect /scripts/mixed-user-journey.js` passed after the same syntax correction.
+- `docker run --rm --entrypoint promtool ... promtool check config /etc/prometheus/prometheus.yml` passed.
+- `docker run --rm ... nginx -t` passed for the gateway config.
+- `config/grafana/dashboards/backend-scalability.json` parsed successfully with PowerShell `ConvertFrom-Json`.
+- Static checks confirmed all eight backend services include `micrometer-registry-prometheus` and expose `health,prometheus`.
+
+## Assumptions and Remaining Items
+
+- Live end-to-end k6 smoke was not run in this generation step; the generated scripts were syntax-validated and remain ready for Session 9 validation/fix.
+- Docker emitted `C:\Users\thele\.docker\config.json` access warnings during Compose config commands, but the commands returned exit code 0.
+- Existing persistent Kafka topics are not automatically repartitioned by `kafka-init` when they already exist; larger benchmark profiles may still require explicit topic inspection or partition adjustment during validation.

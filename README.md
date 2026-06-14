@@ -148,6 +148,7 @@ Important configuration groups:
 * Database connection pool caps
 * Redis cache memory policy
 * k6 workload rates and threshold settings
+* k6 auth user pool size for mixed-profile login pressure
 * k6 container user for writing result summaries to the `k6-results` volume
 * Database credentials for local development containers
 

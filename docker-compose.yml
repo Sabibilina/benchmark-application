@@ -100,7 +100,9 @@ services:
       SPRING_KAFKA_PRODUCER_PROPERTIES_REQUEST_TIMEOUT_MS: ${STREAMING_KAFKA_REQUEST_TIMEOUT_MS:-10000}
     depends_on:
       kafka:
-        condition: service_started
+        condition: service_healthy
+      kafka-init:
+        condition: service_completed_successfully
 
   playlist-service:
     <<: *placeholder-app
@@ -168,7 +170,9 @@ services:
       analytics-db:
         condition: service_healthy
       kafka:
-        condition: service_started
+        condition: service_healthy
+      kafka-init:
+        condition: service_completed_successfully
 
   recommendation-service:
     <<: *placeholder-app
@@ -198,7 +202,9 @@ services:
       recommendation-redis:
         condition: service_started
       kafka:
-        condition: service_started
+        condition: service_healthy
+      kafka-init:
+        condition: service_completed_successfully
 
   notification-service:
     <<: *placeholder-app
@@ -219,7 +225,9 @@ services:
       notification-db:
         condition: service_started
       kafka:
-        condition: service_started
+        condition: service_healthy
+      kafka-init:
+        condition: service_completed_successfully
 
   auth-db:
     <<: *postgres
@@ -526,6 +534,11 @@ services:
     volumes:
       - ./load-generator/k6/scripts:/scripts:ro
       - k6-results:/results
+    depends_on:
+      gateway:
+        condition: service_healthy
+      kafka-init:
+        condition: service_completed_successfully
 
 networks:
   benchmark-network:

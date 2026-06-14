@@ -68,6 +68,11 @@ services:
       KAFKA_LOG_RETENTION_HOURS: 3
       KAFKA_HEAP_OPTS: -Xms768m -Xmx1536m
 
+  kafka-init:
+    environment:
+      PLAYBACK_EVENTS_PARTITIONS: 24
+      PLAYLIST_EVENTS_PARTITIONS: 6
+
   search-opensearch:
     cpus: 2.00
     mem_limit: 4g

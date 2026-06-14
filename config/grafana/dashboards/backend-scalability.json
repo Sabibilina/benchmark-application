@@ -168,6 +168,26 @@
       ],
       "title": "Scrape Target Health",
       "type": "timeseries"
+    },
+    {
+      "gridPos": {
+        "h": 5,
+        "w": 24,
+        "x": 0,
+        "y": 24
+      },
+      "id": 7,
+      "options": {
+        "code": {
+          "language": "plaintext",
+          "showLineNumbers": false,
+          "showMiniMap": false
+        },
+        "content": "Top tracks are served by Analytics through GET /analytics/charts/global. Keep this panel paired with k6 smoke or benchmark evidence and the Analytics API response rather than exporting per-song Prometheus labels, which would create high-cardinality metrics during large benchmark runs.",
+        "mode": "markdown"
+      },
+      "title": "Top Tracks Evidence",
+      "type": "text"
     }
   ],
   "refresh": "10s",
