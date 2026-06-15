@@ -10,6 +10,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+import java.util.stream.Collectors;
 
 @Service
 public class AnalyticsService {
@@ -32,6 +33,19 @@ public class AnalyticsService {
             return;
         }
         repository.insert(event);
+    }
+
+    public void recordBatch(List<PlaybackEventRecord> events) {
+        List<PlaybackEventRecord> filtered = events.stream()
+                .filter(e -> {
+                    if (e.userId() == null || e.songId() == null) {
+                        log.warn("Skipping playback event with null userId or songId: type={}", e.type());
+                        return false;
+                    }
+                    return true;
+                })
+                .collect(Collectors.toList());
+        repository.insertBatch(filtered);
     }
 
     public List<HistoryEntry> getHistory(String userId) {

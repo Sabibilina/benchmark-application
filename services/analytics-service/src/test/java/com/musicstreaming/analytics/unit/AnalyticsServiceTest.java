@@ -98,4 +98,37 @@ class AnalyticsServiceTest {
         service.recordEvent(event);
         verify(repository, never()).insert(any());
     }
+
+    // ── recordBatch ───────────────────────────────────────────────────────────
+
+    @Test
+    void recordBatch_callsInsertBatch_withAllValidEvents() {
+        PlaybackEventRecord e1 = new PlaybackEventRecord("play.started", "alice", "song1", Instant.now());
+        PlaybackEventRecord e2 = new PlaybackEventRecord("play.ended",   "bob",   "song2", Instant.now());
+        service.recordBatch(List.of(e1, e2));
+        verify(repository).insertBatch(List.of(e1, e2));
+    }
+
+    @Test
+    void recordBatch_filtersOutNullUserId() {
+        PlaybackEventRecord valid   = new PlaybackEventRecord("play.started", "alice", "song1", Instant.now());
+        PlaybackEventRecord nullUid = new PlaybackEventRecord("play.started", null,    "song2", Instant.now());
+        service.recordBatch(List.of(valid, nullUid));
+        verify(repository).insertBatch(List.of(valid));
+    }
+
+    @Test
+    void recordBatch_filtersOutNullSongId() {
+        PlaybackEventRecord valid    = new PlaybackEventRecord("play.started", "alice", "song1", Instant.now());
+        PlaybackEventRecord nullSong = new PlaybackEventRecord("play.started", "bob",   null,    Instant.now());
+        service.recordBatch(List.of(valid, nullSong));
+        verify(repository).insertBatch(List.of(valid));
+    }
+
+    @Test
+    void recordBatch_callsInsertBatch_withEmptyList_whenAllFiltered() {
+        PlaybackEventRecord bad = new PlaybackEventRecord("play.started", null, null, Instant.now());
+        service.recordBatch(List.of(bad));
+        verify(repository).insertBatch(List.of());
+    }
 }

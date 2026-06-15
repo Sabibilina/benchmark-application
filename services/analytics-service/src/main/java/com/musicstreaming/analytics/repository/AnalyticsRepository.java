@@ -3,9 +3,12 @@ package com.musicstreaming.analytics.repository;
 import com.musicstreaming.analytics.dto.ChartEntry;
 import com.musicstreaming.analytics.dto.HistoryEntry;
 import com.musicstreaming.analytics.model.PlaybackEventRecord;
+import org.springframework.jdbc.core.BatchPreparedStatementSetter;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 
+import java.sql.PreparedStatement;
+import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.List;
@@ -24,6 +27,30 @@ public class AnalyticsRepository {
         jdbcTemplate.update(
                 "INSERT INTO playback_events (event_type, user_id, song_id, occurred_at) VALUES (?, ?, ?, ?)",
                 event.type(), event.userId(), event.songId(), Timestamp.from(ts));
+    }
+
+    public void insertBatch(List<PlaybackEventRecord> events) {
+        if (events.isEmpty()) {
+            return;
+        }
+        jdbcTemplate.batchUpdate(
+                "INSERT INTO playback_events (event_type, user_id, song_id, occurred_at) VALUES (?, ?, ?, ?)",
+                new BatchPreparedStatementSetter() {
+                    @Override
+                    public void setValues(PreparedStatement ps, int i) throws SQLException {
+                        PlaybackEventRecord event = events.get(i);
+                        Instant ts = event.timestamp() != null ? event.timestamp() : Instant.now();
+                        ps.setString(1, event.type());
+                        ps.setString(2, event.userId());
+                        ps.setString(3, event.songId());
+                        ps.setTimestamp(4, Timestamp.from(ts));
+                    }
+
+                    @Override
+                    public int getBatchSize() {
+                        return events.size();
+                    }
+                });
     }
 
     public List<HistoryEntry> findHistoryForUser(String userId, int limit) {

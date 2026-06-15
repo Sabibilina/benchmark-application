@@ -28,6 +28,9 @@ kafka:
 analytics:
   history:
     limit: ${ANALYTICS_HISTORY_LIMIT:100}
+  batch:
+    size: ${ANALYTICS_BATCH_SIZE:500}
+    flush-interval-ms: ${ANALYTICS_BATCH_FLUSH_MS:5000}
 
 management:
   endpoints:

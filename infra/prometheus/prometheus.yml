@@ -8,42 +8,117 @@ scrape_configs:
     static_configs:
       - targets: [localhost:9090]
 
+  # Application services — DNS SD discovers all running replicas via Docker's embedded DNS
   - job_name: auth-service
     metrics_path: /actuator/prometheus
-    static_configs:
-      - targets: [auth-service:8080]
+    dns_sd_configs:
+      - names: ['auth-service']
+        type: A
+        port: 8080
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
 
   - job_name: catalog-service
     metrics_path: /actuator/prometheus
-    static_configs:
-      - targets: [catalog-service:8080]
+    dns_sd_configs:
+      - names: ['catalog-service']
+        type: A
+        port: 8080
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
 
   - job_name: streaming-service
     metrics_path: /actuator/prometheus
-    static_configs:
-      - targets: [streaming-service:8080]
+    dns_sd_configs:
+      - names: ['streaming-service']
+        type: A
+        port: 8080
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
 
   - job_name: playlist-service
     metrics_path: /actuator/prometheus
-    static_configs:
-      - targets: [playlist-service:8080]
+    dns_sd_configs:
+      - names: ['playlist-service']
+        type: A
+        port: 8080
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
 
   - job_name: search-service
     metrics_path: /actuator/prometheus
-    static_configs:
-      - targets: [search-service:8080]
+    dns_sd_configs:
+      - names: ['search-service']
+        type: A
+        port: 8080
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
 
   - job_name: analytics-service
     metrics_path: /actuator/prometheus
-    static_configs:
-      - targets: [analytics-service:8080]
+    dns_sd_configs:
+      - names: ['analytics-service']
+        type: A
+        port: 8080
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
 
   - job_name: recommendation-service
     metrics_path: /actuator/prometheus
-    static_configs:
-      - targets: [recommendation-service:8080]
+    dns_sd_configs:
+      - names: ['recommendation-service']
+        type: A
+        port: 8080
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
 
   - job_name: notification-service
     metrics_path: /actuator/prometheus
+    dns_sd_configs:
+      - names: ['notification-service']
+        type: A
+        port: 8080
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+
+  # Infrastructure exporters (singletons — static_configs)
+  - job_name: auth-db-exporter
     static_configs:
-      - targets: [notification-service:8080]
+      - targets: ['auth-db-exporter:9187']
+
+  - job_name: catalog-db-exporter
+    static_configs:
+      - targets: ['catalog-db-exporter:9187']
+
+  - job_name: playlist-db-exporter
+    static_configs:
+      - targets: ['playlist-db-exporter:9187']
+
+  - job_name: recommendation-db-exporter
+    static_configs:
+      - targets: ['recommendation-db-exporter:9187']
+
+  - job_name: redis-exporter
+    static_configs:
+      - targets: ['redis-exporter:9121']
+
+  - job_name: kafka-exporter
+    static_configs:
+      - targets: ['kafka-exporter:9308']
+
+  - job_name: mongodb-exporter
+    static_configs:
+      - targets: ['mongodb-exporter:9216']
+
+  - job_name: clickhouse
+    metrics_path: /metrics
+    static_configs:
+      - targets: ['clickhouse:9363']

@@ -22,12 +22,13 @@ public class SchemaInitializer implements ApplicationRunner {
     public void run(ApplicationArguments args) {
         jdbcTemplate.execute("""
                 CREATE TABLE IF NOT EXISTS playback_events (
-                    event_type   String,
+                    event_type   LowCardinality(String),
                     user_id      String,
                     song_id      String,
                     occurred_at  DateTime64(3, 'UTC')
                 ) ENGINE = MergeTree()
-                ORDER BY (user_id, occurred_at)
+                PARTITION BY toYYYYMM(toDateTime(occurred_at))
+                ORDER BY (user_id, song_id, occurred_at)
                 """);
         log.info("ClickHouse schema ready");
     }

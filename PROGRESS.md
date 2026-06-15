@@ -311,6 +311,62 @@ Services are built **one at a time** in the order below. Each service goes throu
 
 ---
 
+## Cost-Aware Scalability Planning
+
+### Planning Step
+- [x] `SCALABILITY.md` produced — cost-aware scaling plan for 1 M users; 4 runtime profiles; 17 sections covering all required areas; 15-step scaling order; 8 risks documented
+- [x] `COST-AWARE-DECISIONS.md` produced — 20 entries covering every cost decision, assumption, trade-off, evidence source, affected file/service, expected cost impact, risk, validation method, and status
+
+### Validation Step (cost-aware scalability review)
+- [x] `docker compose config --quiet` — PASS, exit 0 (default profile)
+- [x] `docker compose --profile load-test config --quiet` — PASS, exit 0
+- [x] `docker compose config --services` — all 8 backend services + full infrastructure confirmed
+- [x] Grafana dashboard JSON validated — 14 panels, no parse errors
+- [x] nginx.conf reviewed against actual service endpoint paths — **BUG FOUND AND FIXED**: `location /notifications/` → `location /notifications` (notification controller maps to bare `/notifications`, not `/notifications/`)
+- [x] k6 `main.js` reviewed against service security configs — **BUG FOUND AND FIXED**: `catalogFlow()` was calling catalog endpoints without auth headers; catalog-service requires JWT (`.anyRequest().authenticated()`); added `authHeaders(token)` to both catalog HTTP calls
+- [x] `.env.example` Profile D section reviewed — **BUG FOUND AND FIXED**: removed `# AUTH_SERVICE_REPLICAS=4` (would fail at runtime due to `container_name: auth-service` conflict with replicas > 1); added explanatory comment
+- [x] analytics-service new batch code reviewed — **GAP FOUND AND FIXED**: no unit tests for `BatchEventBuffer` or `AnalyticsService.recordBatch()`; created `BatchEventBufferTest.java` (8 tests) and extended `AnalyticsServiceTest.java` (+4 recordBatch tests)
+- [x] `mvn test -Dtest="AnalyticsServiceTest,BatchEventBufferTest"` — 21/21 tests PASS, BUILD SUCCESS
+- [x] Prometheus DNS SD config inspected — all 8 services use type A + port 8080; infrastructure exporters use static_configs
+- [x] ARCHITECTURE.md service boundaries verified — all 8 services retained with correct persistence layers; no cross-service DB sharing; JWT validation unchanged
+- [x] No Kubernetes/Helm/Swarm/Terraform artifacts introduced — confirmed Docker Compose only
+- [x] All validation results, fixes, and remaining risks documented in `COST-AWARE-DECISIONS.md` (VL-001 through VL-009)
+
+### Generation Step (cost-aware implementation)
+- [x] `docker-compose.yml` rewritten — nginx-lb added; init-kafka one-shot service added; KAFKA_AUTO_CREATE_TOPICS_ENABLE=false; all 8 app services containerised without host ports and with deploy.replicas; all 4 Postgres DBs tuned (shared_buffers, work_mem, max_connections); OpenSearch heap parameterised; Redis maxmemory + allkeys-lru + appendfsync everysec; ClickHouse + Kafka + Zookeeper + MongoDB resource limits added; HikariCP pool sizing on all DB services; analytics batch env vars wired; all jwt-key consumers depend on auth-service:healthy; all Kafka consumers depend on init-kafka:completed; postgres-exporter ×4, redis_exporter, kafka-exporter, mongodb_exporter added
+- [x] `infra/nginx-lb/nginx.conf` created — resolver 127.0.0.11 valid=10s; set $upstream variable pattern for Docker DNS re-resolution; per-route rate limiting; upstream health location
+- [x] `BatchEventBuffer.java` created — synchronized drain pattern; @Scheduled fixedDelayString flush; size-threshold flush on add()
+- [x] `PlaybackEventConsumer.java` updated — delegates to BatchEventBuffer instead of AnalyticsService directly
+- [x] `AnalyticsService.java` updated — recordBatch(List) added; null userId/songId filtered before batch insert
+- [x] `AnalyticsRepository.java` updated — insertBatch() added using jdbcTemplate.batchUpdate() with BatchPreparedStatementSetter
+- [x] `AnalyticsServiceApplication.java` updated — @EnableScheduling added
+- [x] `SchemaInitializer.java` updated — event_type LowCardinality(String); PARTITION BY toYYYYMM(toDateTime(occurred_at)); ORDER BY extended with song_id
+- [x] `services/analytics-service/src/main/resources/application.yml` updated — analytics.batch.size and analytics.batch.flush-interval-ms bound from env
+- [x] `infra/prometheus/prometheus.yml` updated — all 8 app services use dns_sd_configs (type A); 4 postgres-exporters, redis-exporter, kafka-exporter, mongodb-exporter, ClickHouse :9363 scrape targets added
+- [x] `load-generator/scripts/main.js` replaced — BASE_URL from NGINX_LB_URL; K6_SCENARIO selects scenario (smoke/streaming/full/peak); VU-unique usernames; register+login+catalog+search+stream+playlist+analytics flows; thresholds p95<2000ms, p99<5000ms, error<5%
+- [x] `infra/grafana/dashboards/scaling.json` created — 14 panels covering request rate, error rate, p95/p99 latency, JVM heap, CPU, HikariCP active/saturation, Kafka consumer lag, Redis hit rate/memory, OpenSearch heap, ClickHouse query latency
+- [x] `.env.example` comprehensively updated — image versions, Kafka partition counts, all DB tuning params, HikariCP sizing, OpenSearch heap, Redis maxmemory, infrastructure resource limits, replica count section (Profile A/B defaults + commented Profile D values), K6 scenario vars, analytics batch tuning
+- [x] `SCALABILITY.md` updated — §18 Implementation Status added (19 implemented items, 5 deferred items)
+- [x] `COST-AWARE-DECISIONS.md` statuses updated — CD-002/003/004/005/006/007/008/011/013/016/017: Implemented; CD-010: Planning (no Flyway V2 migrations added yet); CD-009/014/018/019/020: Deferred (evidence-based deferral documented)
+
+### Decisions Summary
+- streaming-service: 8–10 replicas (Profile D only); 1 replica (Profile A/B); highest traffic, stateless, CPU-bound
+- auth-service: 4–6 replicas (Profile D); BCrypt and RS256 signing are CPU-expensive; 1 replica in Profile A/B
+- search-service: 4–6 replicas; OpenSearch heap 512 MB → configurable via OPENSEARCH_HEAP (default 1g, Profile D 2g+) (CD-002)
+- analytics-service: 4 replicas ≤ playback-events partition count; ClickHouse batch insert implemented (CD-004)
+- recommendation-service: 3 replicas; Redis stampede mitigation; circuit breaker deferred to Phase 3 evidence (CD-018)
+- catalog-service: 4 replicas; PgBouncer deferred until saturation observed (CD-009)
+- playlist-service: 3 replicas; PgBouncer deferred until saturation observed
+- notification-service: 2 replicas ≤ playlist-events partition count
+- Kafka topic pre-creation: `playback-events` (12 partitions), `playlist-events` (6 partitions) via `init-kafka` (CD-007 — implemented)
+- Redis: maxmemory 256mb (REDIS_MAXMEMORY) + allkeys-lru + appendfsync everysec (CD-003 — implemented)
+- Infrastructure resource limits added for Kafka, Zookeeper, ClickHouse, MongoDB (CD-013 — implemented)
+- Load generator retained as opt-in profile only (CD-001, already implemented)
+- Phase ordering: 1 → 2 → 3 before 4/5/6; Phase 4/5/6 require Profile D and ≥32 GB host (CD-017 — implemented)
+- PostgreSQL hotspot indexes (CD-010): NOT YET IMPLEMENTED — Flyway V2 migrations must be added before Phase 3
+
+---
+
 ## Phase 10 — Monitoring, Load Generator & Integration
 
 ### Monitoring
