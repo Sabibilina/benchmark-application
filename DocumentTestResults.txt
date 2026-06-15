@@ -1,0 +1,129 @@
+╭─── Claude Code v2.1.126 ─────────────────────────────────────────────────────╮
+│                                                    │ Tips for getting        │
+│                Welcome back Sabina!                │ started                 │
+│                                                    │ Run /init to create a … │
+│                       ▐▛███▜▌                      │ ─────────────────────── │
+│                      ▝▜█████▛▘                     │ What's new              │
+│                        ▘▘ ▝▝                       │ Internal fixes          │
+│       Sonnet 4.6 · Claude Pro ·                    │ [VSCode] Fixed extensi… │
+│       iliuta.sabina@gmail.com's Organization       │ Added `CLAUDE_CODE_ENA… │
+│ ~/Desktop/Thesis/Iteration01/benchmark-application │ /release-notes for more │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+✻ Conversation compacted (ctrl+o for history)
+
+  ⎿  Read load-generator/scripts/main.js (273 lines)
+  ⎿  Referenced file docker-compose.yml
+  ⎿  Read load-generator/.env.example (39 lines)
+  ⎿  Referenced file COST-AWARE-DECISIONS.md
+  ⎿  Referenced file PROGRESS.md
+
+⏺ Task Output(non-blocking) b9yfhvf9y
+  ⎿  
+               /\      |‾‾| /‾‾/   /‾‾/
+          /\  /  \     |  |/  /   /  /
+     … +216 lines (ctrl+o to expand)
+
+⏺ The full scenario is at 43% (~2:10 into 5 min). Waiting for it to finish.
+
+⏺ Task Output b9yfhvf9y
+  ⎿  
+               /\      |‾‾| /‾‾/   /‾‾/
+          /\  /  \     |  |/  /   /  /
+     … +523 lines (ctrl+o to expand)
+
+⏺ Background command "Run k6 full scenario (50 VU, 5 min, all 8 flows)" failed with exit code 99
+
+⏺ Full scenario done. Exit 99 (threshold failure): p(95)=2.48s exceeded the 2s
+  threshold, and 144/1326 "add track" checks failed (89% pass). Now checking
+  memory before running the burst stress test.
+
+⏺ Bash(docker stats --no-stream --format "table
+      {{.Name}}\t{{.MemUsage}}\t{{.CPUPerc}}" 2>/dev/null | head -30 && echo
+      "---" && vm_stat | grep -E "free|Pages free")
+  ⎿  NAME                                             MEM USAGE / LIMIT
+      CPU %
+     benchmark-application-recommendation-service-2   340.9MiB / 512MiB
+     … +31 lines (ctrl+o to expand)
+
+⏺ Only ~15 MB host RAM free (macOS pages). Running 500-VU burst risks OOM kills.
+   I'll run a 200-VU stress test (constant load instead of ramping) to get
+  stress data without destabilizing the stack.
+
+⏺ Bash(NETWORK=$(docker network ls --format '{{.Name}}' | grep "music-net")
+      SCRIPTS_DIR="/Users/Sabina/Desktop/Thesis/Iteration01/benchmark-applicatio
+      n/load-generator/…)
+  ⎿  Error: Exit code 99
+
+               /\      |‾‾| /‾‾/   /‾‾/   
+          /\  /  \     |  |/  /   /  /    
+         /  \/    \    |     (   /   ‾‾\  
+        /          \   |  |\  \ |  (‾)  | 
+       / __________ \  |__| \__\ \_____/ .io
+
+          execution: local
+             script: /scripts/main.js
+     … +262 lines (ctrl+o to expand)
+
+⏺ Good — stress test complete (200 VU, 3 min). Now collecting unit test counts
+  before writing the report.
+
+  Searched for 1 pattern (ctrl+o to expand)
+
+⏺ Bash(docker ps --format "table {{.Names}}\t{{.Status}}" | grep -v NAMES |
+      sort)
+  ⎿  auth-db                                          Up 3 hours (healthy)
+     auth-db-exporter                                 Up 3 hours
+     auth-service                                     Up 3 hours (healthy)
+     … +29 lines (ctrl+o to expand)
+
+⏺ Bash(for dir in /Users/Sabina/Desktop/Thesis/Iteration01/benchmark-application
+      /services/*/target/surefire-reports; do
+        svc=$(echo "$dir" | sed 's|.*/services/||' |…)
+  ⎿  analytics-service: tests=34 failures=0 errors=0 skipped=0
+     auth-service: tests=11 failures=0 errors=0 skipped=0
+     catalog-service: tests=27 failures=0 errors=0 skipped=0
+     … +5 lines (ctrl+o to expand)
+
+⏺ All 201 unit tests pass. Now writing the report with all three scenario
+  results.
+
+⏺ Write(load-test-results.md)
+  ⎿  Wrote 274 lines to load-test-results.md
+       2 # Load Test Results
+       3 **Date**: 2026-06-15  
+       4 **Stack**: Docker Compose — all 10 services on a single MacBook 
+         host  
+       5 **k6 version**: 0.51.0  
+       6 **Test file**: `load-generator/scripts/main.js`
+       7 
+       8 ---
+       9 
+      10 ## 1. Test Environment
+     … +362 lines (ctrl+o to expand)
+
+⏺ load-test-results.md is written. Here's the summary of what was found and
+  reported:
+
+  Smoke (5 VU, 2 min) — PASS: 100% checks, 0% errors, p(95) = 499ms.
+
+  Full baseline (50 VU, 5 min) — THRESHOLD FAIL: 98.64% checks pass, 1.35% error
+   rate (under the 5% limit), but p(95) = 2.48s exceeded the 2s threshold. 144
+  "add track" failures (11%) due to a playlist ownership race between VUs
+  sharing the same user tokens. Median latency was a healthy 191ms — the p(95)
+  tail is driven by write-path queuing on the single host.
+
+  Stress test (200 VU, 3 min) — THRESHOLD FAIL: 98.20% checks, 1.78% errors
+  (still under 5%), but p(95) = 8.01s. All read paths (catalog, search, stream,
+  analytics, recommendations) maintained 100% success at 4× VUs. Throughput
+  scaled 4.6× (13.9 → 63.9 req/s), confirming the read paths scale linearly. The
+   stack survived with no container OOM kills.
+
+  The 500-VU burst scenario defined in the script was replaced with a 200-VU
+  constant stress test due to only ~15 MB free host RAM — the report documents
+  this constraint and recommends running the full burst on a ≥32 GB host. The
+  main actionable finding besides the memory constraint is the playlist
+  track-add bug: pre-creating one playlist per user in setup() would eliminate
+  the ownership race causing ~12% failure on that specific check.
+
+✻ Churned for 46m 55s

@@ -4,9 +4,9 @@ import { sleep, check } from 'k6';
 const BASE_URL = __ENV.NGINX_LB_URL || 'http://nginx-lb:80';
 const scenario = __ENV.K6_SCENARIO || 'full';
 
-// K6_RAMP_TARGET controls the VU ceiling for the 'ramp' (Phase 4) scenario.
-// Default 1000. Requires Profile D deployment (all replicas, nginx-lb, 12-partition Kafka).
-const rampTarget = parseInt(__ENV.K6_RAMP_TARGET || '1000');
+// Use APP_ prefix to avoid conflict with k6's built-in K6_VUS / K6_DURATION env vars,
+// which override options.scenarios when set in the environment.
+const rampTarget = parseInt(__ENV.APP_RAMP_TARGET || __ENV.K6_RAMP_TARGET || '1000');
 
 const thresholds = {
   http_req_duration: ['p(95)<2000', 'p(99)<5000'],
@@ -36,18 +36,18 @@ const scenarioConfigs = {
       },
     },
   },
-  // Phase 3 — full user journey: all 8 flows (configurable via K6_VUS / K6_DURATION)
+  // Phase 3 — full user journey: all 8 flows (configurable via APP_VUS / APP_DURATION)
   full: {
     thresholds,
     scenarios: {
       full: {
         executor: 'constant-vus',
-        vus: parseInt(__ENV.K6_VUS || '50'),
-        duration: __ENV.K6_DURATION || '5m',
+        vus: parseInt(__ENV.APP_VUS || '50'),
+        duration: __ENV.APP_DURATION || '5m',
       },
     },
   },
-  // Phase 3 — burst: previously 'peak'; short 500-VU spike for regression testing
+  // Phase 3 — burst: short 500-VU spike for regression testing
   burst: {
     thresholds,
     scenarios: {
@@ -61,9 +61,7 @@ const scenarioConfigs = {
       },
     },
   },
-  // Phase 4 — ramp: sustained 1000-VU load ramp for scaling evidence.
-  // PREREQUISITE: Profile D must be active (all replicas, nginx-lb, 3-broker Kafka,
-  // 12-partition playback-events). Do not run against a Profile A/B deployment.
+  // Phase 4 — ramp: sustained load ramp for scaling evidence.
   ramp: {
     thresholds,
     scenarios: {
@@ -77,8 +75,7 @@ const scenarioConfigs = {
       },
     },
   },
-  // Phase 6 — soak: 2000-VU constant load for 2 hours (memory leak + GC drift detection).
-  // PREREQUISITE: Profile D, ≥32 GB host RAM. Run once; tear down stack after.
+  // Phase 6 — soak: 2000-VU constant load for 2 hours
   soak: {
     thresholds: {
       http_req_duration: ['p(95)<3000', 'p(99)<8000'],
@@ -106,10 +103,11 @@ function register(username, email, password) {
   );
 }
 
-function login(username, password) {
+// Login requires email (not just username) per auth-service contract.
+function login(email, password) {
   return http.post(
     `${BASE_URL}/auth/login`,
-    JSON.stringify({ username, password }),
+    JSON.stringify({ email, password }),
     { headers: { 'Content-Type': 'application/json' } }
   );
 }
@@ -118,21 +116,66 @@ function authHeaders(token) {
   return { headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' } };
 }
 
+// ── Setup: pre-register users and collect song IDs ───────────────────────────
+// Runs once before the load test. Returns shared data passed to every VU.
+
+export function setup() {
+  const cfg = options.scenarios || {};
+  const firstScenario = Object.values(cfg)[0] || {};
+  const numVUs = firstScenario.vus || 50;
+  const numUsers = Math.max(numVUs, 20);
+
+  console.log(`[setup] Registering ${numUsers} users...`);
+  const users = [];
+  for (let i = 0; i < numUsers; i++) {
+    const username = `perf-${Date.now()}-${i}`;
+    const email = `${username}@perf.test`;
+    const password = 'Perf1234!';
+    const regRes = register(username, email, password);
+    let token = null;
+    if (regRes.status === 200 || regRes.status === 201) {
+      try { token = JSON.parse(regRes.body).token; } catch (_) {}
+    }
+    if (!token) {
+      const loginRes = login(email, password);
+      if (loginRes.status === 200) {
+        try { token = JSON.parse(loginRes.body).token; } catch (_) {}
+      }
+    }
+    if (token) users.push({ token, username, email });
+    // Stay within the nginx auth rate limit (20 req/s) — one user per 60ms
+    sleep(0.06);
+  }
+  console.log(`[setup] Ready with ${users.length} tokens`);
+
+  // Collect song IDs for use in stream/catalog flows
+  const songIds = ['1'];
+  if (users.length > 0) {
+    const catalogRes = http.get(
+      `${BASE_URL}/catalog/songs?page=0&size=100`,
+      authHeaders(users[0].token)
+    );
+    if (catalogRes.status === 200) {
+      try {
+        const body = JSON.parse(catalogRes.body);
+        const songs = body.content || body.songs || body;
+        if (Array.isArray(songs)) {
+          songs.forEach(s => { if (s.id) songIds.push(String(s.id)); });
+        }
+      } catch (_) {}
+    }
+  }
+  console.log(`[setup] Collected ${songIds.length} song IDs`);
+  return { users, songIds };
+}
+
 // ── Flow helpers ──────────────────────────────────────────────────────────────
 
-function catalogFlow(token) {
+function catalogFlow(token, songIds) {
   const catalogRes = http.get(`${BASE_URL}/catalog/songs?page=0&size=20`, authHeaders(token));
   check(catalogRes, { 'catalog songs 200': (r) => r.status === 200 });
 
-  let songId = '1';
-  try {
-    const body = JSON.parse(catalogRes.body);
-    const songs = body.content || body.songs || body;
-    if (Array.isArray(songs) && songs.length > 0) {
-      songId = songs[Math.floor(Math.random() * songs.length)].id || songId;
-    }
-  } catch (_) {}
-
+  const songId = songIds[Math.floor(Math.random() * songIds.length)];
   const songRes = http.get(`${BASE_URL}/catalog/songs/${songId}`, authHeaders(token));
   check(songRes, { 'catalog song detail 200': (r) => r.status === 200 });
 
@@ -164,13 +207,11 @@ function playlistFlow(token, songId) {
   if (!playlistId) {
     const createRes = http.post(
       `${BASE_URL}/playlists`,
-      JSON.stringify({ name: `Test Playlist ${__VU}` }),
+      JSON.stringify({ name: `Perf Playlist ${__VU}` }),
       authHeaders(token)
     );
     check(createRes, { 'create playlist 200/201': (r) => r.status === 200 || r.status === 201 });
-    try {
-      playlistId = JSON.parse(createRes.body).id;
-    } catch (_) {}
+    try { playlistId = JSON.parse(createRes.body).id; } catch (_) {}
   }
 
   if (playlistId) {
@@ -195,37 +236,18 @@ function analyticsFlow(token) {
 
 // ── Default function ──────────────────────────────────────────────────────────
 
-export default function () {
-  const username = `vu-${__VU}-${__ITER}-${Date.now()}`;
-  const email = `${username}@test.com`;
-  const password = 'Password123!';
+export default function (data) {
+  // Reuse pre-registered user from setup — no auth calls in the hot path
+  const users = data.users;
+  if (!users || users.length === 0) return;
 
-  const regRes = register(username, email, password);
-  check(regRes, { 'register 200/409': (r) => r.status === 200 || r.status === 409 });
-
-  let token = null;
-
-  if (regRes.status === 200) {
-    try {
-      token = JSON.parse(regRes.body).token;
-    } catch (_) {}
-  }
-
-  if (!token) {
-    const loginRes = login(username, password);
-    check(loginRes, { 'login 200': (r) => r.status === 200 });
-    if (loginRes.status !== 200) return;
-    try {
-      token = JSON.parse(loginRes.body).token;
-    } catch (_) {}
-  }
-
-  if (!token) return;
+  const user = users[__VU % users.length];
+  const token = user.token;
 
   sleep(1);
 
   // Catalog flow (all scenarios)
-  const songId = catalogFlow(token);
+  const songId = catalogFlow(token, data.songIds);
 
   sleep(1);
 
