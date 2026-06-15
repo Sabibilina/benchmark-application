@@ -506,3 +506,204 @@ Each entry follows this structure:
 ---
 
 *Last updated: 2026-06-15 — validation pass complete; 4 issues found, all fixed.*
+
+---
+
+## Session 9 Entries — Monitoring, Load Generator & Integration Fixes
+
+---
+
+## CD-021 — OpenSearch Prometheus Exporter Addition
+
+| Field | Content |
+|---|---|
+| **Decision** | Add `prometheuscommunity/elasticsearch-exporter` as `opensearch-exporter` service; add scrape job to `prometheus.yml` |
+| **What** | New `opensearch-exporter` compose service; new `opensearch` job in `infra/prometheus/prometheus.yml` |
+| **Where** | `docker-compose.yml`, `infra/prometheus/prometheus.yml` |
+| **Why** | OpenSearch heap, JVM GC, index stats, and thread pool metrics are entirely missing from the monitoring stack. Without an OpenSearch exporter, operators cannot observe the most critical OpenSearch signals (heap %, GC duration, query thread pool rejection rate). SCALABILITY.md §14 explicitly lists OpenSearch as a required scrape target. SCALABILITY.md §16 Step 7 ("defer second OpenSearch node until heap consistently > 75 %") cannot be validated without this metric. |
+| **Cost driver** | Memory (one additional container ~64–128 MB), scrape load (15 s interval, lightweight REST API poll) |
+| **Evidence** | `infra/prometheus/prometheus.yml` has no OpenSearch scrape job. SCALABILITY.md §14: "OpenSearch exposes metrics via the `_prometheus/metrics` endpoint (with the opensearch-prometheus-exporter plugin) or via `opensearch_exporter`." `docker-compose.yml` has no `opensearch-exporter` service. |
+| **Expected cost impact** | +64–128 MB RAM for the exporter container. Negligible CPU (REST polling vs active compute). The cost of NOT having this exporter is undetectable OpenSearch heap saturation, which can cause Phase 3+ benchmarks to fail without an observable root cause — wasting the entire benchmark run cost. |
+| **Behavior/performance risk** | The `elasticsearch_exporter` uses the `_cluster/health`, `_nodes/stats`, and `_stats` REST endpoints. On a heavily loaded OpenSearch cluster, these endpoints add minor read latency. At 15 s scrape intervals, impact is negligible. Risk: if OpenSearch `DISABLE_SECURITY_PLUGIN=true` is not set, the exporter's unauthenticated requests will fail (not applicable here — security is disabled). |
+| **Validation method** | After adding: `curl http://localhost:9090/api/v1/query?query=elasticsearch_jvm_memory_used_bytes` must return non-empty results. Grafana panel for OpenSearch heap must show a live percentage. |
+| **Status** | Planning — must be implemented in Session 9 generation step |
+
+---
+
+## CD-022 — overview.json Dashboard Population (S-03 Compliance)
+
+| Field | Content |
+|---|---|
+| **Decision** | Replace the empty `infra/grafana/dashboards/overview.json` stub with a populated 8-panel system overview dashboard meeting S-03 requirements |
+| **What** | `infra/grafana/dashboards/overview.json` — full replacement with panels for traffic, latency, error rate, top tracks, service health, JVM heap, Kafka consumer lag, and load generator VU count |
+| **Where** | `infra/grafana/dashboards/overview.json` |
+| **Why** | S-03 requirement: "The monitoring stack should include an admin dashboard for observability. Grafana should expose dashboards for traffic, latency, error rate, and top tracks." The current file is an explicit placeholder comment: `"description": "Music Streaming System — overview dashboard. Panels are added in Phase 10."` and has zero panels. Without this dashboard, S-03 is unfulfilled. |
+| **Cost driver** | No infrastructure cost. Grafana renders dashboards on demand; 8 additional panels add ~8 additional PromQL queries per browser refresh — negligible. |
+| **Evidence** | `infra/grafana/dashboards/overview.json`: `"panels": []`. ARCHITECTURE.md requirement S-03. |
+| **Expected cost impact** | Zero additional cloud cost. The dashboard makes previously-computed Prometheus data visible without additional scraping. |
+| **Behavior/performance risk** | The "top tracks" panel requires a Prometheus metric aggregating play counts by `song_id`. If `analytics-service` does not emit a `playback_event_total{song_id}` counter, the top-tracks panel must use a Prometheus recording rule or a ClickHouse-sourced alternative. Recording rule approach: `sum(rate(playback_event_total[1h])) by (song_id)` — this works only if the metric exists. If it does not, the panel will show "No data" and must be marked as a placeholder with a note until analytics-service is confirmed to emit the metric. |
+| **Validation method** | After generation: open `http://localhost:3001` → Music Streaming — System Overview dashboard → all 8 panels must render without "No data" (except possibly top-tracks if metric is absent). Panels for traffic, latency, error rate, service health must all show live data after k6 smoke run. |
+| **Status** | Planning — must be implemented in Session 9 generation step |
+
+---
+
+## CD-023 — k6 Phase 4 Ramp and Phase 5 Isolation
+
+| Field | Content |
+|---|---|
+| **Decision** | Add Phase 4 `ramp` scenario (0→1000 VU, 20 min) to `main.js`; create separate `phase5-peak.js` for Phase 5 (0→10000 VU, 30 min); update `load-generator/.env.example` to replace stale per-service URLs with `NGINX_LB_URL` |
+| **What** | `load-generator/scripts/main.js`, `load-generator/scripts/phase5-peak.js` (new), `load-generator/.env.example` |
+| **Where** | `load-generator/` directory |
+| **Why** | SCALABILITY.md §15 defines Phase 4 at 1000 VU (ramping stages) and Phase 5 at 10000 VU. The current `peak` scenario tops at 500 VU — insufficient for Phase 4 validation. Phase 5 at 10000 VU is explicitly excluded from `main.js` to prevent accidental invocation (accidental Phase 5 invocation on an under-resourced host causes OOM across all services and wastes ~30 min of compute). The `load-generator/.env.example` still lists old per-service host port URLs (`AUTH_SERVICE_URL=http://localhost:8081`) which are invalid — host ports were removed when nginx-lb was added. |
+| **Cost driver** | Phase 4: ~20 CPU-minutes of k6 goroutine overhead + full Profile D service cost; Phase 5: ~30 CPU-minutes + peak Profile D cost (most expensive single operation). Isolation of Phase 5 into a separate file prevents accidental invocation. |
+| **Evidence** | `load-generator/scripts/main.js` peak scenario: `{ duration: '5m', target: 500 }`. SCALABILITY.md §15 Phase 4: `{ duration: '5m', target: 1000 }, { duration: '10m', target: 1000 }, { duration: '5m', target: 0 }`. `load-generator/.env.example`: stale `AUTH_SERVICE_URL=http://localhost:8081`. |
+| **Expected cost impact** | Phase 4 add: no new cost for Phases 1–3. Phase 5 isolation prevents ~30-min full-scale benchmark waste from accidental invocation. `.env.example` fix prevents load-test failures from wrong URL (which would waste the entire scheduled benchmark run). |
+| **Behavior/performance risk** | Phase 4 ramp (1000 VU) requires Profile D deployment (all replicas, nginx-lb, 3-broker Kafka) to be in place. Running Phase 4 against a Profile A/B deployment (1 replica each) will drive all services to saturation and produce invalid benchmark results. The `K6_SCENARIO=ramp` documentation must include a prerequisite checklist. |
+| **Validation method** | `K6_SCENARIO=ramp K6_VUS=1000 docker compose --profile load-test up load-generator` — must start and reach 1000 VU without k6 startup errors. p99 latency in Grafana must be observed rising linearly with VU ramp to confirm load is reaching services. |
+| **Status** | Planning — must be implemented in Session 9 generation step |
+
+---
+
+## CD-024 — M-22 / M-23 Architectural Compliance: No New Code Required
+
+| Field | Content |
+|---|---|
+| **Decision** | M-22 (inter-service HTTP retry) and M-23 (circuit breaker or equivalent) are satisfied architecturally; no new code is required for inter-service HTTP calls because no synchronous inter-service HTTP calls exist |
+| **What** | Documentation of compliance rationale; Kafka producer retry config in `streaming-service` and `playlist-service` application.yml; `@CircuitBreaker` on Redis path in `recommendation-service` (see CD-025) |
+| **Where** | `services/streaming-service/src/main/resources/application.yml`, `services/playlist-service/src/main/resources/application.yml`, `scripts/verify-integration.sh` (compliance assertion) |
+| **Why** | Code audit confirmed: no `RestTemplate`, `WebClient`, `FeignClient`, or equivalent HTTP client is used for service-to-service calls. All inter-service data flows are: (a) Kafka producers/consumers, (b) local RSA JWT validation (no HTTP call to auth-service), (c) independent per-service data stores. M-22 applies to "inter-service HTTP calls" — which do not exist. The retry behavior that applies to the actual cross-service data path (Kafka producers) must be explicitly configured via `spring.kafka.producer.retries` and `retry.backoff.ms` (currently undocumented in application.yml files). M-23 is satisfied by Kafka's producer-consumer decoupling: a failing consumer cannot cascade-fail an upstream producer. |
+| **Cost driver** | No cost — this is a documentation and minor config decision, not an infrastructure addition |
+| **Evidence** | grep for `RestTemplate\|WebClient\|FeignClient` across all 8 service source trees: no results. All pom.xml files: no `spring-cloud-openfeign`, no `spring-webflux` (WebClient), no `spring-web` beyond what's included transitively for MVC. ARCHITECTURE.md M-03: "JWT verification must use a shared verification configuration" (local RSA key, not HTTP call). |
+| **Expected cost impact** | None — documentation decision. Adding Kafka producer retry properties has no cost impact at the infrastructure level. |
+| **Behavior/performance risk** | Documentation risk: if a future developer adds inter-service HTTP calls without adding retry/circuit-breaker, M-22/M-23 compliance breaks silently. The `verify-integration.sh` script should include an assertion that no services make unexpected cross-service HTTP calls (verifiable via nginx-lb access log inspection during the smoke run). |
+| **Validation method** | After adding producer retry config: `docker exec streaming-service env | grep KAFKA` to confirm properties are loaded. During Phase 2/3: introduce a Kafka broker restart; observe that streaming-service producer retries and events eventually appear in analytics-service history (no permanent loss). |
+| **Status** | Planning — Kafka producer retry config must be added to streaming-service and playlist-service application.yml in Session 9 generation step. M-22/M-23 compliance argument must be documented in `scripts/verify-integration.sh` comments and the system verification deliverable. |
+
+---
+
+## CD-025 — Resilience4j on Redis Call Path (recommendation-service)
+
+| Field | Content |
+|---|---|
+| **Decision** | Add `resilience4j-spring-boot3` to `recommendation-service` and annotate Redis read/write operations with `@CircuitBreaker(name = "redis", fallbackMethod = "computeDirectly")` |
+| **What** | `services/recommendation-service/pom.xml`, `RecommendationService.java`, `application.yml` (Resilience4j config), unit test update |
+| **Where** | `services/recommendation-service/` |
+| **Why** | CD-018 deferred this pending Phase 3 evidence. As of Session 9, Phase 3 has not been run. The circuit breaker on the Redis path serves two purposes: (a) formal M-23 compliance evidence for the thesis, and (b) protection against Redis slow-response cascading to `recommendation-service` thread pool exhaustion (SCALABILITY.md §13 documents this risk). The implementation cost is low (one dependency, one annotation, one config block, one test case). |
+| **Cost driver** | JAR size (+~500 KB for Resilience4j spring boot starter), memory (+negligible — circuit breaker state is in-process), operational (adds one config block to application.yml) |
+| **Evidence** | SCALABILITY.md §13: "recommendation-service Redis unavailability falls back to compute (correct) but no circuit breaker on DB calls." ARCHITECTURE.md M-23: "circuit breaker or equivalent failure-isolation mechanism." CD-018 Status: Deferred. |
+| **Expected cost impact** | No infrastructure cost. Circuit breaker prevents Redis slow-response from blocking Tomcat threads — under Redis degradation, this reduces `recommendation-service` CPU usage (fewer threads blocked). The fallback computation (from PostgreSQL) is more expensive per-request than a Redis hit but cheaper than thread-pool exhaustion. |
+| **Behavior/performance risk** | If the circuit breaker `failureRateThreshold` is set too low (e.g., 10 %), transient Redis latency spikes open the breaker and all requests fall back to PostgreSQL — multiplying PostgreSQL load. Recommendation: `failureRateThreshold: 50`, `slidingWindowSize: 10`, `waitDurationInOpenState: 30s`. Half-open state allows gradual Redis recovery without flooding PostgreSQL. |
+| **Validation method** | Unit test: mock Redis to throw `RedisConnectionException`; assert fallback method is called and returns non-null. Phase 3 test: `docker stop redis`; query `/recommend/daily-mix`; assert 200 (not 500). Grafana: `recommendation-service` p99 latency should not spike above 2 s when Redis is down (fallback must stay within threshold). |
+| **Status** | Planning — must be implemented in Session 9 generation step |
+
+---
+
+## CD-026 — Grafana Datasource UID Fix
+
+| Field | Content |
+|---|---|
+| **Decision** | Add `uid: prometheus` to `infra/grafana/provisioning/datasources/prometheus.yml` |
+| **What** | `infra/grafana/provisioning/datasources/prometheus.yml` — add `uid: prometheus` field |
+| **Where** | `infra/grafana/provisioning/datasources/prometheus.yml` |
+| **Why** | Both `scaling.json` and the planned `overview.json` panels reference the datasource as `{"type": "prometheus", "uid": "prometheus"}`. The current provisioning file has no `uid` field, so Grafana assigns an auto-generated UID. When the dashboard JSON references `uid: prometheus` and the actual datasource has UID `abc123xyz`, all panel datasource references resolve to "No data" silently. This makes all monitoring dashboards non-functional at startup — a critical observability failure. |
+| **Cost driver** | No cost — a one-line config fix |
+| **Evidence** | `infra/grafana/provisioning/datasources/prometheus.yml`: no `uid:` field present. `infra/grafana/dashboards/scaling.json`: `"datasource": {"type": "prometheus", "uid": "prometheus"}`. Grafana provisioning docs: `uid` field makes the datasource referenceable by UID in JSON dashboards. |
+| **Expected cost impact** | None. Prevents dashboard panels from showing "No data" at startup, which would require manual Grafana UI editing — operational time cost. |
+| **Behavior/performance risk** | If `uid: prometheus` is already assigned to a different datasource in Grafana's internal database (e.g., from a previous non-provisioned configuration), the provisioning may fail silently or override it. In a fresh `grafana-data` volume this is not an issue. |
+| **Validation method** | After fix: start the stack; open Grafana → Data Sources → Prometheus datasource UID must be `prometheus`. Open scaling.json dashboard; all panels must show live data rather than "No data." |
+| **Status** | Planning — must be fixed in Session 9 generation step |
+
+---
+
+## CD-027 — System Verification Deliverable: Compose-Up Shell Script
+
+| Field | Content |
+|---|---|
+| **Decision** | Implement the system verification deliverable (ARCHITECTURE.md §6) as `scripts/verify-integration.sh` — a shell script that starts the compose stack, waits for health, runs k6 smoke, and asserts cross-service Kafka event flow and JWT validation |
+| **What** | `scripts/verify-integration.sh` (new file) |
+| **Where** | `scripts/verify-integration.sh` |
+| **Why** | ARCHITECTURE.md §6 requires "automated testing at both service and system level so that the integrated behavior of the platform can be checked repeatedly." The existing per-service tests (Testcontainers, unit) do not test cross-service behavior. The system must demonstrate: (a) services start and connect, (b) JWT issued by auth-service is accepted by catalog/streaming/playlist/analytics, (c) Kafka event from streaming-service reaches analytics-service history. |
+| **Cost driver** | Compute: running the full compose stack for the smoke verification takes ~5–10 minutes. Disk: no additional storage beyond the running containers. This is a one-time-per-validation-cycle cost. During CI: the script should run only on `main` merges, not on every PR (cost savings). |
+| **Evidence** | ARCHITECTURE.md §6: "Verification should include automated testing at both service and system level." PROGRESS.md Phase 10 system verification items: all unchecked. |
+| **Expected cost impact** | Running the script costs ~10 min of full-stack compute time. Compared to running Phase 2/3 load tests (~15–30 min), this is the lowest-cost integration verification option. Not embedding in a heavy Java test framework avoids the overhead of spinning up a second Testcontainers environment. |
+| **Behavior/performance risk** | The script depends on Docker Compose being available and the host having sufficient RAM for all services (~8–10 GB for Profile A/B). On a low-RAM CI host, services may not start. Add a RAM check at the top of the script: `[ $(free -g | awk 'NR==2{print $2}') -ge 8 ] || exit 1`. |
+| **Validation method** | `bash scripts/verify-integration.sh` must exit 0 with all steps PASS. The k6 smoke step must produce 0 HTTP errors (k6 exit code 0). The cross-service Kafka assertion must produce a non-empty analytics history response within 30 s of the stream call. |
+| **Status** | Planning — must be implemented in Session 9 generation step |
+
+---
+
+---
+
+## Session 9 — Implementation Status Updates (2026-06-15)
+
+| Entry | Status before generation | Status after generation | Notes |
+|---|---|---|---|
+| CD-021 | Planning | **Implemented** | `opensearch-exporter` service added to `docker-compose.yml`; `opensearch` scrape job added to `prometheus.yml`; `docker compose config --quiet` PASS |
+| CD-022 | Planning | **Implemented (partial)** | `overview.json` populated with 8 panels; panels 1–4, 5, 6, 8 fully operational; panel 7 (top tracks) is a placeholder — no `playback_event_total` counter in analytics-service (DD-012) |
+| CD-023 | Planning | **Implemented** | `main.js` has 6 scenarios: smoke/streaming/full/burst/ramp/soak; `phase5-peak.js` created; `.env.example` updated; `K6_RAMP_TARGET` wired to load-generator service env |
+| CD-024 | Planning | **Implemented** | `streaming-service` and `playlist-service` application.yml: `retries: 3`, `retry.backoff.ms: 1000`, `max.in.flight.requests.per.connection: 1` added; M-22/M-23 architectural compliance documented in DESIGN-DECISIONS DD-004 |
+| CD-025 | Planning | **Implemented** | `resilience4j-spring-boot3:2.1.0` + `spring-boot-starter-aop` in pom.xml; `@CircuitBreaker(name="redis")` on `getDailyMix` and `getSimilarSongs`; `resilience4j.circuitbreaker.instances.redis` in application.yml; 3 fallback tests added to `RecommendationServiceTest` |
+| CD-026 | Planning | **Implemented** | `uid: prometheus` added to `infra/grafana/provisioning/datasources/prometheus.yml` |
+| CD-027 | Planning | **Implemented** | `scripts/verify-integration.sh` created; 7 steps; executable; awaits live run against compose stack |
+
+### Implementation cost impacts observed
+
+| Change | Measured/estimated impact | Risk |
+|---|---|---|
+| `opensearch-exporter` container | +128 MB RAM ceiling; <0.1 CPU at 15s scrape interval | None — lightweight REST poller |
+| `overview.json` 8 panels | Zero infrastructure cost; 8 extra Prometheus queries per Grafana browser session | Negligible |
+| `resilience4j-spring-boot3:2.1.0` | +~500 KB JAR size in recommendation-service image; +negligible JVM heap for circuit breaker state object | None at current scale |
+| `spring-boot-starter-aop` | +~200 KB JAR; enables Spring AOP proxy for @CircuitBreaker (required) | Adds CGLIB proxy overhead per annotated bean call — unmeasurable at this scale |
+| Kafka producer `retries: 3` | No steady-state cost; adds retry latency only on Kafka broker failure events | If broker is down and retries exhaust, message is lost (acks=all still required for in-flight durability) |
+| `phase5-peak.js` | Zero cost until explicitly invoked | Accidental invocation (now prevented by separate file) costs ~30 min full Profile D compute |
+| `catalog-service V2` migration | One-time cost: table scan at startup to build 2 new indexes on songs table. At ~10K songs: <5 s. At 1M songs: ~30–60 s startup delay. | Not applicable — catalog dataset is bounded by the Kaggle CSV size |
+| `scripts/verify-integration.sh` k6 smoke step | ~10 min full-stack runtime per verification run | None — Profile A/B footprint only |
+
+*Last updated: 2026-06-15 — Session 9 generation complete.*
+
+---
+
+## Session 9 — Validation Results (2026-06-15)
+
+### Validation checks performed
+
+| Check | Result | Notes |
+|---|---|---|
+| `docker compose config --quiet` (default profile) | PASS | |
+| `docker compose --profile load-test config --quiet` | PASS | |
+| `docker compose config --services` — opensearch-exporter present | PASS | 30 services confirmed |
+| `overview.json` — 8 panels, valid JSON, datasource UIDs | PASS | panel 7 is documented placeholder |
+| `scaling.json` — 14 panels, valid JSON, datasource UIDs | PASS after fix | **BUG FIXED** panel 13 PromQL used `opensearch_*` but elasticsearch_exporter emits `elasticsearch_*`; corrected to `elasticsearch_jvm_memory_used_bytes{area="heap"} / elasticsearch_jvm_memory_max_bytes{area="heap"} * 100` |
+| Grafana datasource UID — `uid: prometheus` in provisioning | PASS | |
+| Prometheus — `opensearch` scrape job (`opensearch-exporter:9114`) | PASS | |
+| streaming-service Kafka producer retry config | PASS | |
+| playlist-service Kafka producer retry config | PASS | |
+| recommendation-service Resilience4j config | PASS | |
+| `@CircuitBreaker(name="redis")` on `getDailyMix` / `getSimilarSongs` | PASS | |
+| `RESILIENCE4J_REDIS_FAILURE_RATE` / `WAIT_DURATION` in docker-compose.yml | PASS after fix | **GAP FIXED** — vars were missing from recommendation-service environment block; added with defaults matching application.yml |
+| `opensearch-exporter` on `music-net` network | PASS | `networks: [music-net]` confirmed |
+| k6 M-21 flows (all 8 user flows) | PASS | registration, login, catalog, search, stream, playlist, analytics, recommendations all exercised |
+| k6 Phase 5 isolation (not selectable via K6_SCENARIO in main.js) | PASS | `phase5-peak.js` is a standalone file; no reference to it in `main.js` |
+| k6 soak scenario present in main.js | PASS | grep confirmed at lines 82, 88, 241, 246 |
+| `verify-integration.sh` — `docker compose` v2 syntax | PASS | `$COMPOSE --profile load-test run --rm` correctly places `--profile` before subcommand |
+| `RecommendationServiceTest` — 9 tests, all PASS | PASS after fix | **FIXED** Mockito inline mock maker incompatible with Spring Data Redis on Java 26; switched to `ByteBuddyMockMaker` (subclass); `lenient()` stub in `@BeforeEach`; all 9 tests green |
+
+### Validation cost impact
+
+| Fix | Cost impact |
+|---|---|
+| scaling.json panel 13 PromQL correction | Zero — panel JSON edit only; no runtime cost change |
+| RESILIENCE4J env vars in docker-compose.yml | Zero — env var wiring only; tunable at runtime, zero if not overridden |
+| Mockito mock maker switch | Zero — test infrastructure only; no production artifact change |
+
+*Session 9 validation complete. All checks pass. Phase 10 implementation is complete pending live stack run (`bash scripts/verify-integration.sh`).*
+
+---
+
+## Post-validation — Backend Test Suite Cleanup (2026-06-15)
+
+**Finding:** Java 26 + Mockito 5.x inline mock maker incompatibility affected 4 additional services (auth-service, catalog-service, streaming-service, playlist-service). `ByteBuddyMockMaker` config file added to `src/test/resources/mockito-extensions/org.mockito.plugins.MockMaker` in all 4 services, matching the fix already applied to recommendation-service.
+
+**Result:** 191 tests across all 8 services, 0 failures. See DESIGN-DECISIONS.md DD-015 for full rationale.
+
+**Cost impact:** Zero — test infrastructure only, no production artifact changes.

@@ -453,6 +453,25 @@ services:
           cpus: "0.1"
           memory: "64m"
 
+  opensearch-exporter:
+    image: prometheuscommunity/elasticsearch-exporter:${OPENSEARCH_EXPORTER_VERSION:-v1.7.0}
+    container_name: opensearch-exporter
+    networks: [music-net]
+    depends_on:
+      opensearch:
+        condition: service_healthy
+    command:
+      - '--es.uri=http://opensearch:9200'
+      - '--es.all'
+      - '--es.indices'
+      - '--es.shards'
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: "0.2"
+          memory: "128m"
+
   # ── Prometheus ────────────────────────────────────────────────────────────
 
   prometheus:
@@ -768,6 +787,8 @@ services:
       RECOMMENDATION_DAILY_MIX_SIZE: ${RECOMMENDATION_DAILY_MIX_SIZE:-20}
       RECOMMENDATION_SIMILAR_SIZE: ${RECOMMENDATION_SIMILAR_SIZE:-10}
       RECOMMENDATION_CACHE_TTL_SECONDS: ${RECOMMENDATION_CACHE_TTL_SECONDS:-3600}
+      RESILIENCE4J_REDIS_FAILURE_RATE: ${RESILIENCE4J_REDIS_FAILURE_RATE:-50}
+      RESILIENCE4J_REDIS_WAIT_DURATION: ${RESILIENCE4J_REDIS_WAIT_DURATION:-30s}
     deploy:
       replicas: ${RECOMMENDATION_SERVICE_REPLICAS:-1}
       resources:
@@ -829,16 +850,10 @@ services:
         condition: service_healthy
     environment:
       NGINX_LB_URL: http://nginx-lb:80
-      AUTH_SERVICE_URL: http://auth-service:8080
-      CATALOG_SERVICE_URL: http://catalog-service:8080
-      STREAMING_SERVICE_URL: http://streaming-service:8080
-      PLAYLIST_SERVICE_URL: http://playlist-service:8080
-      SEARCH_SERVICE_URL: http://search-service:8080
-      ANALYTICS_SERVICE_URL: http://analytics-service:8080
-      RECOMMENDATION_SERVICE_URL: http://recommendation-service:8080
-      K6_VUS: ${K6_VUS:-10}
-      K6_DURATION: ${K6_DURATION:-60s}
+      K6_VUS: ${K6_VUS:-50}
+      K6_DURATION: ${K6_DURATION:-5m}
       K6_SCENARIO: ${K6_SCENARIO:-full}
+      K6_RAMP_TARGET: ${K6_RAMP_TARGET:-1000}
     profiles:
       - load-test
     deploy:

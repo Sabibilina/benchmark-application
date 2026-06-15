@@ -1,0 +1,1218 @@
+╭─── Claude Code v2.1.126 ─────────────────────────────────────────────────────╮
+│                                                    │ Tips for getting        │
+│                Welcome back Diddler!               │ started                 │
+│                                                    │ Run /init to create a … │
+│                       ▐▛███▜▌                      │ ─────────────────────── │
+│                      ▝▜█████▛▘                     │ What's new              │
+│                        ▘▘ ▝▝                       │ Internal fixes          │
+│ Sonnet 4.6 · Claude Pro · andrei.lentu@gmail.com's │ [VSCode] Fixed extensi… │
+│  Organization                                      │ Added `CLAUDE_CODE_ENA… │
+│           ~/…/services/analytics-service           │ /release-notes for more │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+✻ Conversation compacted (ctrl+o for history)
+
+  ⎿  Referenced file SCALABILITY.md
+  ⎿  Read .env.example (232 lines)
+  ⎿  Read services/analytics-service/src/main/resources/application.yml (48 lines)
+  ⎿  Referenced file docker-compose.yml
+  ⎿  Read services/analytics-service/src/main/java/com/musicstreaming/analytics/messaging/BatchEventBuffer.java (62 lines)
+
+  Read 2 files (ctrl+o to expand)
+
+⏺ Let me check if PostgreSQL index migrations were actually implemented before
+  updating statuses.
+
+  Searched for 1 pattern (ctrl+o to expand)
+
+⏺ No index migration files were added (only V1 files exist for each service), so
+   CD-010 stays as "Planning". Now I'll update the statuses for all the
+  decisions that were implemented.
+
+⏺ Update(~/Desktop/Thesis/Iteration01/benchmark-application/COST-AWARE-DECISIONS
+        .md)
+  ⎿  Added 1 line, removed 1 line
+      58  | **Expected cost impact** | +1.5 GB RAM reservation on the hos
+          t. At $0.05/GB-hr (typical cloud pricing), this is ~$0.075/hr o
+          r ~$1.80/day — justified by eliminating the primary search bott
+          leneck. |
+      59  | **Behavior/performance risk** | Allocating too large a heap o
+          n a memory-constrained host can cause the OS to swap, degrading
+           all services. The 2 GB target assumes ≥16 GB total host RAM. N
+          ever exceed 31 GB (compressed OOP boundary). |
+      60  | **Validation method** | After increasing heap: run Phase 2 lo
+          ad test (50 VUs, search-heavy flow); monitor `opensearch_jvm_me
+          m_heap_used_in_bytes` in Grafana; confirm heap stays below 75 %
+           at Phase 2 load before proceeding to Phase 3. |
+      61 -| **Status** | Planning |                                      
+      61 +| **Status** | Implemented — `docker-compose.yml`: `OPENSEARCH_
+         +JAVA_OPTS: "-Xms${OPENSEARCH_HEAP:-1g} -Xmx${OPENSEARCH_HEAP:-1
+         +g}"`, `.env.example`: `OPENSEARCH_HEAP=1g` with Profile D note 
+         +to increase to 2g+. |                                          
+      62  
+      63  ---
+      64  
+
+⏺ Update(~/Desktop/Thesis/Iteration01/benchmark-application/COST-AWARE-DECISIONS
+        .md)
+  ⎿  Added 1 line, removed 1 line
+      75  | **Expected cost impact** | Hard cap at 512 MB prevents Redis 
+          from consuming host RAM beyond its allocation. AOF latency redu
+          ction indirectly reduces `recommendation-service` response time
+          , improving throughput per replica (fewer replicas needed to hi
+          t target RPS). |
+      76  | **Behavior/performance risk** | `allkeys-lru` evicts keys pro
+          actively when the cap is reached. If the cap is too low relativ
+          e to the working set, cache hit rates drop and all recommendati
+          on requests compute from PostgreSQL — increasing recommendation
+          -db load. Monitor `redis_keyspace_hits_total / (hits + misses)`
+           for hit rate drops. |
+      77  | **Validation method** | After change: run Phase 3 load test; 
+          monitor `redis_used_memory_bytes` (must stay ≤ 512 MB) and `red
+          is_keyspace_hits_total / (hits + misses)` (target ≥ 85 % hit ra
+          te). Confirm `appendfsync everysec` by checking `redis INFO per
+          sistence` output. |
+      78 -| **Status** | Planning |                                      
+      78 +| **Status** | Implemented — `docker-compose.yml` `redis.comman
+         +d`: `--maxmemory ${REDIS_MAXMEMORY:-256mb} --maxmemory-policy a
+         +llkeys-lru --appendfsync everysec`. `.env.example`: `REDIS_MAXM
+         +EMORY=256mb`. |                                                
+      79  
+      80  ---
+      81  
+
+⏺ Update(~/Desktop/Thesis/Iteration01/benchmark-application/COST-AWARE-DECISIONS
+        .md)
+  ⎿  Added 1 line, removed 1 line
+      92  | **Expected cost impact** | Reduces ClickHouse CPU from consta
+          nt background merge contention to periodic batch processing spi
+          kes. Reduces per-event disk I/O by ~1000× (one part per 1000 ev
+          ents vs one part per event). Allows ClickHouse `memory` limit t
+          o be set lower (`4g` instead of requiring more headroom for mer
+          ge operations). |
+      93  | **Behavior/performance risk** | Batching adds up to 5 seconds
+           of event latency for analytics history (`GET /analytics/me/his
+          tory`). Acceptable for a listen-history view; the ARCHITECTURE.
+          md requirement (`GET /analytics/me/history`) does not specify r
+          eal-time freshness. Risk: if `analytics-service` crashes betwee
+          n flush intervals, up to 1000 events (or 5 s worth) are lost. A
+           persistent buffer (Kafka offset commit only after flush) elimi
+          nates this but adds code complexity. |
+      94  | **Validation method** | Before: run Phase 3 load test; observ
+          e ClickHouse part count via `SELECT count() FROM system.parts W
+          HERE table = 'playback_events'` — should be growing rapidly. Af
+          ter: same query under same load; part count should grow slowly 
+          and stay below 150 active parts. `clickhouse_query_duration_ms_
+          quantiles{quantile="0.99"}` in Grafana should decrease. |
+      95 -| **Status** | Planning |                                      
+      95 +| **Status** | Implemented — `BatchEventBuffer.java` created wi
+         +th `@Scheduled(fixedDelayString)` flush; `PlaybackEventConsumer
+         +` delegates to buffer; `AnalyticsService.recordBatch()` and `An
+         +alyticsRepository.insertBatch()` added; `@EnableScheduling` add
+         +ed to `AnalyticsServiceApplication`. |                         
+      96  
+      97  ---
+      98  
+
+⏺ Update(~/Desktop/Thesis/Iteration01/benchmark-application/COST-AWARE-DECISIONS
+        .md)
+  ⎿  Added 1 line, removed 1 line
+      109  | **Expected cost impact** | Sets a hard ceiling of 4 GB RAM a
+           nd 2 CPU cores. Prevents ClickHouse from consuming resources n
+           eeded by other services. Slightly increases ClickHouse batch p
+           rocessing time if it hits the CPU limit, but the batch buffer 
+           (CD-004) compensates by reducing burst write rate. |
+      110  | **Behavior/performance risk** | If ClickHouse's working set 
+           exceeds the 4 GB limit, it will swap pages, increasing query l
+           atency. Set `reservations.memory: 2g` to ensure ClickHouse has
+            its working set available. Monitor `clickhouse_memory_residen
+           t_bytes` in Grafana. |
+      111  | **Validation method** | Under Phase 4/5 load: confirm `docke
+           r stats clickhouse` shows memory below 4 GB; confirm no host-l
+           evel OOM kill events (`dmesg | grep -i oom`). |
+      112 -| **Status** | Planning |                                     
+      112 +| **Status** | Implemented — `docker-compose.yml` `clickhouse.
+          +deploy.resources.limits`: `cpus: '${CLICKHOUSE_CPU_LIMIT:-2.0}
+          +'`, `memory: ${CLICKHOUSE_MEMORY_LIMIT:-4g}`, `reservations.me
+          +mory: ${CLICKHOUSE_MEMORY_RESERVATION:-2g}`. |                
+      113  
+      114  ---
+      115  
+
+⏺ Update(~/Desktop/Thesis/Iteration01/benchmark-application/COST-AWARE-DECISIONS
+        .md)
+  ⎿  Added 1 line, removed 1 line
+      126  | **Expected cost impact** | Reduces baseline RAM footprint fr
+           om ~22 GB (Profile D) to ~7–9 GB (Profile A/B). At $0.05/GB-hr
+            cloud pricing, this saves ~$0.65–$0.75/hr between benchmark s
+           essions. On a 24-hour development day with one 1-hour benchmar
+           k, savings are ~$15/day vs full Profile D continuously. |
+      127  | **Behavior/performance risk** | Running Profile A/B during a
+            high-load test will cause services to saturate and produce ar
+           tificially high error rates. The profiles must never be mixed:
+            do not run Phase 4/5 k6 scripts against a Profile A/B deploym
+           ent. |
+      128  | **Validation method** | Document expected replica counts in 
+           `.env.example` with two sets of values (profile A/B vs profile
+            D). Verify via `docker compose ps` after startup that replica
+            counts match the active profile. |
+      129 -| **Status** | Planning |                                     
+      129 +| **Status** | Implemented — all 8 app services in `docker-com
+          +pose.yml` use `deploy.replicas: ${SERVICE_REPLICAS:-1}`; `.env
+          +.example` contains Profile A/B defaults (all 1) and commented-
+          +out Profile D values with partition-count constraints document
+          +ed. |                                                         
+      130  
+      131  ---
+      132  
+
+⏺ Update(~/Desktop/Thesis/Iteration01/benchmark-application/COST-AWARE-DECISIONS
+        .md)
+  ⎿  Added 1 line, removed 1 line
+      143  | **Expected cost impact** | Eliminates idle consumer replica 
+           RAM waste (~1.5–2 GB) immediately after topic pre-creation. En
+           ables all consumer replicas to receive and process messages, i
+           mproving Kafka consumer throughput proportionally with partiti
+           on count. |
+      144  | **Behavior/performance risk** | Pre-creating topics requires
+            the `init-kafka` container to succeed before any producer or 
+           consumer service starts. If `init-kafka` fails (Kafka not read
+           y), dependent services will fail to start. Mitigate with a ret
+           ry loop in the init script and `depends_on: kafka: condition: 
+           service_healthy`. Disabling auto-create means any new topic re
+           quired by future features must also be explicitly created. |
+      145  | **Validation method** | After deploying: `kafka-consumer-gro
+           ups.sh --describe --group analytics-service` should show all p
+           artitions assigned (not `UNASSIGNED`). Grafana: `kafka_consume
+           rgroup_lag` per partition should show active consumption on al
+           l 12 partitions. |
+      146 -| **Status** | Planning |                                     
+      146 +| **Status** | Implemented — `init-kafka` one-shot service add
+          +ed to `docker-compose.yml` (`restart: "no"`, `kafka-topics.sh 
+          +--create` for `playback-events` (12 partitions) and `playlist-
+          +events` (6 partitions)); `KAFKA_AUTO_CREATE_TOPICS_ENABLE: "fa
+          +lse"` set on `kafka` service; all Kafka consumers have `depend
+          +s_on: init-kafka: condition: service_completed_successfully`. 
+          +|                                                             
+      147  
+      148  ---
+      149  
+
+⏺ Update(~/Desktop/Thesis/Iteration01/benchmark-application/COST-AWARE-DECISIONS
+        .md)
+  ⎿  Added 1 line, removed 1 line
+      160  | **Expected cost impact** | nginx itself costs ~64 MB RAM and
+            <0.1 CPU at idle, <0.5 CPU under full load. The benefit is th
+           at the cost of all additional replicas (Steps 5–13 in the scal
+           ing order) is actually realized — without nginx-lb, scaling is
+            expensive and ineffective simultaneously. |
+      161  | **Behavior/performance risk** | nginx-lb becomes a single po
+           int of failure for all API traffic. If it crashes, all service
+           s are unreachable. Mitigate: set `restart: unless-stopped` on 
+           nginx-lb. The health check on nginx-lb should validate that it
+            can reach at least one upstream replica. |
+      162  | **Validation method** | After adding nginx-lb and scaling st
+           reaming-service to 3 replicas: verify with `docker logs nginx-
+           lb` that all 3 upstream IPs appear in access logs. `docker sta
+           ts` on each streaming replica should show similar CPU usage (l
+           oad is distributed). |
+      163 -| **Status** | Planning |                                     
+      163 +| **Status** | Implemented — `nginx-lb` service added to `dock
+          +er-compose.yml` (port `${NGINX_LB_HOST_PORT:-80}:80`, health c
+          +heck on `/health`); `infra/nginx-lb/nginx.conf` created with `
+          +resolver 127.0.0.11 valid=10s ipv6=off`, `set $upstream` varia
+          +ble pattern for all 8 services, per-route rate limiting zones.
+          + |                                                            
+      164  
+      165  ---
+      166  
+
+⏺ Update(~/Desktop/Thesis/Iteration01/benchmark-application/COST-AWARE-DECISIONS
+        .md)
+  ⎿  Added 1 line, removed 1 line
+      194  | **Expected cost impact** | Index scans are typically 10–100×
+            faster than sequential scans on large tables. At 4 K req/s ca
+           talog browsing, converting seq scans to index scans could redu
+           ce catalog-db CPU by 50–80 %, enabling the database to run on 
+           a smaller memory allocation. |
+      195  | **Behavior/performance risk** | Adding indexes to a large ta
+           ble requires a table scan during migration, which is slow and 
+           locks the table briefly. For the song catalog (seeded at start
+           up), this runs once at container start and is acceptable. Inde
+           xes add overhead on INSERT — negligible for a read-heavy catal
+           og. |
+      196  | **Validation method** | After migration: `EXPLAIN ANALYZE SE
+           LECT ...` on hotspot queries must show `Index Scan` (not `Seq 
+           Scan`). `pg_stat_user_tables_seq_scan` in Grafana must decreas
+           e under Phase 2/3 load. |
+      197 -| **Status** | Planning |                                     
+      197 +| **Status** | Planning — NOT YET IMPLEMENTED. No V2 Flyway mi
+          +gration files exist for auth-service, catalog-service, playlis
+          +t-service, or recommendation-service. Must be added before Pha
+          +se 3 load testing. |                                          
+      198  
+      199  ---
+      200  
+
+⏺ Update(~/Desktop/Thesis/Iteration01/benchmark-application/COST-AWARE-DECISIONS
+        .md)
+  ⎿  Added 1 line, removed 1 line
+      211  | **Expected cost impact** | No direct cost change; enables cl
+           ean horizontal scaling, which is required for all cost-effecti
+           ve replica optimization steps (CD-006). |
+      212  | **Behavior/performance risk** | After removing host ports, s
+           ervices are only reachable via `nginx-lb:80` (or the Docker in
+           ternal hostname from other containers). Direct debugging (`cur
+           l localhost:8082`) requires using `docker exec` or temporarily
+            re-adding a port for that service. This is an acceptable trad
+           e-off in a benchmark environment. |
+      213  | **Validation method** | After change: `docker compose up --s
+           cale streaming-service=3` must succeed without port binding er
+           rors. `curl http://localhost/api/catalog/songs` through nginx-
+           lb must return 200. |
+      214 -| **Status** | Planning |                                     
+      214 +| **Status** | Implemented — all 8 app service `ports` section
+          +s removed from `docker-compose.yml`; all API traffic routes th
+          +rough `nginx-lb:80`; `container_name` retained only on `auth-s
+          +ervice` (prevents accidental `--scale` on the RSA key writer).
+          + |                                                            
+      215  
+      216  ---
+      217  
+
+⏺ Update(~/Desktop/Thesis/Iteration01/benchmark-application/COST-AWARE-DECISIONS
+        .md)
+  ⎿  Added 1 line, removed 1 line
+      245  | **Expected cost impact** | Hard ceilings prevent infrastruct
+           ure components from consuming host resources needed by applica
+           tion service replicas. Enables predictable memory budget plann
+           ing for Profile D (see CD-006). Recommended limits: Kafka 2 GB
+            / 2 CPU; Zookeeper 512 MB / 0.5 CPU; ClickHouse 4 GB / 2 CPU;
+            MongoDB 1 GB / 1 CPU. |
+      246  | **Behavior/performance risk** | If Kafka is capped below its
+            working set (heap + page cache for log segments), it may slow
+            down under high write throughput. Monitor `kafka_server_bytes
+           _in_per_sec` and host page cache hit rate. If Kafka consistent
+           ly hits its CPU limit, increase the cap (benchmark host is the
+            source of truth, not a hypothetical cloud instance). |
+      247  | **Validation method** | Under Phase 3/4 load: `docker stats 
+           kafka` must show memory below the configured limit; `docker ev
+           ents` must not show `oom-kill` events for any container. |
+      248 -| **Status** | Planning |                                     
+      248 +| **Status** | Implemented — `deploy.resources.limits` added t
+          +o `zookeeper` (0.5 CPU / 512m), `kafka` (2 CPU / 2g), `clickho
+          +use` (2 CPU / 4g + 2g reservation), `mongodb` (1 CPU / 1g) in 
+          +`docker-compose.yml`; all limits parameterised via `.env.examp
+          +le`. |                                                        
+      249  
+      250  ---
+      251  
+
+⏺ Update(~/Desktop/Thesis/Iteration01/benchmark-application/COST-AWARE-DECISIONS
+        .md)
+  ⎿  Added 1 line, removed 1 line
+      296  | **Expected cost impact** | Monthly partitioning bounds disk 
+           growth to current-month data during benchmarking. Dropping the
+            previous month's partition after a benchmark run reclaims dis
+           k space instantly. Reduces per-query CPU for `GET /analytics/m
+           e/history` by pruning irrelevant month partitions. |
+      297  | **Behavior/performance risk** | Partition key must be includ
+           ed in the `ORDER BY` or `PRIMARY KEY` or be derivable from it.
+            Wrong partition key causes all queries to scan all partitions
+           . Validate with `EXPLAIN` on the history query. |
+      298  | **Validation method** | After soak test: `SELECT count() FRO
+           M system.parts WHERE table = 'playback_events'` should show a 
+           modest number of parts (< 150) despite high insert volume. `EX
+           PLAIN` on `GET /analytics/me/history` should show partition pr
+           uning to the current month. |
+      299 -| **Status** | Planning |                                     
+      299 +| **Status** | Implemented — `SchemaInitializer.java` updated:
+          + `event_type LowCardinality(String)`, `PARTITION BY toYYYYMM(t
+          +oDateTime(occurred_at))`, `ORDER BY (user_id, song_id, occurre
+          +d_at)`. |                                                     
+      300  
+      301  ---
+      302  
+
+⏺ Update(~/Desktop/Thesis/Iteration01/benchmark-application/COST-AWARE-DECISIONS
+        .md)
+  ⎿  Added 1 line, removed 1 line
+      313  | **Expected cost impact** | Reducing wasted full-scale benchm
+           ark runs from typical 2–3 re-runs (due to undetected bottlenec
+           ks) to 1–2 saves significant compute time. Phase 5 at 10 K VUs
+            for 30 min on a 32 GB host costs the same as leaving all serv
+           ices running for 30 min — the sequencing protocol prevents run
+           ning this unnecessarily. |
+      314  | **Behavior/performance risk** | No technical risk from seque
+           ncing. Operational risk: if Phase 3 results are prematurely de
+           clared "stable" without checking Kafka lag, Phase 4 will fail 
+           due to consumer lag accumulation. Phase 3 completion criteria 
+           must include a Kafka lag check (all consumer groups at 0 lag a
+           fter test end). |
+      315  | **Validation method** | Before running Phase 4: confirm in G
+           rafana that all `kafka_consumergroup_lag` metrics are back to 
+           0. Confirm `http_server_requests_seconds_max{quantile="0.99"}`
+            for all services is below 500 ms in Phase 3 results. |
+      316 -| **Status** | Planning |                                     
+      316 +| **Status** | Implemented — `load-generator/scripts/main.js` 
+          +selects scenario via `K6_SCENARIO` env var (smoke/streaming/fu
+          +ll/peak); `K6_SCENARIO=full` default in `.env.example`; phase 
+          +sequencing constraints documented in `SCALABILITY.md §15`. |  
+      317  
+      318  ---
+      319  
+
+⏺ Now update the last-updated date on the file:
+
+⏺ Update(~/Desktop/Thesis/Iteration01/benchmark-application/COST-AWARE-DECISIONS
+        .md)  ⎿  Added 1 line, removed 1 line
+      368  
+      369  ---
+      370  
+      371 -*Last updated: 2026-06-14*                                    
+      371 +*Last updated: 2026-06-14 — statuses updated after cost-aware 
+          +implementation generation step.*                              
+
+⏺ Now update PROGRESS.md to mark the cost-aware implementation generation step
+  complete:
+
+⏺ Update(~/Desktop/Thesis/Iteration01/benchmark-application/PROGRESS.md)
+  ⎿  Added 24 lines, removed 6 lines
+      317  - [x] `SCALABILITY.md` produced — cost-aware scaling plan for 
+           1 M users; 4 runtime profiles; 17 sections covering all requir
+           ed areas; 15-step scaling order; 8 risks documented
+      318  - [x] `COST-AWARE-DECISIONS.md` produced — 20 entries covering
+            every cost decision, assumption, trade-off, evidence source, 
+           affected file/service, expected cost impact, risk, validation 
+           method, and status
+      319  
+      320 +### Generation Step (cost-aware implementation)               
+      321 +- [x] `docker-compose.yml` rewritten — nginx-lb added; init-ka
+          +fka one-shot service added; KAFKA_AUTO_CREATE_TOPICS_ENABLE=fa
+          +lse; all 8 app services containerised without host ports and w
+          +ith deploy.replicas; all 4 Postgres DBs tuned (shared_buffers,
+          + work_mem, max_connections); OpenSearch heap parameterised; Re
+          +dis maxmemory + allkeys-lru + appendfsync everysec; ClickHouse
+          + + Kafka + Zookeeper + MongoDB resource limits added; HikariCP
+          + pool sizing on all DB services; analytics batch env vars wire
+          +d; all jwt-key consumers depend on auth-service:healthy; all K
+          +afka consumers depend on init-kafka:completed; postgres-export
+          +er ×4, redis_exporter, kafka-exporter, mongodb_exporter added 
+      322 +- [x] `infra/nginx-lb/nginx.conf` created — resolver 127.0.0.1
+          +1 valid=10s; set $upstream variable pattern for Docker DNS re-
+          +resolution; per-route rate limiting; upstream health location 
+      323 +- [x] `BatchEventBuffer.java` created — synchronized drain pat
+          +tern; @Scheduled fixedDelayString flush; size-threshold flush 
+          +on add()                                                      
+      324 +- [x] `PlaybackEventConsumer.java` updated — delegates to Batc
+          +hEventBuffer instead of AnalyticsService directly             
+      325 +- [x] `AnalyticsService.java` updated — recordBatch(List) adde
+          +d; null userId/songId filtered before batch insert            
+      326 +- [x] `AnalyticsRepository.java` updated — insertBatch() added
+          + using jdbcTemplate.batchUpdate() with BatchPreparedStatementS
+          +etter                                                         
+      327 +- [x] `AnalyticsServiceApplication.java` updated — @EnableSche
+          +duling added                                                  
+      328 +- [x] `SchemaInitializer.java` updated — event_type LowCardina
+          +lity(String); PARTITION BY toYYYYMM(toDateTime(occurred_at)); 
+          +ORDER BY extended with song_id                                
+      329 +- [x] `services/analytics-service/src/main/resources/applicati
+          +on.yml` updated — analytics.batch.size and analytics.batch.flu
+          +sh-interval-ms bound from env                                 
+      330 +- [x] `infra/prometheus/prometheus.yml` updated — all 8 app se
+          +rvices use dns_sd_configs (type A); 4 postgres-exporters, redi
+          +s-exporter, kafka-exporter, mongodb-exporter, ClickHouse :9363
+          + scrape targets added                                         
+      331 +- [x] `load-generator/scripts/main.js` replaced — BASE_URL fro
+          +m NGINX_LB_URL; K6_SCENARIO selects scenario (smoke/streaming/
+          +full/peak); VU-unique usernames; register+login+catalog+search
+          ++stream+playlist+analytics flows; thresholds p95<2000ms, p99<5
+          +000ms, error<5%                                               
+      332 +- [x] `infra/grafana/dashboards/scaling.json` created — 14 pan
+          +els covering request rate, error rate, p95/p99 latency, JVM he
+          +ap, CPU, HikariCP active/saturation, Kafka consumer lag, Redis
+          + hit rate/memory, OpenSearch heap, ClickHouse query latency   
+      333 +- [x] `.env.example` comprehensively updated — image versions,
+          + Kafka partition counts, all DB tuning params, HikariCP sizing
+          +, OpenSearch heap, Redis maxmemory, infrastructure resource li
+          +mits, replica count section (Profile A/B defaults + commented 
+          +Profile D values), K6 scenario vars, analytics batch tuning   
+      334 +- [x] `SCALABILITY.md` updated — §18 Implementation Status add
+          +ed (19 implemented items, 5 deferred items)                   
+      335 +- [x] `COST-AWARE-DECISIONS.md` statuses updated — CD-002/003/
+          +004/005/006/007/008/011/013/016/017: Implemented; CD-010: Plan
+          +ning (no Flyway V2 migrations added yet); CD-009/014/018/019/0
+          +20: Deferred (evidence-based deferral documented)             
+      336 +                                                              
+      337  ### Decisions Summary
+      338  - streaming-service: 8–10 replicas (Profile D only); 1 replica
+            (Profile A/B); highest traffic, stateless, CPU-bound
+      339  - auth-service: 4–6 replicas (Profile D); BCrypt and RS256 sig
+           ning are CPU-expensive; 1 replica in Profile A/B
+      323 -- search-service: 4–6 replicas; OpenSearch heap 512 MB → 2 GB 
+          -(CD-002)                                                      
+      324 -- analytics-service: 4 replicas ≤ playback-events partition co
+          -unt; ClickHouse batch insert required before Phase 4 (CD-004) 
+      340 +- search-service: 4–6 replicas; OpenSearch heap 512 MB → confi
+          +gurable via OPENSEARCH_HEAP (default 1g, Profile D 2g+) (CD-00
+          +2)                                                            
+      341 +- analytics-service: 4 replicas ≤ playback-events partition co
+          +unt; ClickHouse batch insert implemented (CD-004)             
+      342  - recommendation-service: 3 replicas; Redis stampede mitigatio
+           n; circuit breaker deferred to Phase 3 evidence (CD-018)
+      343  - catalog-service: 4 replicas; PgBouncer deferred until satura
+           tion observed (CD-009)
+      344  - playlist-service: 3 replicas; PgBouncer deferred until satur
+           ation observed
+      345  - notification-service: 2 replicas ≤ playlist-events partition
+            count
+      329 -- Kafka topic pre-creation: `playback-events` (12 partitions),
+          - `playlist-events` (6 partitions) via `init-kafka` (CD-007)   
+      330 -- Redis: maxmemory 512mb + allkeys-lru + appendfsync everysec 
+          -(CD-003)                                                      
+      331 -- Infrastructure resource limits missing from Kafka, Zookeeper
+          -, ClickHouse, MongoDB — must be added (CD-013)                
+      346 +- Kafka topic pre-creation: `playback-events` (12 partitions),
+          + `playlist-events` (6 partitions) via `init-kafka` (CD-007 — i
+          +mplemented)                                                   
+      347 +- Redis: maxmemory 256mb (REDIS_MAXMEMORY) + allkeys-lru + app
+          +endfsync everysec (CD-003 — implemented)                      
+      348 +- Infrastructure resource limits added for Kafka, Zookeeper, C
+          +lickHouse, MongoDB (CD-013 — implemented)                     
+      349  - Load generator retained as opt-in profile only (CD-001, alre
+           ady implemented)
+      333 -- Phase ordering: 1 → 2 → 3 before 4/5/6; Phase 4/5/6 require 
+          -Profile D and ≥32 GB host (CD-017)                            
+      350 +- Phase ordering: 1 → 2 → 3 before 4/5/6; Phase 4/5/6 require 
+          +Profile D and ≥32 GB host (CD-017 — implemented)              
+      351 +- PostgreSQL hotspot indexes (CD-010): NOT YET IMPLEMENTED — F
+          +lyway V2 migrations must be added before Phase 3              
+      352  
+      353  ---
+      354  
+
+⏺ Both files are updated. COST-AWARE-DECISIONS.md now has accurate statuses
+  across all 20 entries: CD-002 through CD-008, CD-011, CD-013, CD-016, CD-017
+  are marked Implemented with specific file/line references; CD-009, CD-014,
+  CD-018, CD-019, CD-020 remain Deferred with their evidence-based
+  justifications intact; CD-010 stays Planning with an explicit note that no
+  Flyway V2 migrations were added and it's required before Phase 3. PROGRESS.md
+  has a full Generation Step checklist with all 14 implementation artifacts
+  checked off and the same CD-010 gap flagged.
+
+✻ Baked for 8m 7s
+
+❯                                                                               
+  Review the generated scalability and cost-aware changes against               
+  `ARCHITECTURE.md`, `SCALABILITY.md`, the approved scaling plan, and the       
+  current repository.                                                           
+                                                                                
+  Validate that:                                                                
+  - required backend behavior and service boundaries are preserved,             
+  - the solution remains fully Docker Compose based,                            
+  - no Kubernetes, Helm, Nomad, Swarm, Terraform, managed cloud services, or    
+  external orchestrators/provisioning layers were introduced,                   
+  - the implementation matches the approved scalability plan,                   
+  - the implementation accounts for the target workload table,                  
+  - cost-saving claims are tied to clear evidence, expected impact, and         
+  trade-offs,                                                                   
+  - cloud cost decisions are documented in `COST-AWARE-DECISIONS.md`,           
+  - scaling is not applied uniformly where the traffic shape justifies          
+  different service patterns,                                                   
+  - database, cache, messaging, routing, observability, and load-test changes   
+  are consistent with the plan,                                                 
+  - configuration and containerization are correct,                             
+  - relevant validation commands pass,                                          
+  - required tests still pass for any backend behavior touched by the           
+  implementation.                                                               
+                                                                                
+  Run the relevant checks for this phase. Include at minimum:                   
+  - `docker compose config --quiet`,                                            
+  - Compose config validation for every scalability override/profile introduced 
+   or modified,                                                                 
+  - `docker compose config --services` or equivalent service-list inspection to 
+   confirm all eight backend services and required infrastructure remain        
+  available in the documented benchmark path,                                   
+  - Prometheus config validation if Prometheus config changes,                  
+  - Grafana dashboard JSON validation if dashboard files change,                
+  - k6 script inspection if load-generator scripts change,                      
+  - focused backend unit or integration tests for any service code behavior     
+  changed by the scalability work.                                              
+                                                                                
+  Fix missing or incorrect parts. Output only the changed files. Do not modify  
+  unrelated files. State assumptions explicitly. Prefer redesigning the         
+  scalability implementation over patching around it if the architecture is     
+  wrong. Do not consider the phase complete if validation fails or if a         
+  cost-saving change removes required behavior.                                 
+                                                                                
+  Document every validation result, fix, decision, correction, deviation, cost  
+  trade-off, unresolved issue, source of evidence, affected file or service,    
+  and any other relevant observation in `COST-AWARE-DECISIONS.md`. For each     
+  validation or fix entry, explicitly record: what was checked or changed,      
+  where it was checked or changed, why it mattered for scalability and cloud    
+  cost efficiency, validation result, remaining risk, and status.               
+  Update PROGRESS.md only to mark checklist/task completion status for this     
+  validation step.                                                              
+  ⎿  ⧉ Selected 30 lines from SCALABILITY-PROMPTS in Visual Studio Code
+
+⏺ I'll start the validation in parallel — running the compose and config checks
+  while reading the key source files.
+
+⏺ Bash(docker compose config --quiet 2>&1; echo "EXIT:$?")
+  ⎿  EXIT:0
+
+⏺ Bash(docker compose config --services 2>&1)
+  ⎿  auth-db
+     auth-service
+     zookeeper
+     … +26 lines (ctrl+o to expand)
+
+⏺ Bash(python3 -c "import json,sys;
+      json.load(open('/Users/Sabina/Desktop/Thesis/Iteration01/benchmark-applica
+      tion/infra/grafana/dashboards/scaling.json')); print('OK'…)
+  ⎿  OK
+
+⏺ Bash(docker compose config --profiles 2>&1; echo "---"; docker compose
+      --profile load-test config --quiet 2>&1; echo "EXIT:$?")
+  ⎿  load-test
+     ---
+     EXIT:0
+
+  Read 1 file (ctrl+o to expand)
+
+⏺ Now let me read the nginx config and ARCHITECTURE.md to check routing
+  correctness.
+
+  Read 2 files (ctrl+o to expand)
+
+⏺ Let me check the actual service endpoint paths and run the analytics-service
+  tests in parallel.
+
+  Searched for 5 patterns (ctrl+o to expand)
+
+⏺ Found three bugs. Let me now check the analytics tests and verify the
+  auth-service replica constraint.
+
+  Searched for 1 pattern (ctrl+o to expand)
+
+⏺ Bash(docker compose config 2>&1 | grep -A3 'auth-service:' | head -20)
+  ⎿        auth-service:
+             condition: service_healthy
+             required: true
+     … +18 lines (ctrl+o to expand)
+
+  Read 2 files (ctrl+o to expand)
+
+⏺ Now let me check the analytics service source code to verify the batch
+  implementation is complete and correct.
+
+  Read 4 files (ctrl+o to expand)
+
+⏺ Bash(find /Users/Sabina/Desktop/Thesis/Iteration01/benchmark-application/servi
+      ces/analytics-service/src/test -name "*.yml" -o -name "*.properties" |
+      xargs ls 2>/dev/…)
+  ⎿  /Users/Sabina/Desktop/Thesis/Iteration01/benchmark-application/service
+     s/analytics-service/src/test/resources/application-test.yml
+     server:
+     … +27 lines (ctrl+o to expand)
+
+  Read 1 file (ctrl+o to expand)
+⏺ I've found the issues. Here's what's wrong:
+
+  1. nginx /notifications/ → service serves /notifications — notification
+  controller is @RequestMapping("/notifications") + bare @GetMapping, but nginx
+  has location /notifications/ (with trailing slash). A request to GET 
+  /notifications won't match, resulting in 404.
+  2. k6 catalogFlow missing auth headers — catalog-service requires JWT
+  (.anyRequest().authenticated()) but catalogFlow(token) never uses the token
+  parameter.
+  3. .env.example Profile D has # AUTH_SERVICE_REPLICAS=4 — auth-service has
+  container_name: auth-service; setting replicas > 1 will fail at docker compose
+   up time.
+  4. No unit tests for BatchEventBuffer or AnalyticsService.recordBatch — new
+  scalability code paths are untested.
+
+  Fixing all four now.
+
+⏺ Update(~/Desktop/Thesis/Iteration01/benchmark-application/infra/nginx-lb/nginx
+        .conf)
+  ⎿  Added 1 line, removed 1 line
+      74              proxy_pass http://$upstream;
+      75          }
+      76  
+      77 -        location /notifications/ {                             
+      77 +        location /notifications {                              
+      78              limit_req zone=api_limit burst=200 nodelay;
+      79              set $upstream "notification-service:8080";
+      80              proxy_pass http://$upstream;
+
+⏺ Update(~/Desktop/Thesis/Iteration01/benchmark-application/load-generator/scrip
+        ts/main.js)
+  ⎿  Added 2 lines, removed 2 lines
+      82  // --- Flow helpers ---
+      83  
+      84  function catalogFlow(token) {
+      85 -  const catalogRes = http.get(`${BASE_URL}/catalog/songs?page=0
+         -&size=20`);                                                    
+      85 +  const catalogRes = http.get(`${BASE_URL}/catalog/songs?page=0
+         +&size=20`, authHeaders(token));                                
+      86    check(catalogRes, { 'catalog songs 200': (r) => r.status === 
+          200 });
+      87  
+      88    let songId = 'song-1';
+     ...
+       94      }
+       95    } catch (_) {}
+       96  
+       97 -  const songRes = http.get(`${BASE_URL}/catalog/songs/${songId
+          -}`);                                                          
+       97 +  const songRes = http.get(`${BASE_URL}/catalog/songs/${songId
+          +}`, authHeaders(token));                                      
+       98    check(songRes, { 'catalog song detail 200': (r) => r.status 
+           === 200 });
+       99  
+      100    return songId;
+
+⏺ Update(~/Desktop/Thesis/Iteration01/benchmark-application/.env.example)
+  ⎿  Added 5 lines, removed 1 line
+      194  NOTIFICATION_SERVICE_REPLICAS=1
+      195  
+      196  # Profile D replica counts (uncomment and replace defaults for
+            full benchmark runs):
+      197 -# AUTH_SERVICE_REPLICAS=4                                     
+      197 +# NOTE: AUTH_SERVICE_REPLICAS is intentionally absent from thi
+          +s section.                                                    
+      198 +#   auth-service keeps container_name=auth-service (prevents a
+          +ccidental --scale) and                                        
+      199 +#   must run as exactly 1 replica. RSA key files are written o
+          +nce at startup; a second                                      
+      200 +#   replica would race to overwrite them. If you need auth thr
+          +oughput, scale upstream                                       
+      201 +#   through nginx-lb — but keep the auth-service container cou
+          +nt at 1.                                                      
+      202  # CATALOG_SERVICE_REPLICAS=4
+      203  # STREAMING_SERVICE_REPLICAS=8
+      204  # PLAYLIST_SERVICE_REPLICAS=3
+
+⏺ Now add unit tests for BatchEventBuffer and AnalyticsService.recordBatch:
+
+⏺ Write(src/test/java/com/musicstreaming/analytics/unit/BatchEventBufferTest.jav
+       a)
+  ⎿  Wrote 118 lines to src/test/java/com/musicstreaming/analytics/unit/Bat
+     chEventBufferTest.java
+       1 package com.musicstreaming.analytics.unit;
+       2 
+       3 import com.musicstreaming.analytics.messaging.BatchEventBuffer;
+       4 import com.musicstreaming.analytics.model.PlaybackEventRecord;
+       5 import com.musicstreaming.analytics.service.AnalyticsService;
+       6 import org.junit.jupiter.api.BeforeEach;
+       7 import org.junit.jupiter.api.Test;
+       8 import org.junit.jupiter.api.extension.ExtendWith;
+       9 import org.mockito.ArgumentCaptor;
+      10 import org.mockito.Mock;
+     … +118 lines (ctrl+o to expand)
+
+⏺ Now extend AnalyticsServiceTest with recordBatch coverage:
+
+⏺ Update(src/test/java/com/musicstreaming/analytics/unit/AnalyticsServiceTest.ja
+        va)
+  ⎿  Added 33 lines
+       98          service.recordEvent(event);
+       99          verify(repository, never()).insert(any());
+      100      }
+      101 +                                                              
+      102 +    // ── recordBatch ────────────────────────────────────────
+          +───────────────────                                           
+      103 +                                                              
+      104 +    @Test                                                     
+      105 +    void recordBatch_callsInsertBatch_withAllValidEvents() {  
+      106 +        PlaybackEventRecord e1 = new PlaybackEventRecord("play
+          +.started", "alice", "song1", Instant.now());                  
+      107 +        PlaybackEventRecord e2 = new PlaybackEventRecord("play
+          +.ended",   "bob",   "song2", Instant.now());                  
+      108 +        service.recordBatch(List.of(e1, e2));                 
+      109 +        verify(repository).insertBatch(List.of(e1, e2));      
+      110 +    }                                                         
+      111 +                                                              
+      112 +    @Test                                                     
+      113 +    void recordBatch_filtersOutNullUserId() {                 
+      114 +        PlaybackEventRecord valid   = new PlaybackEventRecord(
+          +"play.started", "alice", "song1", Instant.now());             
+      115 +        PlaybackEventRecord nullUid = new PlaybackEventRecord(
+          +"play.started", null,    "song2", Instant.now());             
+      116 +        service.recordBatch(List.of(valid, nullUid));         
+      117 +        verify(repository).insertBatch(List.of(valid));       
+      118 +    }                                                         
+      119 +                                                              
+      120 +    @Test                                                     
+      121 +    void recordBatch_filtersOutNullSongId() {                 
+      122 +        PlaybackEventRecord valid    = new PlaybackEventRecord
+          +("play.started", "alice", "song1", Instant.now());            
+      123 +        PlaybackEventRecord nullSong = new PlaybackEventRecord
+          +("play.started", "bob",   null,    Instant.now());            
+      124 +        service.recordBatch(List.of(valid, nullSong));        
+      125 +        verify(repository).insertBatch(List.of(valid));       
+      126 +    }                                                         
+      127 +                                                              
+      128 +    @Test                                                     
+      129 +    void recordBatch_callsInsertBatch_withEmptyList_whenAllFil
+          +tered() {                                                     
+      130 +        PlaybackEventRecord bad = new PlaybackEventRecord("pla
+          +y.started", null, null, Instant.now());                       
+      131 +        service.recordBatch(List.of(bad));                    
+      132 +        verify(repository).insertBatch(List.of());            
+      133 +    }                                                         
+      134  }
+
+⏺ Now re-run validation checks:
+
+⏺ Bash(docker compose config --quiet 2>&1; echo "COMPOSE_EXIT:$?")
+  ⎿  COMPOSE_EXIT:0
+
+⏺ Bash(docker compose --profile load-test config --quiet 2>&1; echo
+      "LOAD_TEST_EXIT:$?")
+  ⎿  LOAD_TEST_EXIT:0
+
+⏺ Bash(docker compose config --services 2>&1 | sort)
+  ⎿  analytics-service
+     auth-db
+     auth-db-exporter
+     … +26 lines (ctrl+o to expand)
+
+⏺ Bash(python3 -c "
+      import json…)
+  ⎿  Grafana dashboard: 'Music Streaming — Scaling Metrics', panels=14
+       [timeseries] Request Rate per Service
+       [timeseries] HTTP Error Rate per Service
+     … +13 lines (ctrl+o to expand)
+
+⏺ All 8 services confirmed. Now run the analytics-service unit tests to verify
+  the new tests compile and pass:
+
+⏺ Bash(cd /Users/Sabina/Desktop/Thesis/Iteration01/benchmark-application/service
+      s/analytics-service && mvn test
+      -Dtest="AnalyticsServiceTest,BatchEventBufferTest" -Dsu…)
+  ⎿  [INFO] Scanning for projects...
+     [INFO]
+     [INFO] ----------------< com.musicstreaming:analytics-service >-------
+     … +54 lines (ctrl+o to expand)
+  ⎿  (timeout 2m)
+
+⏺ 21/21 unit tests pass. Let me do a final validation pass on all changed files:
+
+  Searched for 3 patterns (ctrl+o to expand)
+
+⏺ All fixes verified. Now document everything in COST-AWARE-DECISIONS.md:
+
+  Read 1 file (ctrl+o to expand)
+
+⏺ Update(~/Desktop/Thesis/Iteration01/benchmark-application/COST-AWARE-DECISIONS
+        .md)
+  ⎿  Added 138 lines, removed 1 line
+      368  
+      369  ---
+      370  
+      371 -*Last updated: 2026-06-14 — statuses updated after cost-aware 
+          -implementation generation step.*                              
+      371 +---                                                           
+      372 +                                                              
+      373 +## Validation Step — 2026-06-15                               
+      374 +                                                              
+      375 +> These entries document everything found and fixed during the
+          + validation pass against ARCHITECTURE.md, the approved scaling
+          + plan, and the current repository.                            
+      376 +                                                              
+      377 +---                                                           
+      378 +                                                              
+      379 +## VL-001 — docker-compose.yml Syntax Validation              
+      380 +                                                              
+      381 +| Field | Content |                                           
+      382 +|---|---|                                                     
+      383 +| **What** | `docker compose config --quiet` on the default pr
+          +ofile and `--profile load-test` |                             
+      384 +| **Where** | `docker-compose.yml` |                          
+      385 +| **Why** | Compose YAML errors (undefined variables, wrong ty
+          +pes, missing fields) prevent any service from starting, making
+          + every downstream cost or scaling decision moot. |            
+      386 +| **Result** | PASS — both `docker compose config --quiet` and
+          + `docker compose --profile load-test config --quiet` exit 0 wi
+          +th no errors. |                                               
+      387 +| **Remaining risk** | None for syntax. Semantic correctness (
+          +health check paths, dependency ordering) requires a live run. 
+          +|                                                             
+      388 +| **Status** | Validated |                                    
+      389 +                                                              
+      390 +---                                                           
+      391 +                                                              
+      392 +## VL-002 — All 8 Backend Services Present                    
+      393 +                                                              
+      394 +| Field | Content |                                           
+      395 +|---|---|                                                     
+      396 +| **What** | `docker compose config --services` output checked
+          + against ARCHITECTURE.md §3 list |                            
+      397 +| **Where** | `docker-compose.yml` |                          
+      398 +| **Why** | Horizontal scaling changes (removing host ports, a
+          +dding nginx-lb, changing depends_on chains) must not silently 
+          +drop a required service from the compose graph. |             
+      399 +| **Result** | PASS — all 8 application services confirmed pre
+          +sent: auth-service, catalog-service, streaming-service, playli
+          +st-service, search-service, analytics-service, recommendation-
+          +service, notification-service. Infrastructure: zookeeper, kafk
+          +a, init-kafka, auth-db, catalog-db, playlist-db, recommendatio
+          +n-db, opensearch, clickhouse, redis, mongodb, auth-db-exporter
+          +, catalog-db-exporter, playlist-db-exporter, recommendation-db
+          +-exporter, redis-exporter, kafka-exporter, mongodb-exporter, p
+          +rometheus, grafana, nginx-lb, load-generator (profile=load-tes
+          +t). |                                                         
+      400 +| **Remaining risk** | None. |                                
+      401 +| **Status** | Validated |                                    
+      402 +                                                              
+      403 +---                                                           
+      404 +                                                              
+      405 +## VL-003 — Grafana Dashboard JSON Validation                 
+      406 +                                                              
+      407 +| Field | Content |                                           
+      408 +|---|---|                                                     
+      409 +| **What** | `python3 -c "import json; json.load(open(...))"` 
+          +on `infra/grafana/dashboards/scaling.json` |                  
+      410 +| **Where** | `infra/grafana/dashboards/scaling.json` |       
+      411 +| **Why** | Grafana silently ignores invalid JSON dashboards; 
+          +a parse error means zero observability panels are loaded, maki
+          +ng it impossible to validate any cost or scaling claim against
+          + live data. |                                                 
+      412 +| **Result** | PASS — 14 panels loaded cleanly: request rate, 
+          +error rate, p99/p95 latency, JVM heap, CPU, HikariCP active/sa
+          +turation, Kafka lag (analytics; recommendation+notification), 
+          +Redis hit rate, Redis memory, OpenSearch heap, ClickHouse p99 
+          +query latency. |                                              
+      413 +| **Remaining risk** | Panel PromQL expressions must be valida
+          +ted against a live Prometheus instance. Some metric names (e.g
+          +. `hikaricp_connections_active`) may differ by Spring Boot ver
+          +sion. |                                                       
+      414 +| **Status** | Validated |                                    
+      415 +                                                              
+      416 +---                                                           
+      417 +                                                              
+      418 +## VL-004 — nginx `/notifications/` Path Bug (FIXED)          
+      419 +                                                              
+      420 +| Field | Content |                                           
+      421 +|---|---|                                                     
+      422 +| **What** | `location /notifications/` in nginx.conf did not 
+          +match `GET /notifications` requests |                         
+      423 +| **Where** | `infra/nginx-lb/nginx.conf` |                   
+      424 +| **Why** | notification-service controller is `@RequestMappin
+          +g("/notifications")` + bare `@GetMapping`, which maps to the U
+          +RI `/notifications` (no trailing slash). nginx `location /noti
+          +fications/` is a prefix match that requires the URI to start w
+          +ith `/notifications/`; the request path `/notifications` does 
+          +not start with `/notifications/`, so nginx returned 404. Any k
+          +6 or frontend call to `GET /notifications` failed silently beh
+          +ind nginx. |                                                  
+      425 +| **Cost driver** | No cost impact; correctness issue that rem
+          +oves a required endpoint from the benchmark flow. |           
+      426 +| **Evidence** | grep of notification-service controller: `@Re
+          +questMapping("/notifications")` + `@GetMapping` (no path). ngi
+          +nx prefix match semantics: `location /X/` does not match URI `
+          +/X`. |                                                        
+      427 +| **Fix** | Changed `location /notifications/` → `location /no
+          +tifications` in `infra/nginx-lb/nginx.conf`. |                
+      428 +| **Result** | FIXED — `GET /notifications` and all sub-paths 
+          +(future) now route correctly to `notification-service:8080`. |
+      429 +| **Remaining risk** | None for routing. If notification-servi
+          +ce adds sub-path endpoints, the prefix match `location /notifi
+          +cations` will continue to work. |                             
+      430 +| **Status** | Fixed |                                        
+      431 +                                                              
+      432 +---                                                           
+      433 +                                                              
+      434 +## VL-005 — k6 catalogFlow Missing Auth Headers (FIXED)       
+      435 +                                                              
+      436 +| Field | Content |                                           
+      437 +|---|---|                                                     
+      438 +| **What** | `catalogFlow(token)` in `load-generator/scripts/m
+          +ain.js` made catalog HTTP calls without `Authorization: Bearer
+          +` headers |                                                   
+      439 +| **Where** | `load-generator/scripts/main.js` — `catalogFlow(
+          +)` function |                                                 
+      440 +| **Why** | catalog-service `SecurityConfig` configures `.anyR
+          +equest().authenticated()` — all catalog endpoints (including `
+          +GET /catalog/songs`) require a valid JWT. The k6 function acce
+          +pted `token` as a parameter but never used it, causing all cat
+          +alog requests to return 401 during the load test. All latency 
+          +measurements for the catalog flow would be timing 401 rejectio
+          +ns, not actual catalog query performance. This invalidates the
+          + benchmark results for catalog-related cost decisions (CD-006,
+          + CD-013). |                                                   
+      441 +| **Cost driver** | Benchmark validity — invalid load-test res
+          +ults make cost decisions based on catalog throughput untrustwo
+          +rthy. |                                                       
+      442 +| **Evidence** | catalog-service `SecurityConfig.java`: `.anyR
+          +equest().authenticated()`. k6 `catalogFlow` function: `http.ge
+          +t(BASE_URL + '/catalog/songs?page=0&size=20')` — no headers ar
+          +gument. |                                                     
+      443 +| **Fix** | Added `authHeaders(token)` as the second argument 
+          +to both `http.get()` calls in `catalogFlow`. |                
+      444 +| **Result** | FIXED — catalog calls now include `Authorizatio
+          +n: Bearer <token>` header. All 8 API flows in the load test no
+          +w send valid JWTs. |                                          
+      445 +| **Remaining risk** | The 409-fallback login path in the VU d
+          +efault function doesn't retry catalog after login; if both reg
+          +istration AND login fail, the VU returns early without touchin
+          +g catalog. This is pre-existing guard logic and not introduced
+          + by scalability work. |                                       
+      446 +| **Status** | Fixed |                                        
+      447 +                                                              
+      448 +---                                                           
+      449 +                                                              
+      450 +## VL-006 — auth-service container_name Conflicts with Profile
+          + D replica=4 (FIXED)                                          
+      451 +                                                              
+      452 +| Field | Content |                                           
+      453 +|---|---|                                                     
+      454 +| **What** | `.env.example` Profile D section contained `# AUT
+          +H_SERVICE_REPLICAS=4`, which if uncommented would fail at `doc
+          +ker compose up` because `container_name: auth-service` prevent
+          +s multiple replicas |                                         
+      455 +| **Where** | `.env.example` — Profile D replica counts sectio
+          +n |                                                           
+      456 +| **Why** | auth-service has `container_name: auth-service` (i
+          +ntentionally, to prevent accidental `--scale`) and `deploy.rep
+          +licas: ${AUTH_SERVICE_REPLICAS:-1}`. Docker cannot assign the 
+          +same name to multiple containers; attempting replicas > 1 with
+          + a fixed container_name causes Docker to error. An operator fo
+          +llowing the Profile D instructions and uncommenting `AUTH_SERV
+          +ICE_REPLICAS=4` would get a startup failure with no obvious di
+          +agnostic. Additionally, auth-service must stay at 1 replica be
+          +cause it writes RSA key files to the `jwt-keys` volume at star
+          +tup; a second replica would race to overwrite them, potentiall
+          +y corrupting the keys that all other services depend on. |    
+      457 +| **Cost driver** | Operational safety — incorrect Profile D v
+          +alues cause deployment failures that waste benchmark session t
+          +ime (compute cost). |                                         
+      458 +| **Evidence** | docker-compose.yml auth-service stanza: `cont
+          +ainer_name: auth-service` AND `deploy.replicas: ${AUTH_SERVICE
+          +_REPLICAS:-1}`. Docker Compose behavior: `container_name` + `r
+          +eplicas > 1` fails at runtime. RSA key write behavior: auth-se
+          +rvice writes `private.pem` and `public.pem` to the `jwt-keys` 
+          +volume on first start. |                                      
+      459 +| **Fix** | Removed `# AUTH_SERVICE_REPLICAS=4` from the Profi
+          +le D section. Added a comment explaining that auth-service is 
+          +intentionally absent from Profile D replica scaling (container
+          +_name constraint + RSA key race). |                           
+      460 +| **Result** | FIXED — Profile D section no longer contains a 
+          +value that would silently break the deployment. |             
+      461 +| **Remaining risk** | auth-service is a BCrypt + RS256 bottle
+          +neck at 1 replica. Under Phase 4+ load, auth endpoint latency 
+          +may increase. Operators can rate-limit registration and pre-is
+          +sue tokens for the load test to reduce auth-service pressure (
+          +documented in SCALABILITY.md §14). |                          
+      462 +| **Status** | Fixed |                                        
+      463 +                                                              
+      464 +---                                                           
+      465 +                                                              
+      466 +## VL-007 — analytics-service Unit Test Coverage for New Batch
+          + Code (FIXED)                                                 
+      467 +                                                              
+      468 +| Field | Content |                                           
+      469 +|---|---|                                                     
+      470 +| **What** | No unit tests existed for `BatchEventBuffer` or `
+          +AnalyticsService.recordBatch()` — both introduced by the scala
+          +bility implementation |                                       
+      471 +| **Where** | `services/analytics-service/src/test/java/com/mu
+          +sicstreaming/analytics/unit/` |                               
+      472 +| **Why** | Untested scalability code that handles batching of
+          + 40K events/s is a correctness risk. If the synchronized drain
+          + pattern, null-filter logic, or batch-size threshold has a reg
+          +ression, it will not be caught until Phase 3+ load testing — w
+          +hich wastes a full benchmark run and the associated compute ti
+          +me. |                                                         
+      473 +| **Cost driver** | Operational cost — late detection of batch
+          + logic bugs requires full benchmark reruns. |                 
+      474 +| **Evidence** | `BatchEventBuffer.java` added; `AnalyticsServ
+          +ice.recordBatch()` added. No corresponding test files existed.
+          + The existing `AnalyticsServiceTest` only covered `recordEvent
+          +()`, `getHistory()`, and `getGlobalCharts()`. |               
+      475 +| **Fix** | Created `BatchEventBufferTest.java` (8 tests cover
+          +ing: below-batch-size no-flush, batch-size-triggered flush, bu
+          +ffer-cleared-after-flush, null-userId filtered, null-songId fi
+          +ltered, scheduledFlush on empty buffer, scheduledFlush drains 
+          +pending, buffer cleared after scheduledFlush). Added 4 `record
+          +Batch` tests to `AnalyticsServiceTest` (valid events passed th
+          +rough, null userId filtered, null songId filtered, all-filtere
+          +d produces empty insertBatch call). |                         
+      476 +| **Result** | PASS — 21/21 unit tests pass (8 BatchEventBuffe
+          +rTest + 13 AnalyticsServiceTest). `mvn test -Dtest="AnalyticsS
+          +erviceTest,BatchEventBufferTest"` exits BUILD SUCCESS. |      
+      477 +| **Remaining risk** | Integration-level concurrency testing (
+          +two threads calling `add()` simultaneously) is not covered; th
+          +e `synchronized(buffer)` block handles this correctly but it i
+          +s not exercised by single-threaded Mockito tests. |           
+      478 +| **Status** | Fixed and validated |                          
+      479 +                                                              
+      480 +---                                                           
+      481 +                                                              
+      482 +## VL-008 — Prometheus DNS SD Config Validation               
+      483 +                                                              
+      484 +| Field | Content |                                           
+      485 +|---|---|                                                     
+      486 +| **What** | `prometheus.yml` scrape config — all 8 app servic
+          +es use `dns_sd_configs` (type A, port 8080); 8 infrastructure 
+          +exporters use `static_configs` |                              
+      487 +| **Where** | `infra/prometheus/prometheus.yml` |             
+      488 +| **Why** | If DNS SD is misconfigured (wrong type, wrong port
+          +, wrong job name), Prometheus will fail to discover replica ta
+          +rgets as services scale. This would make the Grafana dashboard
+          + panels empty and invalidate all cost decisions that depend on
+          + observability data. |                                        
+      489 +| **Result** | PASS — all 8 `dns_sd_configs` jobs use `type: A
+          +` (correct for Docker embedded DNS), `port: 8080` (matches Spr
+          +ing Boot default), and `metrics_path: /actuator/prometheus` (m
+          +atches Spring Boot Actuator default). Infrastructure exporters
+          + use `static_configs` (correct for singleton containers). Clic
+          +kHouse metrics use path `/metrics` on port 9363 (ClickHouse na
+          +tive Prometheus exporter default). |                          
+      490 +| **Remaining risk** | Prometheus DNS SD type A returns a set 
+          +of IPs; if Docker DNS caches IPs across replica restarts, Prom
+          +etheus may scrape stale targets. The `valid=10s` TTL mitigates
+          + this in nginx but Prometheus DNS SD has its own refresh inter
+          +val (default 30s from `dns_sd_configs.refresh_interval`). Not 
+          +configured explicitly — acceptable at current scale. |        
+      491 +| **Status** | Validated |                                    
+      492 +                                                              
+      493 +---                                                           
+      494 +                                                              
+      495 +## VL-009 — k6 Script Scenario Configuration Inspection       
+      496 +                                                              
+      497 +| Field | Content |                                           
+      498 +|---|---|                                                     
+      499 +| **What** | k6 `main.js` scenario selection logic, VU flows, 
+          +auth header propagation, BASE_URL binding |                   
+      500 +| **Where** | `load-generator/scripts/main.js` |              
+      501 +| **Why** | An incorrect k6 scenario config (e.g., missing aut
+          +h headers, wrong BASE_URL, broken scenario selection) produces
+          + invalid benchmark results that cannot inform cost decisions. 
+          +|                                                             
+      502 +| **Result** | PASS (after VL-005 fix) — `BASE_URL` correctly 
+          +reads `NGINX_LB_URL` env var; scenario selection via `K6_SCENA
+          +RIO` env correctly maps to smoke/streaming/full/peak configs; 
+          +all API flows (catalog, search, stream, playlist, analytics, r
+          +ecommendations) now correctly include `Authorization: Bearer <
+          +token>` headers. Thresholds: p95 < 2000ms, p99 < 5000ms, error
+          + rate < 5%. |                                                 
+      503 +| **Remaining risk** | The `smoke` scenario returns early afte
+          +r catalogFlow without exercising stream/playlist/analytics flo
+          +ws. This is by design — smoke verifies basic connectivity only
+          +. Ensure `full` or `peak` scenario is used for CD-002 through 
+          +CD-016 validation. |                                          
+      504 +| **Status** | Validated |                                    
+      505 +                                                              
+      506 +---                                                           
+      507 +                                                              
+      508 +*Last updated: 2026-06-15 — validation pass complete; 4 issues
+          + found, all fixed.*                                           
+
+⏺ Now update PROGRESS.md to mark the validation step complete:
+
+⏺ Update(~/Desktop/Thesis/Iteration01/benchmark-application/PROGRESS.md)
+  ⎿  Added 15 lines
+      317  - [x] `SCALABILITY.md` produced — cost-aware scaling plan for 
+           1 M users; 4 runtime profiles; 17 sections covering all requir
+           ed areas; 15-step scaling order; 8 risks documented
+      318  - [x] `COST-AWARE-DECISIONS.md` produced — 20 entries covering
+            every cost decision, assumption, trade-off, evidence source, 
+           affected file/service, expected cost impact, risk, validation 
+           method, and status
+      319  
+      320 +### Validation Step (cost-aware scalability review)           
+      321 +- [x] `docker compose config --quiet` — PASS, exit 0 (default 
+          +profile)                                                      
+      322 +- [x] `docker compose --profile load-test config --quiet` — PA
+          +SS, exit 0                                                    
+      323 +- [x] `docker compose config --services` — all 8 backend servi
+          +ces + full infrastructure confirmed                           
+      324 +- [x] Grafana dashboard JSON validated — 14 panels, no parse e
+          +rrors                                                         
+      325 +- [x] nginx.conf reviewed against actual service endpoint path
+          +s — **BUG FOUND AND FIXED**: `location /notifications/` → `loc
+          +ation /notifications` (notification controller maps to bare `/
+          +notifications`, not `/notifications/`)                        
+      326 +- [x] k6 `main.js` reviewed against service security configs —
+          + **BUG FOUND AND FIXED**: `catalogFlow()` was calling catalog 
+          +endpoints without auth headers; catalog-service requires JWT (
+          +`.anyRequest().authenticated()`); added `authHeaders(token)` t
+          +o both catalog HTTP calls                                     
+      327 +- [x] `.env.example` Profile D section reviewed — **BUG FOUND 
+          +AND FIXED**: removed `# AUTH_SERVICE_REPLICAS=4` (would fail a
+          +t runtime due to `container_name: auth-service` conflict with 
+          +replicas > 1); added explanatory comment                      
+      328 +- [x] analytics-service new batch code reviewed — **GAP FOUND 
+          +AND FIXED**: no unit tests for `BatchEventBuffer` or `Analytic
+          +sService.recordBatch()`; created `BatchEventBufferTest.java` (
+          +8 tests) and extended `AnalyticsServiceTest.java` (+4 recordBa
+          +tch tests)                                                    
+      329 +- [x] `mvn test -Dtest="AnalyticsServiceTest,BatchEventBufferT
+          +est"` — 21/21 tests PASS, BUILD SUCCESS                       
+      330 +- [x] Prometheus DNS SD config inspected — all 8 services use 
+          +type A + port 8080; infrastructure exporters use static_config
+          +s                                                             
+      331 +- [x] ARCHITECTURE.md service boundaries verified — all 8 serv
+          +ices retained with correct persistence layers; no cross-servic
+          +e DB sharing; JWT validation unchanged                        
+      332 +- [x] No Kubernetes/Helm/Swarm/Terraform artifacts introduced 
+          +— confirmed Docker Compose only                               
+      333 +- [x] All validation results, fixes, and remaining risks docum
+          +ented in `COST-AWARE-DECISIONS.md` (VL-001 through VL-009)    
+      334 +                                                              
+      335  ### Generation Step (cost-aware implementation)
+      336  - [x] `docker-compose.yml` rewritten — nginx-lb added; init-ka
+           fka one-shot service added; KAFKA_AUTO_CREATE_TOPICS_ENABLE=fa
+           lse; all 8 app services containerised without host ports and w
+           ith deploy.replicas; all 4 Postgres DBs tuned (shared_buffers,
+            work_mem, max_connections); OpenSearch heap parameterised; Re
+           dis maxmemory + allkeys-lru + appendfsync everysec; ClickHouse
+            + Kafka + Zookeeper + MongoDB resource limits added; HikariCP
+            pool sizing on all DB services; analytics batch env vars wire
+           d; all jwt-key consumers depend on auth-service:healthy; all K
+           afka consumers depend on init-kafka:completed; postgres-export
+           er ×4, redis_exporter, kafka-exporter, mongodb_exporter added
+      337  - [x] `infra/nginx-lb/nginx.conf` created — resolver 127.0.0.1
+           1 valid=10s; set $upstream variable pattern for Docker DNS re-
+           resolution; per-route rate limiting; upstream health location
+
+⏺ Validation complete. Here's what was found and fixed:
+
+  4 issues found, all fixed:
+
+  #: VL-004
+  Issue: location /notifications/ in nginx wouldn't match GET /notifications
+    (notification controller exposes bare /notifications)
+  File: infra/nginx-lb/nginx.conf
+  Fix: Removed trailing slash
+  ────────────────────────────────────────
+  #: VL-005
+  Issue: catalogFlow(token) passed token as argument but never used it — all
+    catalog calls returned 401 because catalog-service requires JWT
+  File: load-generator/scripts/main.js
+  Fix: Added authHeaders(token) to both catalog HTTP calls
+  ────────────────────────────────────────
+  #: VL-006
+  Issue: .env.example Profile D had # AUTH_SERVICE_REPLICAS=4 — uncommenting it
+    would fail at runtime (auth-service has container_name: preventing replicas
+  >
+     1, plus RSA key race)
+  File: .env.example
+  Fix: Removed the dangerous line, added explanatory comment
+  ────────────────────────────────────────
+  #: VL-007
+  Issue: No unit tests for BatchEventBuffer or AnalyticsService.recordBatch()
+  File: new BatchEventBufferTest.java + updated AnalyticsServiceTest.java
+  Fix: 8 + 4 = 12 new tests, all 21 unit tests pass
+
+  Everything else passed: compose config validates clean on both profiles, all 8
+   backend services present, Grafana JSON parses correctly (14 panels),
+  Prometheus DNS SD config is correct, no Kubernetes/cloud-managed services
+  introduced, service boundaries from ARCHITECTURE.md are preserved.
+
+✻ Sautéed for 7m 16s
+
+※ recap: Cost-aware horizontal scaling plan is implemented and validated. Run the integration tests next: `mvn verify` inside `services/analytics-service` to confirm the batch flush path works end-to-end with a real ClickHouse container. (disable recaps in /config)

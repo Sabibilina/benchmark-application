@@ -36,7 +36,7 @@ class RecommendationServiceTest {
 
     @BeforeEach
     void setUp() {
-        when(redisTemplate.opsForValue()).thenReturn(valueOps);
+        lenient().when(redisTemplate.opsForValue()).thenReturn(valueOps);
         // dailyMixSize=5, similarSize=3, cacheTtlSeconds=3600
         service = new RecommendationService(songRepo, playEventRepo, redisTemplate, new ObjectMapper(), 5, 3, 3600);
     }
@@ -80,6 +80,57 @@ class RecommendationServiceTest {
 
         assertThat(response.songs()).isEmpty();
         verifyNoInteractions(songRepo, playEventRepo);
+    }
+
+    // ── Resilience4j fallback tests ───────────────────────────────────────────
+    // These test the fallback methods directly, verifying they produce a valid
+    // response via the compute path without any Redis involvement.
+
+    @Test
+    void getDailyMixFallback_computesFromDb_whenRedisUnavailable() {
+        RuntimeException redisDown = new RuntimeException("Redis connection refused");
+        when(playEventRepo.findTopSongIdsByUser(eq("dave"), any(LocalDateTime.class), anyInt()))
+                .thenReturn(List.of());
+        when(playEventRepo.findGlobalTopSongIds(anyInt())).thenReturn(List.of());
+        when(songRepo.findRandom(any(Pageable.class))).thenReturn(List.of(buildSong(10L, "rock")));
+
+        DailyMixResponse response = service.getDailyMixFallback("dave", redisDown);
+
+        assertThat(response).isNotNull();
+        assertThat(response.songs()).isNotEmpty();
+        verifyNoInteractions(redisTemplate);
+    }
+
+    @Test
+    void getDailyMixFallback_returnsEmptyList_whenDbAlsoHasNoData() {
+        RuntimeException redisDown = new RuntimeException("Redis unavailable");
+        when(playEventRepo.findTopSongIdsByUser(eq("nobody"), any(LocalDateTime.class), anyInt()))
+                .thenReturn(List.of());
+        when(playEventRepo.findGlobalTopSongIds(anyInt())).thenReturn(List.of());
+        when(songRepo.findRandom(any(Pageable.class))).thenReturn(List.of());
+
+        DailyMixResponse response = service.getDailyMixFallback("nobody", redisDown);
+
+        assertThat(response).isNotNull();
+        assertThat(response.songs()).isEmpty();
+        verifyNoInteractions(redisTemplate);
+    }
+
+    @Test
+    void getSimilarSongsFallback_computesFromDb_whenRedisUnavailable() {
+        RuntimeException redisDown = new RuntimeException("Redis timeout");
+        RecommendationSong seed = buildSong(5L, "jazz");
+        seed.setTempo(110.0);
+        when(songRepo.findById(5L)).thenReturn(Optional.of(seed));
+        when(songRepo.findSimilar(eq("jazz"), eq(110.0), eq(20.0), eq(5L), any(Pageable.class)))
+                .thenReturn(List.of(buildSong(6L, "jazz")));
+
+        SimilarSongsResponse response = service.getSimilarSongsFallback(5L, redisDown);
+
+        assertThat(response).isNotNull();
+        assertThat(response.songs()).isNotEmpty();
+        assertThat(response.seedSongId()).isEqualTo(5L);
+        verifyNoInteractions(redisTemplate);
     }
 
     // ── Similar Songs ─────────────────────────────────────────────────────────

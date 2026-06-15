@@ -4,12 +4,17 @@ import { sleep, check } from 'k6';
 const BASE_URL = __ENV.NGINX_LB_URL || 'http://nginx-lb:80';
 const scenario = __ENV.K6_SCENARIO || 'full';
 
+// K6_RAMP_TARGET controls the VU ceiling for the 'ramp' (Phase 4) scenario.
+// Default 1000. Requires Profile D deployment (all replicas, nginx-lb, 12-partition Kafka).
+const rampTarget = parseInt(__ENV.K6_RAMP_TARGET || '1000');
+
 const thresholds = {
   http_req_duration: ['p(95)<2000', 'p(99)<5000'],
   http_req_failed: ['rate<0.05'],
 };
 
 const scenarioConfigs = {
+  // Phase B — smoke: verify basic connectivity and JWT flow (5 VUs, 2 min)
   smoke: {
     thresholds,
     scenarios: {
@@ -20,6 +25,7 @@ const scenarioConfigs = {
       },
     },
   },
+  // Phase 2 — streaming: auth + catalog + search + stream hot path (50 VUs, 5 min)
   streaming: {
     thresholds,
     scenarios: {
@@ -30,6 +36,7 @@ const scenarioConfigs = {
       },
     },
   },
+  // Phase 3 — full user journey: all 8 flows (configurable via K6_VUS / K6_DURATION)
   full: {
     thresholds,
     scenarios: {
@@ -40,24 +47,56 @@ const scenarioConfigs = {
       },
     },
   },
-  peak: {
+  // Phase 3 — burst: previously 'peak'; short 500-VU spike for regression testing
+  burst: {
     thresholds,
     scenarios: {
-      peak: {
+      burst: {
         executor: 'ramping-vus',
         stages: [
           { duration: '5m', target: 500 },
-          { duration: '10m', target: 500 },
+          { duration: '5m', target: 500 },
           { duration: '5m', target: 0 },
         ],
       },
     },
   },
+  // Phase 4 — ramp: sustained 1000-VU load ramp for scaling evidence.
+  // PREREQUISITE: Profile D must be active (all replicas, nginx-lb, 3-broker Kafka,
+  // 12-partition playback-events). Do not run against a Profile A/B deployment.
+  ramp: {
+    thresholds,
+    scenarios: {
+      ramp: {
+        executor: 'ramping-vus',
+        stages: [
+          { duration: '5m',  target: rampTarget },
+          { duration: '10m', target: rampTarget },
+          { duration: '5m',  target: 0 },
+        ],
+      },
+    },
+  },
+  // Phase 6 — soak: 2000-VU constant load for 2 hours (memory leak + GC drift detection).
+  // PREREQUISITE: Profile D, ≥32 GB host RAM. Run once; tear down stack after.
+  soak: {
+    thresholds: {
+      http_req_duration: ['p(95)<3000', 'p(99)<8000'],
+      http_req_failed: ['rate<0.05'],
+    },
+    scenarios: {
+      soak: {
+        executor: 'constant-vus',
+        vus: 2000,
+        duration: '120m',
+      },
+    },
+  },
 };
 
-export const options = scenarioConfigs[scenario];
+export const options = scenarioConfigs[scenario] || scenarioConfigs['full'];
 
-// --- Auth helpers ---
+// ── Auth helpers ──────────────────────────────────────────────────────────────
 
 function register(username, email, password) {
   return http.post(
@@ -79,13 +118,13 @@ function authHeaders(token) {
   return { headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' } };
 }
 
-// --- Flow helpers ---
+// ── Flow helpers ──────────────────────────────────────────────────────────────
 
 function catalogFlow(token) {
   const catalogRes = http.get(`${BASE_URL}/catalog/songs?page=0&size=20`, authHeaders(token));
   check(catalogRes, { 'catalog songs 200': (r) => r.status === 200 });
 
-  let songId = 'song-1';
+  let songId = '1';
   try {
     const body = JSON.parse(catalogRes.body);
     const songs = body.content || body.songs || body;
@@ -154,14 +193,13 @@ function analyticsFlow(token) {
   check(recRes, { 'recommendations 200': (r) => r.status === 200 });
 }
 
-// --- Default function ---
+// ── Default function ──────────────────────────────────────────────────────────
 
 export default function () {
   const username = `vu-${__VU}-${__ITER}-${Date.now()}`;
   const email = `${username}@test.com`;
   const password = 'Password123!';
 
-  // Registration
   const regRes = register(username, email, password);
   check(regRes, { 'register 200/409': (r) => r.status === 200 || r.status === 409 });
 
@@ -173,7 +211,6 @@ export default function () {
     } catch (_) {}
   }
 
-  // If registration conflicted or token missing, fall back to login
   if (!token) {
     const loginRes = login(username, password);
     check(loginRes, { 'login 200': (r) => r.status === 200 });
@@ -201,12 +238,12 @@ export default function () {
 
   if (scenario === 'streaming') return;
 
-  // Playlist ops (full + peak)
+  // Playlist ops (full, burst, ramp, soak)
   playlistFlow(token, songId);
 
   sleep(1);
 
-  // Analytics + recommendations (full + peak)
+  // Analytics + recommendations (full, burst, ramp, soak)
   analyticsFlow(token);
 
   sleep(1);

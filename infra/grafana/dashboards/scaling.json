@@ -1,21 +1,38 @@
 {
-  "title": "Music Streaming — Scaling Metrics",
+  "title": "Music Streaming \u2014 Scaling Metrics",
   "uid": "music-streaming-scaling",
   "schemaVersion": 39,
-  "tags": ["music-streaming", "scaling"],
+  "tags": [
+    "music-streaming",
+    "scaling"
+  ],
   "refresh": "15s",
-  "time": {"from": "now-1h", "to": "now"},
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
   "timezone": "browser",
   "panels": [
     {
       "id": 1,
       "title": "Request Rate per Service",
       "type": "timeseries",
-      "gridPos": {"x": 0, "y": 0, "w": 12, "h": 8},
-      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
       "targets": [
         {
-          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
           "expr": "sum(rate(http_server_requests_seconds_count{uri!~\".*actuator.*\"}[1m])) by (job)",
           "legendFormat": "{{job}}",
           "refId": "A"
@@ -28,7 +45,10 @@
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              {"color": "green", "value": null}
+              {
+                "color": "green",
+                "value": null
+              }
             ]
           }
         },
@@ -39,11 +59,22 @@
       "id": 2,
       "title": "HTTP Error Rate per Service",
       "type": "timeseries",
-      "gridPos": {"x": 12, "y": 0, "w": 12, "h": 8},
-      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "gridPos": {
+        "x": 12,
+        "y": 0,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
       "targets": [
         {
-          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
           "expr": "sum(rate(http_server_requests_seconds_count{uri!~\".*actuator.*\",status=~\"5..\"}[1m])) by (job)",
           "legendFormat": "{{job}}",
           "refId": "A"
@@ -56,8 +87,14 @@
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              {"color": "green", "value": null},
-              {"color": "red", "value": 1}
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
             ]
           }
         },
@@ -68,11 +105,22 @@
       "id": 3,
       "title": "p99 Latency per Service (ms)",
       "type": "timeseries",
-      "gridPos": {"x": 0, "y": 8, "w": 12, "h": 8},
-      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "gridPos": {
+        "x": 0,
+        "y": 8,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
       "targets": [
         {
-          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
           "expr": "histogram_quantile(0.99, sum(rate(http_server_requests_seconds_bucket{uri!~\".*actuator.*\"}[1m])) by (le, job)) * 1000",
           "legendFormat": "{{job}}",
           "refId": "A"
@@ -85,9 +133,18 @@
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              {"color": "green", "value": null},
-              {"color": "yellow", "value": 500},
-              {"color": "red", "value": 1000}
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 500
+              },
+              {
+                "color": "red",
+                "value": 1000
+              }
             ]
           }
         },
@@ -98,11 +155,22 @@
       "id": 4,
       "title": "p95 Latency per Service (ms)",
       "type": "timeseries",
-      "gridPos": {"x": 12, "y": 8, "w": 12, "h": 8},
-      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "gridPos": {
+        "x": 12,
+        "y": 8,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
       "targets": [
         {
-          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
           "expr": "histogram_quantile(0.95, sum(rate(http_server_requests_seconds_bucket{uri!~\".*actuator.*\"}[1m])) by (le, job)) * 1000",
           "legendFormat": "{{job}}",
           "refId": "A"
@@ -115,9 +183,18 @@
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              {"color": "green", "value": null},
-              {"color": "yellow", "value": 300},
-              {"color": "red", "value": 800}
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 300
+              },
+              {
+                "color": "red",
+                "value": 800
+              }
             ]
           }
         },
@@ -128,11 +205,22 @@
       "id": 5,
       "title": "JVM Heap Usage % per Service",
       "type": "timeseries",
-      "gridPos": {"x": 0, "y": 16, "w": 12, "h": 8},
-      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "gridPos": {
+        "x": 0,
+        "y": 16,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
       "targets": [
         {
-          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
           "expr": "jvm_memory_used_bytes{area=\"heap\"} / jvm_memory_max_bytes{area=\"heap\"} * 100",
           "legendFormat": "{{job}} {{instance}}",
           "refId": "A"
@@ -147,9 +235,18 @@
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              {"color": "green", "value": null},
-              {"color": "yellow", "value": 70},
-              {"color": "red", "value": 90}
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 70
+              },
+              {
+                "color": "red",
+                "value": 90
+              }
             ]
           }
         },
@@ -160,11 +257,22 @@
       "id": 6,
       "title": "CPU Usage per Service",
       "type": "timeseries",
-      "gridPos": {"x": 12, "y": 16, "w": 12, "h": 8},
-      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "gridPos": {
+        "x": 12,
+        "y": 16,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
       "targets": [
         {
-          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
           "expr": "process_cpu_usage * 100",
           "legendFormat": "{{job}} {{instance}}",
           "refId": "A"
@@ -179,9 +287,18 @@
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              {"color": "green", "value": null},
-              {"color": "yellow", "value": 70},
-              {"color": "red", "value": 90}
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 70
+              },
+              {
+                "color": "red",
+                "value": 90
+              }
             ]
           }
         },
@@ -192,11 +309,22 @@
       "id": 7,
       "title": "HikariCP Active Connections",
       "type": "timeseries",
-      "gridPos": {"x": 0, "y": 24, "w": 12, "h": 8},
-      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "gridPos": {
+        "x": 0,
+        "y": 24,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
       "targets": [
         {
-          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
           "expr": "hikaricp_connections_active",
           "legendFormat": "{{job}} {{instance}}",
           "refId": "A"
@@ -209,7 +337,10 @@
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              {"color": "green", "value": null}
+              {
+                "color": "green",
+                "value": null
+              }
             ]
           }
         },
@@ -220,11 +351,22 @@
       "id": 8,
       "title": "HikariCP Pool Saturation %",
       "type": "timeseries",
-      "gridPos": {"x": 12, "y": 24, "w": 12, "h": 8},
-      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "gridPos": {
+        "x": 12,
+        "y": 24,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
       "targets": [
         {
-          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
           "expr": "hikaricp_connections_active / hikaricp_connections_max * 100",
           "legendFormat": "{{job}} {{instance}}",
           "refId": "A"
@@ -239,8 +381,14 @@
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              {"color": "green", "value": null},
-              {"color": "red", "value": 80}
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
             ]
           }
         },
@@ -249,13 +397,24 @@
     },
     {
       "id": 9,
-      "title": "Kafka Consumer Lag — analytics-service",
+      "title": "Kafka Consumer Lag \u2014 analytics-service",
       "type": "timeseries",
-      "gridPos": {"x": 0, "y": 32, "w": 12, "h": 8},
-      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "gridPos": {
+        "x": 0,
+        "y": 32,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
       "targets": [
         {
-          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
           "expr": "kafka_consumergroup_lag{consumergroup=\"analytics-service\"}",
           "legendFormat": "partition {{partition}}",
           "refId": "A"
@@ -268,9 +427,18 @@
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              {"color": "green", "value": null},
-              {"color": "yellow", "value": 1000},
-              {"color": "red", "value": 10000}
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 1000
+              },
+              {
+                "color": "red",
+                "value": 10000
+              }
             ]
           }
         },
@@ -279,19 +447,33 @@
     },
     {
       "id": 10,
-      "title": "Kafka Consumer Lag — recommendation-service & notification-service",
+      "title": "Kafka Consumer Lag \u2014 recommendation-service & notification-service",
       "type": "timeseries",
-      "gridPos": {"x": 12, "y": 32, "w": 12, "h": 8},
-      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "gridPos": {
+        "x": 12,
+        "y": 32,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
       "targets": [
         {
-          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
           "expr": "kafka_consumergroup_lag{consumergroup=\"recommendation-service\"}",
           "legendFormat": "rec {{partition}}",
           "refId": "A"
         },
         {
-          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
           "expr": "kafka_consumergroup_lag{consumergroup=\"notification-service\"}",
           "legendFormat": "notif {{partition}}",
           "refId": "B"
@@ -304,9 +486,18 @@
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              {"color": "green", "value": null},
-              {"color": "yellow", "value": 1000},
-              {"color": "red", "value": 10000}
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 1000
+              },
+              {
+                "color": "red",
+                "value": 10000
+              }
             ]
           }
         },
@@ -317,11 +508,22 @@
       "id": 11,
       "title": "Redis Cache Hit Rate %",
       "type": "gauge",
-      "gridPos": {"x": 0, "y": 40, "w": 6, "h": 8},
-      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "gridPos": {
+        "x": 0,
+        "y": 40,
+        "w": 6,
+        "h": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
       "targets": [
         {
-          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
           "expr": "rate(redis_keyspace_hits_total[1m]) / (rate(redis_keyspace_hits_total[1m]) + rate(redis_keyspace_misses_total[1m])) * 100",
           "legendFormat": "Hit Rate",
           "refId": "A"
@@ -329,7 +531,9 @@
       ],
       "options": {
         "reduceOptions": {
-          "calcs": ["lastNotNull"]
+          "calcs": [
+            "lastNotNull"
+          ]
         },
         "orientation": "auto",
         "showThresholdLabels": false,
@@ -343,9 +547,18 @@
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              {"color": "red", "value": null},
-              {"color": "yellow", "value": 50},
-              {"color": "green", "value": 80}
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 50
+              },
+              {
+                "color": "green",
+                "value": 80
+              }
             ]
           }
         },
@@ -356,11 +569,22 @@
       "id": 12,
       "title": "Redis Memory Used",
       "type": "gauge",
-      "gridPos": {"x": 6, "y": 40, "w": 6, "h": 8},
-      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "gridPos": {
+        "x": 6,
+        "y": 40,
+        "w": 6,
+        "h": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
       "targets": [
         {
-          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
           "expr": "redis_memory_used_bytes",
           "legendFormat": "Memory Used",
           "refId": "A"
@@ -368,7 +592,9 @@
       ],
       "options": {
         "reduceOptions": {
-          "calcs": ["lastNotNull"]
+          "calcs": [
+            "lastNotNull"
+          ]
         },
         "orientation": "auto",
         "showThresholdLabels": false,
@@ -380,9 +606,18 @@
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              {"color": "green", "value": null},
-              {"color": "yellow", "value": 536870912},
-              {"color": "red", "value": 1073741824}
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 536870912
+              },
+              {
+                "color": "red",
+                "value": 1073741824
+              }
             ]
           }
         },
@@ -393,19 +628,32 @@
       "id": 13,
       "title": "OpenSearch JVM Heap %",
       "type": "gauge",
-      "gridPos": {"x": 12, "y": 40, "w": 6, "h": 8},
-      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "gridPos": {
+        "x": 12,
+        "y": 40,
+        "w": 6,
+        "h": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
       "targets": [
         {
-          "datasource": {"type": "prometheus", "uid": "prometheus"},
-          "expr": "opensearch_jvm_mem_heap_used_in_bytes / opensearch_jvm_mem_heap_max_in_bytes * 100",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "elasticsearch_jvm_memory_used_bytes{area=\"heap\"} / elasticsearch_jvm_memory_max_bytes{area=\"heap\"} * 100",
           "legendFormat": "Heap %",
           "refId": "A"
         }
       ],
       "options": {
         "reduceOptions": {
-          "calcs": ["lastNotNull"]
+          "calcs": [
+            "lastNotNull"
+          ]
         },
         "orientation": "auto",
         "showThresholdLabels": false,
@@ -419,8 +667,14 @@
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              {"color": "green", "value": null},
-              {"color": "red", "value": 75}
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 75
+              }
             ]
           }
         },
@@ -431,11 +685,22 @@
       "id": 14,
       "title": "ClickHouse p99 Query Latency (ms)",
       "type": "timeseries",
-      "gridPos": {"x": 18, "y": 40, "w": 6, "h": 8},
-      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "gridPos": {
+        "x": 18,
+        "y": 40,
+        "w": 6,
+        "h": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
       "targets": [
         {
-          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
           "expr": "ClickHouseProfileEvents_DiskReadElapsedMicroseconds",
           "legendFormat": "ClickHouse disk read",
           "refId": "A"
@@ -448,9 +713,18 @@
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              {"color": "green", "value": null},
-              {"color": "yellow", "value": 100},
-              {"color": "red", "value": 500}
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 100
+              },
+              {
+                "color": "red",
+                "value": 500
+              }
             ]
           }
         },

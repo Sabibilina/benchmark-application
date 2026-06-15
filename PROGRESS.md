@@ -369,55 +369,94 @@ Services are built **one at a time** in the order below. Each service goes throu
 
 ## Phase 10 — Monitoring, Load Generator & Integration
 
+### Session 9 Planning Step
+- [x] **Step 1 — Plan**: Monitoring and load-generation stack confirmed; file tree produced; all gaps identified; cost analysis completed; integration fixes specified; validation steps defined. See `DESIGN-DECISIONS.md` (DD-001 through DD-009) and `COST-AWARE-DECISIONS.md` (CD-021 through CD-027).
+
+### Session 9 Generation Step
+- [x] **Step 2 — Generate**: All files generated per plan. See generation decisions in `DESIGN-DECISIONS.md` (DD-001 through DD-009). All validations below passed.
+
+### Session 9 Validation Step
+- [x] `docker compose config --quiet` — PASS (default profile)
+- [x] `docker compose --profile load-test config --quiet` — PASS
+- [x] `docker compose config --services` — `opensearch-exporter` confirmed present (30 services total)
+- [x] `infra/grafana/dashboards/overview.json` — PASS, 8 panels, valid JSON
+- [x] `infra/grafana/dashboards/scaling.json` — PASS, 14 panels; **BUG FOUND & FIXED** panel 13 (OpenSearch heap) used `opensearch_jvm_*` metric names but `elasticsearch_exporter` emits `elasticsearch_jvm_memory_*` names; corrected to `elasticsearch_jvm_memory_used_bytes{area="heap"} / elasticsearch_jvm_memory_max_bytes{area="heap"} * 100`
+- [x] `infra/grafana/provisioning/datasources/prometheus.yml` — `uid: prometheus` confirmed present
+- [x] `infra/prometheus/prometheus.yml` — `opensearch` scrape job confirmed (targets: `opensearch-exporter:9114`)
+- [x] `streaming-service/application.yml` — `retries: 3`, `retry.backoff.ms: 1000`, `max.in.flight.requests.per.connection: 1` confirmed
+- [x] `playlist-service/application.yml` — same Kafka retry properties confirmed
+- [x] `recommendation-service/application.yml` — `resilience4j.circuitbreaker.instances.redis` config confirmed; `RESILIENCE4J_REDIS_FAILURE_RATE` and `RESILIENCE4J_REDIS_WAIT_DURATION` **added to docker-compose.yml** recommendation-service environment block (missing — now exposed as tunable env vars)
+- [x] `RecommendationService.java` — `@CircuitBreaker(name = "redis", ...)` on `getDailyMix` and `getSimilarSongs` confirmed
+- [x] `RecommendationServiceTest.java` — 3 new fallback tests added (9 tests total, up from 6); **FIXED**: `@BeforeEach` changed to `lenient().when(redisTemplate.opsForValue())` to prevent `UnnecessaryStubbing` in fallback tests; Mockito compatibility: `mockito-extensions/org.mockito.plugins.MockMaker` file added to switch from inline to subclass mock maker (required for Spring Data Redis classes on Java 26); surefire `--add-opens` argLine added to pom.xml; **ALL 9 TESTS PASS**
+- [x] `catalog-service V2__add_songs_indexes.sql` — `idx_songs_title` and `idx_songs_genre_title` confirmed
+- [x] `load-generator/scripts/main.js` — 6 scenarios: smoke, streaming, full, burst, ramp, soak
+- [x] `load-generator/scripts/phase5-peak.js` — Phase 5 isolated script created
+- [x] `load-generator/.env.example` — stale per-service URLs removed; `NGINX_LB_URL` added; all 6 scenarios documented
+- [x] `scripts/verify-integration.sh` — created, executable, 7-step system verification
+
+### Audit findings that changed the plan (documented in DESIGN-DECISIONS.md):
+- **auth-service V2 NOT generated**: V1 `UNIQUE NOT NULL` constraint on `username` and `email` creates implicit unique indexes. Adding named duplicates would create redundant indexes (+storage, +write overhead). V2 omitted.
+- **recommendation-service V3 NOT generated**: V2 already has `idx_play_events_user (user_id, occurred_at DESC)` which covers the hotspot query exactly. V3 omitted.
+- **top-tracks panel**: analytics-service emits no `playback_event_total` Micrometer counter. Panel 7 is a text placeholder explaining how to enable it. S-03 traffic/latency/error-rate/health panels (1–4, 5, 6, 8) are fully operational.
+
 ### Monitoring
-- [ ] Prometheus configured to scrape all 8 services
-- [ ] If implemented, Grafana dashboard is configured with panels for traffic, latency, error rate, and top tracks (S-03)
-- [ ] All services expose metrics suitable for Prometheus scraping
+- [x] Prometheus configured to scrape all 8 services (DNS SD)
+- [x] All services expose metrics suitable for Prometheus scraping (actuator/prometheus on all 8)
+- [x] Grafana dashboard configured with panels for traffic, latency, error rate, service health (S-03 partial — top-tracks placeholder pending analytics-service counter)
+- [x] `scaling.json` dashboard: 14 panels (no regressions)
+- [x] OpenSearch Prometheus exporter added (`opensearch-exporter` service + prometheus.yml scrape job)
+- [x] Grafana datasource UID fix: `uid: prometheus` added to provisioning datasources
 
 ### Load Generator
-- [ ] Covers: registration, login, catalog browsing, search, streaming requests, playlist operations, and history queries (M-21)
-- [ ] Load generator starts as a service in `docker-compose.yml`
-- [ ] Workload definition is documented
+- [x] Covers: registration, login, catalog browsing, search, streaming requests, playlist operations, and history queries (M-21)
+- [x] Load generator starts as a service in `docker-compose.yml` (profiles: load-test)
+- [x] 6 documented scenarios: smoke, streaming, full, burst, ramp (Phase 4), soak (Phase 6)
+- [x] Phase 4 ramp scenario: 0→K6_RAMP_TARGET (default 1000) VUs, 20 min total
+- [x] Phase 5 in separate file `load-generator/scripts/phase5-peak.js` (10K VUs, 30 min, isolated)
+- [x] `load-generator/.env.example` updated: NGINX_LB_URL added; stale per-service URLs removed
 
 ### Integration Fixes
-- [ ] Inter-service HTTP calls implement retry with exponential backoff (M-22)
-- [ ] Inter-service HTTP calls implement circuit breaker or equivalent failure isolation (M-23)
-- [ ] All 8 services communicate over the shared named Docker network (M-18)
-- [ ] CPU and memory limits are configurable per service in `docker-compose.yml` (M-20)
+- [x] Kafka producer retry config (M-22): `retries: 3`, `retry.backoff.ms: 1000`, `max.in.flight.requests.per.connection: 1` in `streaming-service` and `playlist-service` application.yml
+- [x] M-22 / M-23 architectural satisfaction documented: no inter-service HTTP calls exist (code audit confirmed)
+- [x] Resilience4j `@CircuitBreaker(name = "redis")` on Redis path in `recommendation-service` (M-23)
+- [x] All 8 services communicate over shared `music-net` network (M-18)
+- [x] CPU and memory limits configurable per service (M-20)
+- [x] Flyway V2 migration: `catalog-service` `idx_songs_title` + `idx_songs_genre_title` added
 
 ### System Verification Deliverable
-- [ ] Automated integration tests show that the services run correctly together in the shared deployment environment
-- [ ] End-to-end tests cover the main application flows across service boundaries
-- [ ] Cross-service authentication, persistence, and messaging behavior are validated in the integrated system
-- [ ] Test evidence is documented and included in the final delivery
+- [x] `scripts/verify-integration.sh` — 7-step automated integration check (prerequisites, health, JWT cross-service, Kafka pipeline, k6 smoke, Prometheus targets, Grafana health)
+- [x] Cross-service JWT validation assertion (auth-service → catalog-service)
+- [x] Kafka event pipeline assertion (streaming-service → analytics-service history)
+- [x] 401 enforcement check (M-25)
+- [ ] Full test run validation (requires running compose stack — execute `bash scripts/verify-integration.sh`)
 
 ---
 
 ## Final Delivery Checklist
 
 ### Architecture
-- [ ] Each application service that persists state uses its own dedicated persistence layer (M-26)
-- [ ] All protected endpoints require JWT; only `/auth/register` and `/auth/login` are public (M-25)
+- [x] Each application service that persists state uses its own dedicated persistence layer (M-26) — confirmed: auth/catalog/playlist/recommendation→PostgreSQL, search→OpenSearch, analytics→ClickHouse, notification→MongoDB, streaming→stateless
+- [x] All protected endpoints require JWT; only `/auth/register` and `/auth/login` are public (M-25) — validated in cost-aware scalability review (k6 bug fix: catalog required auth) and verify-integration.sh step 3
 
 ### Artifacts
-- [ ] `docker-compose.yml` starts all 8 application services and the required infrastructure
-- [ ] Source code complete and runnable for all 8 services and the frontend (no pseudocode or placeholders)
-- [ ] Dockerfiles present and building for all 8 services and the frontend
-- [ ] `.env.example` present and complete for all 8 services and the frontend
-- [ ] Database schemas / migrations present for all services with persistence
-- [ ] Catalog CSV seed script included and runs automatically at startup
-- [ ] Prometheus config file included
-- [ ] Grafana dashboard config included if Grafana dashboards are implemented
-- [ ] Load generator script and workload definition included
+- [x] `docker-compose.yml` starts all 8 application services and the required infrastructure — 30 services, validated with `docker compose config --quiet`
+- [~] Source code complete and runnable for all 8 services and the frontend — **8 backend services: complete. Frontend: not implemented** (deliberately removed; see git history)
+- [x] Dockerfiles present and building for all 8 services — confirmed for all 8
+- [x] `.env.example` present and complete for all 8 services — confirmed for all 8; top-level `.env.example` with all 150+ variables
+- [x] Database schemas / migrations present for all services with persistence — Flyway V1/V2 for auth/catalog/playlist/recommendation; ClickHouse schema initialised by `SchemaInitializer.java`; OpenSearch index created by seed on startup; MongoDB is schema-less
+- [x] Catalog CSV seed script included and runs automatically at startup — `services/catalog-service/src/main/resources/data/songs.csv` + seed package; also present in recommendation-service and search-service
+- [x] Prometheus config file included — `infra/prometheus/prometheus.yml` (17 scrape jobs, DNS SD for all 8 app services)
+- [x] Grafana dashboard config included — `infra/grafana/dashboards/overview.json` (8 panels), `infra/grafana/dashboards/scaling.json` (14 panels); auto-provisioned datasource
+- [x] Load generator script and workload definition included — `load-generator/scripts/main.js` (6 scenarios), `load-generator/scripts/phase5-peak.js`, `load-generator/.env.example`
 
 ### Documentation
-- [ ] Top-level README with setup, run, validation, and testing instructions
+- [x] Top-level README with setup, run, validation, and testing instructions — rewritten (Session 9 validation); covers prerequisites, quick start, RSA key generation, endpoints, load generator scenarios, runtime profiles, test instructions, project structure, teardown
 
 ### Testing Deliverables
-- [ ] All backend unit tests pass
-- [ ] All backend integration tests pass
-- [ ] Frontend automated tests pass
-- [ ] Integrated system tests show that the services run correctly together
+- [x] All backend unit tests pass — **191 tests across 8 services, 0 failures**: auth-service 11, catalog-service 27, streaming-service 24, playlist-service 44, search-service 23, analytics-service 34, recommendation-service 9, notification-service 19. Java 26 Mockito inline mock incompatibility fixed by adding `org.mockito.plugins.MockMaker` (`ByteBuddyMockMaker`) to `src/test/resources/mockito-extensions/` in all affected services.
+- [x] All backend integration tests pass — included in the 191 total above (playlist `PlaylistControllerIT` 22 tests, notification `NotificationControllerIT` 6 tests, analytics `BatchEventBufferTest`/`AnalyticsServiceTest` included in analytics-service total)
+- [~] Frontend automated tests pass — **Not applicable: frontend not implemented**
+- [ ] Integrated system tests show that the services run correctly together — `scripts/verify-integration.sh` created and ready; requires a running Docker stack to execute (`bash scripts/verify-integration.sh`)
 - [ ] End-to-end test results are documented
 
 ### Minimum Completion Criteria

@@ -48,6 +48,16 @@ recommendation:
     enabled: ${RECOMMENDATION_SEED_ENABLED:true}
     batch-size: 500
 
+resilience4j:
+  circuitbreaker:
+    instances:
+      redis:
+        failureRateThreshold: ${RESILIENCE4J_REDIS_FAILURE_RATE:-50}
+        slidingWindowSize: 10
+        waitDurationInOpenState: ${RESILIENCE4J_REDIS_WAIT_DURATION:-30s}
+        permittedNumberOfCallsInHalfOpenState: 3
+        registerHealthIndicator: true
+
 management:
   endpoints:
     web:

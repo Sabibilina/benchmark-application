@@ -7,6 +7,7 @@ import com.musicstreaming.recommendation.dto.SongRecommendation;
 import com.musicstreaming.recommendation.model.RecommendationSong;
 import com.musicstreaming.recommendation.repository.PlayEventRepository;
 import com.musicstreaming.recommendation.repository.RecommendationSongRepository;
+import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -56,19 +57,19 @@ public class RecommendationService {
         this.cacheTtlSeconds = cacheTtlSeconds;
     }
 
+    @CircuitBreaker(name = "redis", fallbackMethod = "getDailyMixFallback")
     public DailyMixResponse getDailyMix(String userId) {
         String cacheKey = "daily-mix:" + userId;
-        try {
-            String cached = redisTemplate.opsForValue().get(cacheKey);
-            if (cached != null) {
+        // Intentionally no try-catch on get: exceptions propagate to the circuit breaker.
+        String cached = redisTemplate.opsForValue().get(cacheKey);
+        if (cached != null) {
+            try {
                 return objectMapper.readValue(cached, DailyMixResponse.class);
+            } catch (Exception e) {
+                log.warn("Cache deserialize failed for {}: {}", cacheKey, e.getMessage());
             }
-        } catch (Exception e) {
-            log.warn("Redis read failed for {}: {}", cacheKey, e.getMessage());
         }
-
         DailyMixResponse response = computeDailyMix(userId);
-
         try {
             redisTemplate.opsForValue().set(cacheKey,
                     objectMapper.writeValueAsString(response),
@@ -76,23 +77,26 @@ public class RecommendationService {
         } catch (Exception e) {
             log.warn("Redis write failed for {}: {}", cacheKey, e.getMessage());
         }
-
         return response;
     }
 
+    public DailyMixResponse getDailyMixFallback(String userId, Throwable cause) {
+        log.warn("Redis circuit open for daily-mix:{} — computing directly. Cause: {}", userId, cause.getMessage());
+        return computeDailyMix(userId);
+    }
+
+    @CircuitBreaker(name = "redis", fallbackMethod = "getSimilarSongsFallback")
     public SimilarSongsResponse getSimilarSongs(Long songId) {
         String cacheKey = "similar:" + songId;
-        try {
-            String cached = redisTemplate.opsForValue().get(cacheKey);
-            if (cached != null) {
+        String cached = redisTemplate.opsForValue().get(cacheKey);
+        if (cached != null) {
+            try {
                 return objectMapper.readValue(cached, SimilarSongsResponse.class);
+            } catch (Exception e) {
+                log.warn("Cache deserialize failed for {}: {}", cacheKey, e.getMessage());
             }
-        } catch (Exception e) {
-            log.warn("Redis read failed for {}: {}", cacheKey, e.getMessage());
         }
-
         SimilarSongsResponse response = computeSimilarSongs(songId);
-
         try {
             redisTemplate.opsForValue().set(cacheKey,
                     objectMapper.writeValueAsString(response),
@@ -100,8 +104,12 @@ public class RecommendationService {
         } catch (Exception e) {
             log.warn("Redis write failed for {}: {}", cacheKey, e.getMessage());
         }
-
         return response;
+    }
+
+    public SimilarSongsResponse getSimilarSongsFallback(Long songId, Throwable cause) {
+        log.warn("Redis circuit open for similar:{} — computing directly. Cause: {}", songId, cause.getMessage());
+        return computeSimilarSongs(songId);
     }
 
     private DailyMixResponse computeDailyMix(String userId) {

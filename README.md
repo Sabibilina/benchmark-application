@@ -1,221 +1,239 @@
 # benchmark-application
 
-Cloud-native music streaming benchmark application for cost-aware IaC research.
+Cloud-native music streaming benchmark for cost-aware infrastructure research.
 
-## What this application is
-
-A cloud-native music streaming system implemented as eight independent microservices. Services cover user authentication, song catalog management, simulated streaming, playlist operations, full-text search, analytics, recommendations, and notifications. The architecture emphasises database-per-service isolation, a shared Kafka event bus, and a Prometheus/Grafana monitoring stack — all deployable with a single `docker compose up`.
+Eight Spring Boot microservices on Docker Compose. All traffic routes through an nginx load balancer. Prometheus + Grafana collect and visualise metrics. A k6 load generator reproduces six workload phases from smoke to 2000-VU soak.
 
 ---
 
-## Architecture overview
+## Architecture
 
-| Service | Technology | Persistence | Port |
-|---|---|---|---|
-| auth-service | Java 21 / Spring Boot 3 | PostgreSQL | 8081 |
-| catalog-service | Java 21 / Spring Boot 3 | PostgreSQL | 8082 |
-| streaming-service | Java 21 / Spring Boot 3 | Stateless | 8083 |
-| playlist-service | Java 21 / Spring Boot 3 | PostgreSQL | 8084 |
-| search-service | Java 21 / Spring Boot 3 | OpenSearch | 8085 |
-| analytics-service | Java 21 / Spring Boot 3 | ClickHouse | 8086 |
-| recommendation-service | Java 21 / Spring Boot 3 | PostgreSQL + Redis | 8087 |
-| notification-service | Java 21 / Spring Boot 3 | MongoDB | 8088 |
-| frontend | React + TypeScript (Vite) | — | 3000 |
+| Service | Persistence | Responsibility |
+|---|---|---|
+| auth-service | PostgreSQL | JWT issuance (RSA-256), registration, login |
+| catalog-service | PostgreSQL + OpenSearch | Song catalog, CSV seed, full-text indexing |
+| streaming-service | Stateless | HLS manifest simulation, publishes `playback-events` to Kafka |
+| playlist-service | PostgreSQL | Playlist CRUD, track reorder, publishes `playlist-events` to Kafka |
+| search-service | OpenSearch | Full-text search, genre/BPM/year filters |
+| analytics-service | ClickHouse | Consumes `playback-events`, batch insert, listening history, global charts |
+| recommendation-service | PostgreSQL + Redis | Daily mix, similar songs, Redis cache with Resilience4j circuit breaker |
+| notification-service | MongoDB | Consumes `playlist-events`, in-app notification inbox |
 
-**Shared infrastructure:** Apache Kafka (+ Zookeeper), Prometheus, Grafana.
+**Shared infrastructure:** nginx-lb (load balancer), Apache Kafka + Zookeeper, Prometheus v2.51.2, Grafana 10.4.2, PostgreSQL ×4, OpenSearch 2.13, ClickHouse 24.3, Redis 7.2, MongoDB 7.0.
 
-All containers share the named Docker network `music-net`.
+All containers share the `music-net` Docker bridge network. Application services have no exposed host ports — all requests go through nginx-lb on port 80.
 
 ---
 
 ## Prerequisites
 
-- Docker Engine 24+ with Docker Compose v2 (`docker compose version`)
-- At least 8 GB of free RAM for the full stack
-- Ports listed above plus 2181, 9090, 3001, 9200, 8123, 6379, 27017, 29092 available on the host
+| Requirement | Minimum |
+|---|---|
+| Docker Engine | 24+ |
+| Docker Compose | v2 (`docker compose version`) |
+| Host RAM | 8 GB free (Profile A/B) |
+| Free ports | 80, 2181, 9090, 3001, 5432–5435, 6379, 8123, 9000, 9200, 27017, 29092 |
 
 ---
 
-## Phase 0 — Shared deployment environment (current phase)
-
-Phase 0 scaffolds the full repository and starts all infrastructure containers. Application service images are minimal Spring Boot stubs that respond to `/actuator/health`. Full service business logic is added in Phases 1–9.
+## Quick start
 
 ### 1. Configure the environment
 
 ```bash
 cp .env.example .env
-# Edit .env if you need to change any port or credential
+# Edit .env to change credentials, ports, or resource limits
 ```
 
-### 2. Start infrastructure only (fastest validation)
+For a first run the defaults are sufficient.
+
+### 2. Generate RSA keys (required once)
+
+The eight services share a key pair for JWT signing and verification. Run this before the first `compose up`:
 
 ```bash
-docker compose up -d \
-  zookeeper kafka \
-  auth-db catalog-db playlist-db recommendation-db \
-  opensearch clickhouse redis mongodb \
-  prometheus grafana
+mkdir -p infra/keys
+openssl genrsa -out infra/keys/private.pem 2048
+openssl rsa -in infra/keys/private.pem -pubout -out infra/keys/public.pem
 ```
 
-Wait for all containers to be healthy:
+Keys are bind-mounted into every service container via the `jwt-keys` named volume, which is seeded by auth-service at startup.
 
-```bash
-docker compose ps
-```
-
-### 3. Start the full skeleton (infrastructure + placeholder app services)
+### 3. Start the full stack
 
 ```bash
 docker compose up -d
 ```
 
-This builds the placeholder Spring Boot stubs from source (requires Maven to download dependencies — allow 5–10 minutes on first run) and starts all containers.
+First run downloads images and compiles all eight services (Maven resolves ~400 MB of dependencies). Allow 10–15 minutes. Subsequent starts take under 2 minutes.
 
-### 4. Run the load generator (opt-in)
-
-```bash
-docker compose --profile load-test up load-generator
-```
-
----
-
-## Service endpoints (Phase 0)
-
-| Endpoint | Description |
-|---|---|
-| `http://localhost:808{1-8}/actuator/health` | Spring Boot health for each service |
-| `http://localhost:808{1-8}/actuator/prometheus` | Prometheus metrics for each service |
-| `http://localhost:9090` | Prometheus UI |
-| `http://localhost:3001` | Grafana (admin / admin) |
-| `http://localhost:3000` | Frontend placeholder |
-| `localhost:29092` | Kafka (external / host access) |
-| `http://localhost:9200` | OpenSearch |
-| `http://localhost:8123/ping` | ClickHouse HTTP ping |
-
----
-
-## Phase 0 validation checklist
-
-Run these commands to confirm Phase 0 is working correctly.
+### 4. Wait for all services to be healthy
 
 ```bash
-# 1. Compose file parses without errors
-docker compose config > /dev/null && echo "PASS: compose config valid"
-
-# 2. Named network exists
-docker network inspect music-net --format '{{.Name}}' | grep -q music-net && echo "PASS: music-net exists"
-
-# 3. All infrastructure containers healthy
-docker compose ps --format "table {{.Name}}\t{{.Status}}" | grep -v "unhealthy"
-
-# 4. Prometheus is up
-curl -sf http://localhost:9090/-/healthy && echo "PASS: Prometheus healthy"
-
-# 5. Grafana is up
-curl -sf http://localhost:3001/api/health | grep -q ok && echo "PASS: Grafana healthy"
-
-# 6. Kafka broker reachable from within the network
-docker compose exec kafka kafka-broker-api-versions --bootstrap-server localhost:9092 > /dev/null 2>&1 && echo "PASS: Kafka broker API responding"
-
-# 7. OpenSearch cluster status
-curl -sf http://localhost:9200/_cluster/health | python3 -m json.tool | grep status
-
-# 8. ClickHouse ping
-curl -sf http://localhost:8123/ping && echo "PASS: ClickHouse responding"
-
-# 9. Redis ping
-docker compose exec redis redis-cli ping && echo "PASS: Redis pong"
-
-# 10. MongoDB ping
-docker compose exec mongodb mongosh --username mongouser --password mongopass \
-  --authenticationDatabase admin --eval 'db.runCommand({ping:1})' --quiet
+docker compose ps
 ```
+
+All 8 application containers should show `healthy`. The `init-kafka` one-shot container will show `exited (0)` — that is expected.
+
+### 5. Verify the stack
+
+```bash
+bash scripts/verify-integration.sh --keep-up
+```
+
+This runs a 7-step automated check: prerequisites → service health → JWT cross-service → Kafka event pipeline → k6 smoke run → Prometheus scrape targets → Grafana health. Exits 0 on full pass.
 
 ---
 
-## Environment configuration
+## Endpoints
 
-All tuneable values live in `.env` (copied from `.env.example`). Key variables:
+All application endpoints are reached via nginx-lb on port 80. No direct service ports are exposed.
 
-| Variable | Default | Purpose |
+| Path prefix | Routed to | Auth required |
 |---|---|---|
-| `*_CPU_LIMIT` / `*_MEMORY_LIMIT` | 1.0 / 512m | Per-service resource caps (M-20) |
-| `JWT_EXPIRATION_MS` | 3600000 | JWT lifetime in ms |
-| `STREAM_SEGMENT_SIZE_BYTES` | 65536 | Simulated HLS segment size |
-| `K6_VUS` / `K6_DURATION` | 10 / 60s | Load generator concurrency and duration |
-| `KAFKA_HOST_PORT` | 29092 | External Kafka port on the host |
+| `/auth/register`, `/auth/login` | auth-service | No |
+| `/auth/**` | auth-service | Yes |
+| `/catalog/**` | catalog-service | Yes |
+| `/stream/**` | streaming-service | Yes |
+| `/playlists/**` | playlist-service | Yes |
+| `/search/**` | search-service | Yes |
+| `/analytics/**` | analytics-service | Yes |
+| `/recommendations/**` | recommendation-service | Yes |
+| `/notifications` | notification-service | Yes |
+
+| Monitoring endpoint | Description |
+|---|---|
+| `http://localhost:9090` | Prometheus UI |
+| `http://localhost:3001` | Grafana (`admin` / `admin`) |
+| `http://localhost:9200` | OpenSearch (direct) |
+| `http://localhost:8123/ping` | ClickHouse HTTP ping |
+| `http://localhost:29092` | Kafka external listener |
+
+Grafana ships with two pre-built dashboards:
+- **System Overview** — traffic, error rate, p99 latency, service health, Kafka lag, JVM heap
+- **Scaling Decisions** — HikariCP saturation, Redis hit rate, OpenSearch heap, ClickHouse query latency
+
+---
+
+## Load generator
+
+The k6 load generator is an opt-in compose profile. Six scenarios are available:
+
+| Scenario | VUs | Duration | Purpose |
+|---|---|---|---|
+| `smoke` | 5 | 2 min | Quick stack health check |
+| `streaming` | 50 | 5 min | Hot path only (auth + catalog + stream) |
+| `full` | K6_VUS (default 50) | K6_DURATION (default 5m) | All 8 flows |
+| `burst` | 0→500 | 15 min | Short spike |
+| `ramp` | 0→K6_RAMP_TARGET (default 1000) | 20 min | Phase 4 sustained load |
+| `soak` | 2000 constant | 120 min | Phase 6 memory/GC drift |
+
+```bash
+# Run a specific scenario (all traffic through nginx-lb)
+K6_SCENARIO=smoke docker compose --profile load-test up --abort-on-container-exit load-generator
+
+# Phase 5 (10 000 VUs) is isolated in a separate file — do not run without Profile D hardware
+# k6 run load-generator/scripts/phase5-peak.js
+```
+
+Phase 5 requires ≥ 32 GB host RAM and Profile D replica counts. See `SCALABILITY.md §15`.
+
+---
+
+## Runtime profiles
+
+Four resource profiles are defined in `SCALABILITY.md §2` and controlled by `.env` variables:
+
+| Profile | Replicas | Host RAM | Purpose |
+|---|---|---|---|
+| A — Dev/CI | 1 each | ~8–9 GB | Default; local development and CI smoke tests |
+| B — Smoke | 1 each + 5 VU k6 | ~9 GB | Quick regression gate |
+| C — Calibration | 1 each + 50 VU k6, 10 min | ~10 GB | Baseline measurement |
+| D — Benchmark | 2–10 each | ~20–22 GB | Full thesis load phases |
+
+Switch profiles by editing the replica and resource limit variables in `.env`. Profile D values are documented as comments in `.env.example`.
+
+---
+
+## Running tests
+
+### Unit and integration tests per service
+
+```bash
+cd services/<service-name>
+mvn test
+```
+
+**Note:** Tests require Java 21+. On Java 22+ (including Java 26) the surefire argLine includes `--add-opens` flags and the `ByteBuddyMockMaker` mock maker is configured for services that mock Spring Data classes. If you run tests with a different JDK version, results may differ.
+
+### System verification
+
+```bash
+bash scripts/verify-integration.sh         # starts, tests, tears down
+bash scripts/verify-integration.sh --keep-up  # leaves the stack running
+```
+
+---
+
+## Project structure
+
+```
+benchmark-application/
+├── docker-compose.yml          # Full stack definition (30 services)
+├── .env.example                # All tuneable variables with defaults
+├── infra/
+│   ├── nginx-lb/nginx.conf     # Reverse proxy + rate limiting
+│   ├── prometheus/prometheus.yml
+│   └── grafana/
+│       ├── provisioning/       # Datasource auto-provisioning
+│       └── dashboards/         # overview.json, scaling.json
+├── load-generator/
+│   ├── scripts/main.js         # k6 multi-scenario entrypoint
+│   └── scripts/phase5-peak.js  # Phase 5 (10K VU) — isolated
+├── scripts/
+│   └── verify-integration.sh   # 7-step automated verification
+└── services/
+    ├── auth-service/
+    ├── catalog-service/
+    ├── streaming-service/
+    ├── playlist-service/
+    ├── search-service/
+    ├── analytics-service/
+    ├── recommendation-service/
+    └── notification-service/
+```
 
 ---
 
 ## Tearing down
 
 ```bash
-# Stop and remove containers, networks
+# Stop containers and remove networks
 docker compose down
 
-# Also remove all named volumes (destroys persisted data)
+# Also remove named volumes (destroys all persisted data)
 docker compose down -v
 ```
 
 ---
 
-## Phase 6 — Analytics Service
-
-Consumes `playback-events` from Kafka and stores them in ClickHouse. Exposes two protected endpoints:
-
-| Endpoint | Description |
-|---|---|
-| `GET /analytics/me/history` | Authenticated user's listening history (newest first, capped by `ANALYTICS_HISTORY_LIMIT`) |
-| `GET /analytics/charts/global` | Global top-50 chart ranked by `play.started` event count |
-
-### Running the tests
-
-```bash
-# From the project root — requires Docker socket mounted for ClickHouse Testcontainer
-docker run --rm \
-  -v /var/run/docker.sock:/var/run/docker.sock \
-  -v "$PWD/services/analytics-service":/app \
-  -w /app \
-  -e TESTCONTAINERS_HOST_OVERRIDE=host.docker.internal \
-  maven:3.9-eclipse-temurin-21-alpine \
-  mvn test
-```
-
-### Building the Docker image
-
-```bash
-cd services/analytics-service
-docker build -t analytics-service .
-```
-
-### Configuration
-
-| Variable | Default | Description |
-|---|---|---|
-| `CLICKHOUSE_HOST` | `clickhouse` | ClickHouse hostname |
-| `CLICKHOUSE_HTTP_PORT` | `8123` | ClickHouse HTTP port |
-| `CLICKHOUSE_DB` | `analyticsdb` | Target database |
-| `CLICKHOUSE_USER` | `analyticsuser` | ClickHouse user |
-| `CLICKHOUSE_PASSWORD` | `analyticspass` | ClickHouse password |
-| `KAFKA_TOPIC_PLAYBACK_EVENTS` | `playback-events` | Topic consumed from Streaming Service |
-| `KAFKA_CONSUMER_GROUP_ID` | `analytics-service` | Kafka consumer group |
-| `ANALYTICS_HISTORY_LIMIT` | `100` | Max history entries per response |
-| `JWT_PUBLIC_KEY_PATH` | `/jwt-keys/public.pem` | RSA public key for JWT verification |
-
----
-
 ## Implementation status
 
-| Phase | Scope | Status |
-|---|---|---|
-| 0 | Shared deployment environment + skeleton | **Complete** |
-| 1 | Auth Service | Pending |
-| 2 | Catalog Service | Pending |
-| 3 | Playlist Service | Pending |
-| 4 | Streaming Service | Pending |
-| 5 | Search Service | Pending |
-| 6 | Analytics Service | **Complete** |
-| 7 | Recommendation Service | Pending |
-| 8 | Notification Service | Pending |
-| 9 | Frontend | Pending |
-| 10 | Monitoring, load generator, integration | Pending |
+| Component | Status |
+|---|---|
+| Auth Service | Complete |
+| Catalog Service | Complete |
+| Streaming Service | Complete |
+| Playlist Service | Complete |
+| Search Service | Complete |
+| Analytics Service | Complete |
+| Recommendation Service | Complete |
+| Notification Service | Complete |
+| nginx load balancer | Complete |
+| Prometheus + exporters | Complete |
+| Grafana dashboards | Complete |
+| k6 load generator (6 scenarios) | Complete |
+| System verification script | Complete |
+| Frontend | Not implemented |
+
+See `PROGRESS.md` for the detailed phase-by-phase implementation log, `DESIGN-DECISIONS.md` for ordinary implementation decisions, and `COST-AWARE-DECISIONS.md` for all cloud cost trade-offs.

@@ -21,6 +21,10 @@ spring:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
       acks: all
+      retries: 3
+      properties:
+        retry.backoff.ms: 1000
+        max.in.flight.requests.per.connection: 1
 
 jwt:
   public-key-path: ${JWT_PUBLIC_KEY_PATH:/jwt-keys/public.pem}
