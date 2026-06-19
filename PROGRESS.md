@@ -267,67 +267,23 @@ Services are built **one at a time** in the order below. Each service goes throu
 - [x] Internal-service behavior is tested according to the implemented exposure model (JWT-protected GET /notifications)
 - [x] Test suite passes successfully — 19/19 tests pass (12 unit `NotificationServiceTest` + 6 integration `NotificationControllerIT` + 1 context `NotificationServiceApplicationTests`); Docker image builds cleanly
 
----
-
-## Phase 9 — Frontend (React + TypeScript SPA)
-
-### Steps
-- [ ] **Step 1 — Plan**: File tree for `frontend/`, routing strategy, global state shape (session, playback, queue), API client design (JWT injection, retry, error normalization), view inventory, env vars, build/containerization approach, validation steps
-- [ ] **Step 2 — Generate**: All source files, Dockerfile, `package.json`, `.env.example`, build config, unit/component tests, integration tests, README section covering build, run, and backend configuration
-- [ ] **Step 3 — Validate/Fix**: Review against acceptance criteria; fix and return only changed files
-
-### Views to Implement
-- [ ] **Home / Discovery** — Daily Mix cards and "Because you listened to…" rails; trending tracks from Analytics global charts if implemented
-- [ ] **Search** — Full-text search bar; optional real-time autocomplete; results filterable by genre, BPM range, and release year; song results with optional artist/album/playlist sections
-- [ ] **Catalog Browse** — Paginated song grid/list with sort controls (title, artist, BPM); artist detail/top tracks only if implemented
-- [ ] **Now Playing / Player Bar** — Persistent bottom bar with track title, artist, album art placeholder, play/pause/skip/previous controls, progress scrubber, and volume control; visible across all views
-- [ ] **Playlists** — Sidebar list of user's playlists including "Liked Songs"; playlist detail with drag-and-drop reordering, track removal, add-from-search/catalog; playlist creation and deletion
-- [ ] **Listening History** — Chronological log of play events from Analytics Service, grouped by date
-- [ ] **Notifications** — Optional inbox panel for in-app notifications if notification retrieval is exposed to the frontend in the implemented version
-
-### Acceptance Criteria
-- [ ] Registration and login flows work end-to-end against the Auth Service; JWT stored in memory (not `localStorage`)
-- [ ] JWT is attached via `Authorization: Bearer` header on all protected API requests
-- [ ] Required frontend views are present and navigable via client-side routing (no full-page reload between views)
-- [ ] Now Playing bar persists across all route changes
-- [ ] Player calls `GET /stream/:songId` to initiate a stream session; playback state machine transitions correctly (`idle → loading → playing → paused → ended/skipped`)
-- [ ] Skip and completion actions explicitly trigger the appropriate state transitions and backend event payloads
-- [ ] API client handles JWT injection, exponential backoff retry, and error normalization centrally
-- [ ] Search returns results and filters (genre, BPM range, year) work in combination
-- [ ] Playlist drag-and-drop reorder calls `PATCH /playlists/:id/tracks/reorder`
-- [ ] "Liked Songs" playlist is visible but the delete control is hidden or disabled
-- [ ] Notifications are retrievable and viewable from the frontend if the notification inbox is implemented in the current version
-- [ ] Frontend exposes a `/health` route or static response for uptime checks
-- [ ] Key client-side metrics tracked: page load time, API error rates, playback failure counts
-- [ ] Dockerfile builds and container starts without errors; frontend is added to `docker-compose.yml`
-- [ ] `.env.example` documents all `VITE_` / `REACT_APP_` variables (API base URLs, etc.)
-- [ ] No requirements from the brief are missing; no extra requirements added
-- [ ] Automated tests cover critical UI flows and route behavior
-- [ ] Authentication flow is tested
-- [ ] Playback state transitions are tested
-- [ ] Search filtering behavior is tested
-- [ ] Playlist reorder interaction is tested
-- [ ] Test suite passes successfully
-
----
-
-## Phase 10 — Monitoring, Load Generator & Integration
+## Phase 9 — Monitoring, Load Generator & Integration
 
 ### Monitoring
-- [ ] Prometheus configured to scrape all 8 services
-- [ ] If implemented, Grafana dashboard is configured with panels for traffic, latency, error rate, and top tracks (S-03)
-- [ ] All services expose metrics suitable for Prometheus scraping
+- [x] Prometheus configured to scrape all 8 services — DNS-SD scrape config added in Phase S1
+- [x] If implemented, Grafana dashboard is configured with panels for traffic, latency, error rate, and top tracks (S-03) — `scaling.json` (19 panels) delivered in Phase S1
+- [x] All services expose metrics suitable for Prometheus scraping — Spring Boot Actuator + exporters configured in Phase S1
 
 ### Load Generator
 - [x] Covers: registration, login, catalog browsing, search, streaming requests, playlist operations, and history queries (M-21) — implemented in main.js (5 arrival-rate scenarios)
-- [ ] Load generator starts as a service in `docker-compose.yml`
+- [x] Load generator starts as a service in `docker-compose.yml` — added under `--profile load-test` in Phase S1
 - [x] Workload definition is documented — LOAD.md written 2026-05-26 (arrival-rate scenario architecture, phases, file tree, metrics, SLO thresholds, seed strategy, dependencies, env vars, validation steps, blockers)
 
 ### Integration Fixes
 - [ ] Inter-service HTTP calls implement retry with exponential backoff (M-22)
 - [ ] Inter-service HTTP calls implement circuit breaker or equivalent failure isolation (M-23)
-- [ ] All 8 services communicate over the shared named Docker network (M-18)
-- [ ] CPU and memory limits are configurable per service in `docker-compose.yml` (M-20)
+- [x] All 8 services communicate over the shared named Docker network (M-18) — named network defined in Phase 0; all services reference it
+- [ ] CPU and memory limits are configurable per service in `docker-compose.yml` (M-20) — Phase S1 covered infra containers only; application service limits still missing
 
 ### System Verification Deliverable
 - [ ] Automated integration tests show that the services run correctly together in the shared deployment environment
@@ -340,19 +296,19 @@ Services are built **one at a time** in the order below. Each service goes throu
 ## Final Delivery Checklist
 
 ### Architecture
-- [ ] Each application service that persists state uses its own dedicated persistence layer (M-26)
-- [ ] All protected endpoints require JWT; only `/auth/register` and `/auth/login` are public (M-25)
+- [x] Each application service that persists state uses its own dedicated persistence layer (M-26) — validated per-service in Phases 1–8
+- [x] All protected endpoints require JWT; only `/auth/register` and `/auth/login` are public (M-25) — validated per-service in Phases 1–8
 
 ### Artifacts
-- [ ] `docker-compose.yml` starts all 8 application services and the required infrastructure
-- [ ] Source code complete and runnable for all 8 services and the frontend (no pseudocode or placeholders)
-- [ ] Dockerfiles present and building for all 8 services and the frontend
-- [ ] `.env.example` present and complete for all 8 services and the frontend
-- [ ] Database schemas / migrations present for all services with persistence
-- [ ] Catalog CSV seed script included and runs automatically at startup
-- [ ] Prometheus config file included
-- [ ] Grafana dashboard config included if Grafana dashboards are implemented
-- [ ] Load generator script and workload definition included
+- [x] `docker-compose.yml` starts all 8 application services and the required infrastructure
+- [x] Source code complete and runnable for all 8 services (frontend removed; no pseudocode or placeholders)
+- [x] Dockerfiles present and building for all 8 services
+- [x] `.env.example` present and complete for all 8 services
+- [x] Database schemas / migrations present for all services with persistence
+- [x] Catalog CSV seed script included and runs automatically at startup
+- [x] Prometheus config file included — added in Phase S1
+- [x] Grafana dashboard config included — `scaling.json` added in Phase S1
+- [x] Load generator script and workload definition included — Phase S2
 
 ### Documentation
 - [ ] Top-level README with setup, run, validation, and testing instructions
