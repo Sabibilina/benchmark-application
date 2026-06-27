@@ -1,7 +1,6 @@
 # Load Test Results
 
 **Date**: 2026-06-15  
-**Stack**: Docker Compose — all 10 services on a single MacBook host  
 **k6 version**: 0.51.0  
 **Test file**: `load-generator/scripts/main.js`
 
