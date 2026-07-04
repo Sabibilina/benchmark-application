@@ -19,7 +19,6 @@ monitoring stack — all deployable with a single `docker compose up`.
 | analytics-service | ClickHouse | Playback event ingestion and charts |
 | recommendation-service | PostgreSQL + Redis | Daily mix and similar-songs recommendations |
 | notification-service | MongoDB | Playlist-event-driven notification feed |
-| frontend | — | React SPA served by nginx |
 
 **Infrastructure:** Kafka + Zookeeper, Prometheus, Grafana, nginx load balancer.
 
@@ -32,7 +31,7 @@ default; use `docker-compose.dev.yml` when you need direct host access (e2e test
 
 - Docker Engine 24+ with Compose v2 — confirm with `docker compose version`
 - At least 16 GB free RAM for the full scaled stack (8 services × up to 3 replicas + infrastructure)
-- Ports free on host: `80`, `3000`, `3001`, `9090`, `9200`, `8123`, `29092`,
+- Ports free on host: `80`, `3001`, `9090`, `9200`, `8123`, `29092`,
   `5432–5435`, `6379`, `27017`
 
 ---
@@ -58,9 +57,10 @@ All services should show `healthy`. Services that consume Kafka (`streaming-serv
 `init-kafka` to finish creating topics before starting.
 
 **Open in browser:**
-- Frontend: http://localhost:3000
 - Grafana (admin / admin): http://localhost:3001
 - Prometheus: http://localhost:9090
+
+> This is a backend-only benchmark application. There is no frontend UI; all API endpoints are consumed by the k6 load generator and the e2e test suite.
 
 ---
 

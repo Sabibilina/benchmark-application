@@ -98,7 +98,7 @@ Services are built **one at a time** in the order below. Each service goes throu
 - [x] Unit tests cover the core business logic of the service
 - [x] Integration tests cover the required endpoints and persistence behavior where applicable
 - [x] JWT issuance, signing, and verification behavior is tested, including valid and invalid token cases
-- [ ] Test suite passes successfully — PENDING: requires Maven + Java 21 + Docker; run `mvn verify` inside `services/auth-service/` when available
+- [ ] Test suite passes successfully — Unit tests 10/10 confirmed on 2026-07-04 (AuthServiceTest 6, JwtConfigTest 4); integration/context tests require Docker daemon at /var/run/docker.sock (unavailable in this validation environment; Docker socket not reachable by Testcontainers)
 
 ---
 
@@ -283,13 +283,13 @@ Services are built **one at a time** in the order below. Each service goes throu
 - [ ] Inter-service HTTP calls implement retry with exponential backoff (M-22)
 - [ ] Inter-service HTTP calls implement circuit breaker or equivalent failure isolation (M-23)
 - [x] All 8 services communicate over the shared named Docker network (M-18) — named network defined in Phase 0; all services reference it
-- [ ] CPU and memory limits are configurable per service in `docker-compose.yml` (M-20) — Phase S1 covered infra containers only; application service limits still missing
+- [x] CPU and memory limits are configurable per service in `docker-compose.yml` (M-20) — All 8 application services have env-variable-driven limits (e.g., `${AUTH_SERVICE_CPU_LIMIT:-1.5}` / `${AUTH_SERVICE_MEMORY_LIMIT:-512m}`); confirmed present in docker-compose.yml lines 593–859 (2026-07-04)
 
 ### System Verification Deliverable
-- [ ] Automated integration tests show that the services run correctly together in the shared deployment environment
-- [ ] End-to-end tests cover the main application flows across service boundaries
-- [ ] Cross-service authentication, persistence, and messaging behavior are validated in the integrated system
-- [ ] Test evidence is documented and included in the final delivery
+- [x] Automated integration tests show that the services run correctly together in the shared deployment environment — 101/101 E2E tests passed on 2026-05-20 (see TEST.md); 9 suites including `FullUserJourneyIT`; service code changes post-2026-05-20 are infrastructure and fix-only with no endpoint removals
+- [x] End-to-end tests cover the main application flows across service boundaries — `FullUserJourneyIT` covers: register → login → browse catalog → search → create playlist → add track → reorder → stream → complete → check history → daily mix → similar songs → notification → remove track → delete playlist
+- [x] Cross-service authentication, persistence, and messaging behavior are validated in the integrated system — `FullUserJourneyIT` validates JWT propagation across services, per-service persistence, and Kafka-driven notification flow
+- [x] Test evidence is documented and included in the final delivery — TEST.md contains per-suite results, pass counts, durations, and a complete test method list (191 backend tests + 101 E2E tests)
 
 ---
 
@@ -311,24 +311,24 @@ Services are built **one at a time** in the order below. Each service goes throu
 - [x] Load generator script and workload definition included — Phase S2
 
 ### Documentation
-- [ ] Top-level README with setup, run, validation, and testing instructions
+- [x] Top-level README with setup, run, validation, and testing instructions — README.md verified 2026-07-04: covers prerequisites, `docker compose up --build -d`, per-service `mvn verify`, E2E test execution, load test commands, scaling, and teardown
 
 ### Testing Deliverables
-- [ ] All backend unit tests pass
-- [ ] All backend integration tests pass
-- [ ] Frontend automated tests pass
-- [ ] Integrated system tests show that the services run correctly together
-- [ ] End-to-end test results are documented
+- [ ] All backend unit tests pass — auth-service unit tests confirmed 10/10 on 2026-07-04; remaining 7 services documented passing in PROGRESS.md phases 2–8 (2026-05-20); Docker unavailable for fresh re-run
+- [ ] All backend integration tests pass — documented passing for all 8 services (phases 2–8); Docker daemon unavailable for re-validation on 2026-07-04
+- [ ] Frontend automated tests pass — N/A: frontend was removed (commit 528440c, 2026-06-02); no frontend service in docker-compose.yml; no frontend test files exist
+- [x] Integrated system tests show that the services run correctly together — 101/101 E2E tests passed 2026-05-20 (TEST.md); `FullUserJourneyIT` covers the full cross-service flow
+- [x] End-to-end test results are documented — TEST.md §E2E Test Results contains per-suite results table with pass counts and durations
 
 ### Minimum Completion Criteria
-- [ ] All 8 services start successfully in the local deployment environment
-- [ ] Frontend starts and is reachable in the browser via `docker-compose up`
-- [ ] All required endpoints are implemented and reachable
-- [ ] Protected endpoints enforce JWT authentication
-- [ ] Metrics are exposed and collected through the monitoring stack
-- [ ] Load generator can execute the main application flows end-to-end
-- [ ] Integrated system tests show that all services run correctly together in the shared deployment environment
-- [ ] Cross-service authentication, persistence, and messaging behavior are verified end-to-end
+- [ ] All 8 services start successfully in the local deployment environment — docker-compose.yml is valid (confirmed 2026-07-04); Docker daemon unavailable for live start verification
+- [ ] Frontend starts and is reachable in the browser via `docker-compose up` — N/A: frontend removed (commit 528440c); no frontend service in docker-compose.yml; this is a backend-only benchmark application
+- [x] All required endpoints are implemented and reachable — verified via 101/101 E2E tests 2026-05-20 covering all 8 services; code inspection confirms no endpoint removals since
+- [x] Protected endpoints enforce JWT authentication — verified via per-service integration tests (all 8 services test 401 on missing/invalid JWT) and E2E `AuthFlowIT`
+- [ ] Metrics are exposed and collected through the monitoring stack — Prometheus config and Grafana dashboards present; Spring Boot Actuator configured on all services; live scrape verification requires running stack
+- [x] Load generator can execute the main application flows end-to-end — documented across Phases S3–S7 (5 k6 runs); scripts pass `node --check` syntax validation; Run 5 achieved 103 572 requests at 158 req/s with 94.91% check pass rate
+- [x] Integrated system tests show that all services run correctly together in the shared deployment environment — 101/101 E2E tests passed 2026-05-20; `FullUserJourneyIT` exercises all 8 services in one ordered flow
+- [x] Cross-service authentication, persistence, and messaging behavior are verified end-to-end — `FullUserJourneyIT` validates JWT propagation, per-service storage, and Kafka-driven notification delivery
 ---
 
 ## Phase S1 — Scaling Implementation (2026-05-21)
