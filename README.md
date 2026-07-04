@@ -98,7 +98,7 @@ All application endpoints are reached via nginx-lb on port 80. No direct service
 | `/playlists/**` | playlist-service | Yes |
 | `/search/**` | search-service | Yes |
 | `/analytics/**` | analytics-service | Yes |
-| `/recommendations/**` | recommendation-service | Yes |
+| `/recommend/**` | recommendation-service | Yes |
 | `/notifications` | notification-service | Yes |
 
 | Monitoring endpoint | Description |
