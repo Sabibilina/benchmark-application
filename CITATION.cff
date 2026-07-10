@@ -1,0 +1,10 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+authors:
+  - family-names: Iliuta
+    given-names: Sabina
+title: "AI-Assisted Development and Cost-Awareness Evaluation of
+a Cloud-Native Benchmark Application"
+version: 1.0
+identifiers:
+date-released: 2026-07-10
