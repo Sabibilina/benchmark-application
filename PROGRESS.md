@@ -289,7 +289,7 @@ Services are built **one at a time** in the order below. Each service goes throu
 - [x] Automated integration tests show that the services run correctly together in the shared deployment environment — 101/101 E2E tests passed on 2026-05-20 (see TEST.md); 9 suites including `FullUserJourneyIT`; service code changes post-2026-05-20 are infrastructure and fix-only with no endpoint removals
 - [x] End-to-end tests cover the main application flows across service boundaries — `FullUserJourneyIT` covers: register → login → browse catalog → search → create playlist → add track → reorder → stream → complete → check history → daily mix → similar songs → notification → remove track → delete playlist
 - [x] Cross-service authentication, persistence, and messaging behavior are validated in the integrated system — `FullUserJourneyIT` validates JWT propagation across services, per-service persistence, and Kafka-driven notification flow
-- [x] Test evidence is documented and included in the final delivery — TEST.md contains per-suite results, pass counts, durations, and a complete test method list (191 backend tests + 101 E2E tests)
+- [x] Test evidence is documented and included in the final delivery — TEST.md contains per-suite results, pass counts, durations, and a complete test method list (196 backend tests + 101 E2E tests; notification-service @ParameterizedTest expanded to correct count 2026-07-10)
 
 ---
 
@@ -314,7 +314,7 @@ Services are built **one at a time** in the order below. Each service goes throu
 - [x] Top-level README with setup, run, validation, and testing instructions — README.md verified 2026-07-04: covers prerequisites, `docker compose up --build -d`, per-service `mvn verify`, E2E test execution, load test commands, scaling, and teardown
 
 ### Testing Deliverables
-- [ ] All backend unit tests pass — auth-service unit tests confirmed 10/10 on 2026-07-04; remaining 7 services documented passing in PROGRESS.md phases 2–8 (2026-05-20); Docker unavailable for fresh re-run
+- [x] All backend unit tests pass — all 8 services re-confirmed 2026-07-10 (Docker offline; unit tests run without Docker): auth 10/10, catalog 13/13, streaming 8/8, playlist 21/21, search 10/10, analytics 9/9, recommendation 6/6, notification 12/12 (89 total; `@ParameterizedTest` expansions counted); all `BUILD SUCCESS`
 - [ ] All backend integration tests pass — documented passing for all 8 services (phases 2–8); Docker daemon unavailable for re-validation on 2026-07-04
 - [ ] Frontend automated tests pass — N/A: frontend was removed (commit 528440c, 2026-06-02); no frontend service in docker-compose.yml; no frontend test files exist
 - [x] Integrated system tests show that the services run correctly together — 101/101 E2E tests passed 2026-05-20 (TEST.md); `FullUserJourneyIT` covers the full cross-service flow

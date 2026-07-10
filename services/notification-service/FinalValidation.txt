@@ -1,0 +1,592 @@
+╭─── Claude Code v2.1.126 ─────────────────────────────────────────────────────╮
+│                                                    │ Tips for getting        │
+│                Welcome back Sabina!                │ started                 │
+│                                                    │ Run /init to create a … │
+│                       ▐▛███▜▌                      │ ─────────────────────── │
+│                      ▝▜█████▛▘                     │ What's new              │
+│                        ▘▘ ▝▝                       │ Internal fixes          │
+│       Sonnet 4.6 · Claude Pro ·                    │ [VSCode] Fixed extensi… │
+│       iliuta.sabina@gmail.com's Organization       │ Added `CLAUDE_CODE_ENA… │
+│         ~/…/services/notification-service          │ /release-notes for more │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+❯ Perform one final end-to-end validation pass.                                 
+                                                                                
+  Context:                                                                      
+  - Goal: confirm the system is in a valid final state for submission and, only 
+   if the evidence truly supports it, check the remaining boxes in the final    
+  delivery checklist.                                                           
+  - Be strict: do not mark anything complete unless you can verify it from the  
+  codebase, runnable commands, logs, or generated evidence.                     
+                                                                                
+  What to do:                                                                   
+                                                                                
+  1. Inspect the current repository state and identify the remaining unchecked  
+  items in the final delivery checklist, especially under final delivery /      
+  system verification / validation sections in documentation such as:           
+  - PROGRESS.md                                                                 
+  - TESTS.md                                                                    
+  - README.md                                                                   
+  - any delivery or checklist-related docs                                      
+                                                                                
+  2. Run a final validation pass of the project.                                
+  At minimum:                                                                   
+  - verify Docker Compose configuration is valid                                
+  - verify the expected services and infrastructure are wired correctly         
+  - run the most relevant automated tests that are feasible in this environment 
+  - run smoke or end-to-end style validation if available                       
+  - confirm load generator scripts and observability pieces are present and     
+  consistent with docs                                                          
+  - check that the current backend-only scope is reflected consistently across  
+  docs and config                                                               
+                                                                                
+  3. For every remaining unchecked checklist item:                              
+  - determine whether it is truly satisfied                                     
+  - collect concrete evidence                                                   
+  - if satisfied, update the checkbox to checked                                
+  - if not satisfied, leave it unchecked and explain exactly why                
+                                                                                
+  4. Update documentation only where justified by the validation results.       
+  Do not inflate claims.                                                        
+  Do not mark boxes complete based on assumptions.                              
+  If a command cannot be run, say so clearly and treat that as missing evidence 
+   unless the requirement can be proven another way.                            
+                                                                                
+  5. Give a final report with:                                                  
+  - what was validated                                                          
+  - what passed                                                                 
+  - what failed                                                                 
+  - which checklist boxes were checked                                          
+  - which boxes remain unchecked                                                
+  - any residual risks before submission                                        
+                                                                                
+  Execution rules:                                                              
+  - prefer repo evidence over guesswork                                         
+  - be conservative                                                             
+  - keep changes minimal and truthful                                           
+  - if you hit conflicts between docs and implementation, fix the docs to match 
+   reality only when you have strong evidence                                   
+                                                                                
+  Important:                                                                    
+  The purpose is not to “make the checklist green.”                             
+  The purpose is to produce an honest final validation and only check boxes     
+  that are genuinely earned.                                                    
+
+⏺ I'll read the key documentation files in parallel to understand the current
+  state before running any validation.
+
+  Searched for 1 pattern, read 3 files (ctrl+o to expand)
+
+⏺ Now let me run the Docker Compose validation and check additional files in
+  parallel.
+
+⏺ Bash(docker compose config --quiet 2>&1; echo "Exit code: $?")
+  ⎿  Exit code: 0
+
+  Read 1 file, listed 3 directories (ctrl+o to expand)
+
+⏺ Bash(node --check /Users/Sabina/Desktop/Thesis/Iteration01/benchmark-applicati
+      on/load-generator/scripts/main.js 2>&1; echo "Exit: $?"
+      node --check /Users/Sabina/Desk…)
+  ⎿  Exit: 0
+     Exit: 0
+     Exit: 0
+
+  Searched for 2 patterns (ctrl+o to expand)
+
+⏺ Bash(docker compose -f /Users/Sabina/Desktop/Thesis/Iteration01/benchmark-appl
+      ication/docker-compose.yml config --services 2>&1 | sort)
+  ⎿  analytics-service
+     auth-db
+     auth-service
+     … +25 lines (ctrl+o to expand)
+
+  Searched for 1 pattern (ctrl+o to expand)
+
+⏺ Bash(cd /Users/Sabina/Desktop/Thesis/Iteration01/benchmark-application/service
+      s/auth-service && mvn test -Dtest="AuthServiceTest,JwtConfigTest" -q 2>&1
+      | tail -20)
+  ⎿  19:07:47.686 [main] INFO com.musicstreaming.auth.config.JwtConfig -- J
+     WT RSA key pair generated and written to /var/folders/xl/g57jwjw12ssd4
+     nxv1bvdp6c80000gn/T/junit7277641006583963849
+     … +11 lines (ctrl+o to expand)
+
+⏺ Bash(mvn test -Dtest="AuthServiceTest,JwtConfigTest" 2>&1 | grep -E "Tests
+      run:|BUILD|FAIL|ERROR" | tail -20)
+  ⎿  [INFO] Tests run: 4, Failures: 0, Errors: 0, Skipped: 0, Time elapsed:
+      3.098 s -- in com.musicstreaming.auth.unit.JwtConfigTest
+     [INFO] Tests run: 6, Failures: 0, Errors: 0, Skipped: 0, Time elapsed:
+     … +3 lines (ctrl+o to expand)
+
+⏺ Bash(for svc in catalog-service streaming-service playlist-service
+      search-service analytics-service recommendation-service
+      notification-service; do
+        echo -n "$svc u…)
+  ⎿  catalog-service unit tests: streaming-service unit tests: playlist-ser
+     vice unit tests: search-service unit tests: analytics-service unit tes
+     ts: recommendation-service unit tests: notification-service unit tests
+     :
+
+  Searched for 9 patterns, listed 1 directory (ctrl+o to expand)
+
+⏺ Bash(# Check docker-compose.dev.yml exists and is valid
+      docker compose -f /Users/Sabina/Desktop/Thesis/Iteration01/benchmark-appli
+      cation/docker-compose.yml -f /Users…)
+  ⎿  Exit: 0
+
+  Searched for 1 pattern, read 1 file, listed 2 directories (ctrl+o to expand)
+
+⏺ Bash(docker info --format '{{.ServerVersion}}' 2>&1 | head -3)
+  ⎿  Cannot connect to the Docker daemon at unix:///Users/Sabina/.docker/ru
+     n/docker.sock. Is the docker daemon running?
+
+⏺ Bash(mvn test -Dtest="AuthServiceTest,JwtConfigTest" 2>&1 | grep -E "Tests
+      run:|BUILD")
+  ⎿  [INFO] Tests run: 4, Failures: 0, Errors: 0, Skipped: 0, Time elapsed:
+      2.693 s -- in com.musicstreaming.auth.unit.JwtConfigTest
+     [INFO] Tests run: 6, Failures: 0, Errors: 0, Skipped: 0, Time elapsed:
+     … +3 lines (ctrl+o to expand)
+
+⏺ Bash(cd /Users/Sabina/Desktop/Thesis/Iteration01/benchmark-application/service
+      s/streaming-service && mvn test -Dtest="StreamingServiceTest" -q 2>&1 |
+      tail -5)
+  ⎿  WARNING: Discovered 2 'junit-platform.properties' configuration files
+     in the classpath; only the first will be used.
+     Jul 10, 2026 7:59:27 AM org.junit.platform.launcher.core.LauncherConfi
+     … +7 lines (ctrl+o to expand)
+
+⏺ Bash(cd /Users/Sabina/Desktop/Thesis/Iteration01/benchmark-application/service
+      s/search-service && mvn test -Dtest="SearchQueryBuilderTest" -q 2>&1 |
+      tail -5)
+  ⎿  (No output)
+
+⏺ Bash(cd /Users/Sabina/Desktop/Thesis/Iteration01/benchmark-application/service
+      s/streaming-service && mvn test -Dtest="StreamingServiceTest" 2>&1 | grep
+      -E "Tests run…)  ⎿  [INFO] Tests run: 8, Failures: 0, Errors: 0, Skipped: 0, Time elapsed:
+      1.975 s -- in com.musicstreaming.streaming.unit.StreamingServiceTest
+     [INFO] Tests run: 8, Failures: 0, Errors: 0, Skipped: 0
+     [INFO] BUILD SUCCESS
+
+⏺ Bash(mvn test -Dtest="SearchQueryBuilderTest" 2>&1 | grep -E "Tests
+      run:|BUILD|ERROR")
+  ⎿  [INFO] BUILD FAILURE
+     [ERROR] Failed to execute goal org.apache.maven.plugins:maven-surefire
+     -plugin:3.2.5:test (default-test) on project streaming-service: No tes
+     … +11 lines (ctrl+o to expand)
+
+⏺ Bash(cd /Users/Sabina/Desktop/Thesis/Iteration01/benchmark-application/service
+      s/search-service && mvn test -Dtest="SearchQueryBuilderTest" 2>&1 | grep
+      -E "Tests run:…)
+  ⎿  [INFO] Tests run: 10, Failures: 0, Errors: 0, Skipped: 0, Time elapsed
+     : 1.055 s -- in com.musicstreaming.search.unit.SearchQueryBuilderTest
+     [INFO] Tests run: 10, Failures: 0, Errors: 0, Skipped: 0
+     [INFO] BUILD SUCCESS
+
+⏺ Bash(cd /Users/Sabina/Desktop/Thesis/Iteration01/benchmark-application/service
+      s/playlist-service && mvn test -Dtest="PlaylistServiceTest" 2>&1 | grep -E
+       "Tests run:|…)
+  ⎿  [INFO] Tests run: 21, Failures: 0, Errors: 0, Skipped: 0, Time elapsed
+     : 2.903 s -- in com.musicstreaming.playlist.unit.PlaylistServiceTest
+     [INFO] Tests run: 21, Failures: 0, Errors: 0, Skipped: 0
+     [INFO] BUILD SUCCESS
+
+⏺ Bash(cd /Users/Sabina/Desktop/Thesis/Iteration01/benchmark-application/service
+      s/analytics-service && mvn test -Dtest="AnalyticsServiceTest" 2>&1 | grep
+      -E "Tests run…)
+  ⎿  [INFO] Tests run: 9, Failures: 0, Errors: 0, Skipped: 0, Time elapsed:
+      2.024 s -- in com.musicstreaming.analytics.unit.AnalyticsServiceTest
+     [INFO] Tests run: 9, Failures: 0, Errors: 0, Skipped: 0
+     [INFO] BUILD SUCCESS
+
+⏺ Bash(cd /Users/Sabina/Desktop/Thesis/Iteration01/benchmark-application/service
+      s/recommendation-service && mvn test -Dtest="RecommendationServiceTest"
+      2>&1 | grep -E…)
+  ⎿  [INFO] Tests run: 6, Failures: 0, Errors: 0, Skipped: 0, Time elapsed:
+      4.808 s -- in com.musicstreaming.recommendation.unit.RecommendationSe
+     rviceTest
+     … +2 lines (ctrl+o to expand)
+
+⏺ Bash(cd /Users/Sabina/Desktop/Thesis/Iteration01/benchmark-application/service
+      s/notification-service && mvn test -Dtest="NotificationServiceTest" 2>&1 |
+       grep -E "Tes…)
+  ⎿  [INFO] Tests run: 12, Failures: 0, Errors: 0, Skipped: 0, Time elapsed
+     : 2.194 s -- in com.musicstreaming.notification.unit.NotificationServi
+     ceTest
+     … +2 lines (ctrl+o to expand)
+
+⏺ Bash(cd /Users/Sabina/Desktop/Thesis/Iteration01/benchmark-application/service
+      s/catalog-service && mvn test -Dtest="CatalogServiceTest,DataSeederTest"
+      2>&1 | grep -E…)
+  ⎿  [INFO] Tests run: 7, Failures: 0, Errors: 0, Skipped: 0, Time elapsed:
+      2.281 s -- in com.musicstreaming.catalog.unit.CatalogServiceTest
+     [INFO] Tests run: 6, Failures: 0, Errors: 0, Skipped: 0, Time elapsed:
+     … +3 lines (ctrl+o to expand)
+
+⏺ Now let me check the notification unit test discrepancy (TEST.md says 7, but I
+   got 12):
+
+⏺ Bash(cd /Users/Sabina/Desktop/Thesis/Iteration01/benchmark-application/service
+      s/notification-service && mvn test -Dtest="NotificationServiceTest" 2>&1 |
+       grep -E "^\[…)
+  ⎿  [INFO] Running com.musicstreaming.notification.unit.NotificationServic
+     eTest
+     [INFO] Tests run: 12, Failures: 0, Errors: 0, Skipped: 0, Time elapsed
+     … +3 lines (ctrl+o to expand)
+
+  Searched for 1 pattern, read 1 file (ctrl+o to expand)
+
+⏺ Now I have all the evidence I need. The @ParameterizedTest with 6 @ValueSource
+   strings expands to 12 test executions, not 7 — TEST.md documented the method
+  count, not the execution count. PROGRESS.md already correctly says 12. Let me
+  now update the documentation.
+
+  All 8 services' unit tests just passed (89 total executions confirmed live in
+  this session). Docker is offline so integration tests cannot be re-run, but
+  they were documented as passing in PROGRESS.md per-phase. The "All backend
+  unit tests pass" box in the Final Delivery Checklist can now be checked with
+  fresh evidence.
+
+  Read 1 file (ctrl+o to expand)
+
+⏺ Now I'll update the two files. In PROGRESS.md, I'll check the "All backend
+  unit tests pass" item and update its evidence note:
+
+⏺ Update(~/Desktop/Thesis/Iteration01/benchmark-application/PROGRESS.md)
+  ⎿  Added 1 line, removed 1 line
+      314  - [x] Top-level README with setup, run, validation, and testin
+           g instructions — README.md verified 2026-07-04: covers prerequ
+           isites, `docker compose up --build -d`, per-service `mvn verif
+           y`, E2E test execution, load test commands, scaling, and teard
+           own
+      315  
+      316  ### Testing Deliverables
+      317 -- [ ] All backend unit tests pass — auth-service unit tests co
+          -nfirmed 10/10 on 2026-07-04; remaining 7 services documented p
+          -assing in PROGRESS.md phases 2–8 (2026-05-20); Docker unavaila
+          -ble for fresh re-run                                          
+      317 +- [x] All backend unit tests pass — all 8 services re-confirme
+          +d 2026-07-10 (Docker offline; unit tests run without Docker): 
+          +auth 10/10, catalog 13/13, streaming 8/8, playlist 21/21, sear
+          +ch 10/10, analytics 9/9, recommendation 6/6, notification 12/1
+          +2 (89 total; `@ParameterizedTest` expansions counted); all `BU
+          +ILD SUCCESS`                                                  
+      318  - [ ] All backend integration tests pass — documented passing 
+           for all 8 services (phases 2–8); Docker daemon unavailable for
+            re-validation on 2026-07-04
+      319  - [ ] Frontend automated tests pass — N/A: frontend was remove
+           d (commit 528440c, 2026-06-02); no frontend service in docker-
+           compose.yml; no frontend test files exist
+      320  - [x] Integrated system tests show that the services run corre
+           ctly together — 101/101 E2E tests passed 2026-05-20 (TEST.md);
+            `FullUserJourneyIT` covers the full cross-service flow
+
+⏺ Now fix the notification-service discrepancy in TEST.md. The per-service table
+   says 7 unit tests but actual is 12, and total is listed as 14 (should be 19):
+
+  Read 1 file (ctrl+o to expand)
+
+⏺ Update(~/Desktop/Thesis/Iteration01/benchmark-application/TEST.md)
+  ⎿  Added 2 lines, removed 2 lines
+       8  | Services with Unit Tests | 8 / 8 |
+       9  | Services with Integration Tests | 8 / 8 |
+      10  | Total Backend Test Files | 18 (excl. support/config classes) 
+          |
+      11 -| Total Unit Test Methods | 84 |                               
+      11 +| Total Unit Test Methods | 89 |                               
+      12  | Total Integration Test Methods | 99 |
+      13  | Total Context Tests | 8 |
+      14 -| Total Backend Test Methods | 191 |                           
+      14 +| Total Backend Test Methods | 196 |                           
+      15  | E2E Test Suites | 9 |
+      16  | Total E2E Test Cases | 101 |
+      17  | Overall E2E Pass Rate | 101 / 101 (100%) |
+
+⏺ Update(~/Desktop/Thesis/Iteration01/benchmark-application/TEST.md)
+  ⎿  Error editing file
+
+  Read 1 file (ctrl+o to expand)
+
+⏺ Update(~/Desktop/Thesis/Iteration01/benchmark-application/TEST.md)
+  ⎿  Added 1 line, removed 1 line
+      35  | search-service | `SearchQueryBuilderTest` | 10 | `SearchContr
+          ollerIT` | 12 | 1 | **23** (fixed F-009) |
+      36  | analytics-service | `AnalyticsServiceTest` | 9 | `AnalyticsCo
+          ntrollerIT` | 12 | 1 | **22** |
+      37  | recommendation-service | `RecommendationServiceTest` | 6 | `R
+          ecommendationControllerIT` | 9 | 1 | **16** |
+      38 -| notification-service | `NotificationServiceTest` | 7 | `Notif
+         -icationControllerIT` | 6 | 1 | **14** |                        
+      38 +| notification-service | `NotificationServiceTest` | 12 | `Noti
+         +ficationControllerIT` | 6 | 1 | **19** |                       
+      39  
+      40  ---
+      41  
+
+⏺ Now fix the Coverage Assessment Table row for notification-service (line 53):
+
+  Read 1 file (ctrl+o to expand)
+
+⏺ Update(~/Desktop/Thesis/Iteration01/benchmark-application/TEST.md)
+  ⎿  Added 1 line, removed 1 line
+      50  | search-service | 5 | 23 | **66%** (169/258) | **43%** (29/68)
+           | **89%** (66/74) | **Good** — query builder logic fully unit-
+          tested across filter combinations; controller integration tests
+           verify OpenSearch interaction; lower coverage reflects uncover
+          ed OpenSearch exception-handling paths and index-management cod
+          e. Note: OpenSearch container startup fix applied (F-009); re-r
+          un `mvn test` to confirm pass. |
+      51  | analytics-service | 5 | 22 | **94%** (117/124) | **80%** (8/1
+          0) | **93%** (40/43) | **Good** — Kafka consumer, history persi
+          stence, and aggregation logic tested; ClickHouse integration ve
+          rified via dedicated test container |
+      52  | recommendation-service | 6 | 16 | **72%** (195/271) | **52%**
+           (30/58) | **87%** (62/71) | **Moderate** — daily mix and simil
+          ar-song logic covered; Redis caching paths tested; lower covera
+          ge reflects uncovered Kafka deserialization error paths and fal
+          lback recommendation branches |
+      53 -| notification-service | 5 | 14 | **86%** (116/135) | **77%** (
+         -20/26) | **92%** (44/48) | **Moderate** — Kafka consumer and Mo
+         -ngoDB persistence tested; benign shutdown exception documented 
+         -(see FINDINGS.md) |                                            
+      53 +| notification-service | 5 | 19 | **86%** (116/135) | **77%** (
+         +20/26) | **92%** (44/48) | **Moderate** — Kafka consumer and Mo
+         +ngoDB persistence tested; benign shutdown exception documented 
+         +(see FINDINGS.md) |                                            
+      54  
+      55  ---
+      56  
+
+⏺ Now fix the unit test list summary in TEST.md (it says 84 unit tests in the
+  description paragraph under Backend Coverage):
+  Read 1 file (ctrl+o to expand)
+
+⏺ Good — the table itself is the right place. Now also update the Remaining
+  Backend Risks section which mentions 191:
+
+  Searched for 2 patterns (ctrl+o to expand)
+
+⏺ Update(~/Desktop/Thesis/Iteration01/benchmark-application/PROGRESS.md)
+  ⎿  Added 1 line, removed 1 line
+      289  - [x] Automated integration tests show that the services run c
+           orrectly together in the shared deployment environment — 101/1
+           01 E2E tests passed on 2026-05-20 (see TEST.md); 9 suites incl
+           uding `FullUserJourneyIT`; service code changes post-2026-05-2
+           0 are infrastructure and fix-only with no endpoint removals
+      290  - [x] End-to-end tests cover the main application flows across
+            service boundaries — `FullUserJourneyIT` covers: register → l
+           ogin → browse catalog → search → create playlist → add track →
+            reorder → stream → complete → check history → daily mix → sim
+           ilar songs → notification → remove track → delete playlist
+      291  - [x] Cross-service authentication, persistence, and messaging
+            behavior are validated in the integrated system — `FullUserJo
+           urneyIT` validates JWT propagation across services, per-servic
+           e persistence, and Kafka-driven notification flow
+      292 -- [x] Test evidence is documented and included in the final de
+          -livery — TEST.md contains per-suite results, pass counts, dura
+          -tions, and a complete test method list (191 backend tests + 10
+          -1 E2E tests)                                                  
+      292 +- [x] Test evidence is documented and included in the final de
+          +livery — TEST.md contains per-suite results, pass counts, dura
+          +tions, and a complete test method list (196 backend tests + 10
+          +1 E2E tests; notification-service @ParameterizedTest expanded 
+          +to correct count 2026-07-10)                                  
+      293  
+      294  ---
+      295  
+
+⏺ Now let me also verify the unit test list section of TEST.md matches what
+  PROGRESS.md says for notification (the detailed test-by-test list at the end
+  of TEST.md lists only 7 notification tests):
+
+  Read 1 file (ctrl+o to expand)
+
+⏺ The detailed unit test list (rows 78-84) only shows 7 methods for notification
+   but row 83 is a @ParameterizedTest that runs 6 times. I'll add a clarifying
+  note to that row rather than renumbering the whole table:
+
+⏺ Update(~/Desktop/Thesis/Iteration01/benchmark-application/TEST.md)
+  ⎿  Added 1 line, removed 1 line
+      175  | 80 | `createNotification_setsReadFalse` | Creating a notific
+           ation sets the read flag to false | notification-service | JUn
+           it 5 + Mockito | `NotificationServiceTest.java` |
+      176  | 81 | `createNotification_setsReferenceId` | Creating a notif
+           ication sets the reference ID | notification-service | JUnit 5
+            + Mockito | `NotificationServiceTest.java` |
+      177  | 82 | `createNotification_nullTimestamp_usesNow` | Creating a
+            notification with a null timestamp defaults to current time |
+            notification-service | JUnit 5 + Mockito | `NotificationServi
+           ceTest.java` |
+      178 -| 83 | `createNotification_allEventTypes_producesNonBlankTitle
+          -AndMessage` | All event types produce a non-blank title and me
+          -ssage | notification-service | JUnit 5 + Mockito | `Notificati
+          -onServiceTest.java` |                                         
+      178 +| 83 | `createNotification_allEventTypes_producesNonBlankTitle
+          +AndMessage` | All event types produce a non-blank title and me
+          +ssage — `@ParameterizedTest` with 6 values (`PLAYLIST_CREATED`
+          +, `PLAYLIST_UPDATED`, `PLAYLIST_DELETED`, `TRACK_ADDED`, `TRAC
+          +K_REMOVED`, `TRACKS_REORDERED`); counts as 6 test executions |
+          + notification-service | JUnit 5 + Mockito | `NotificationServi
+          +ceTest.java` |                                                
+      179  | 84 | `getNotificationsForUser_delegatesToRepository` | Getti
+           ng notifications delegates to the repository | notification-se
+           rvice | JUnit 5 + Mockito | `NotificationServiceTest.java` |
+      180  
+      181  ---
+
+⏺ Now do a final check to make sure all edits are consistent:
+
+  Searched for 2 patterns (ctrl+o to expand)
+
+⏺ All updates are consistent. Let me now give the final report.
+
+  ---
+  Final Validation Report
+
+  What was validated
+
+  Check: docker compose config syntax
+  Method: docker compose config --quiet
+  Result: PASS — exit 0
+  ────────────────────────────────────────
+  Check: docker-compose.dev.yml overlay
+  Method: merged config check
+  Result: PASS — exit 0
+  ────────────────────────────────────────
+  Check: Expected services in compose
+  Method: config --services
+  Result: PASS — 28 services including all 8 app services + infrastructure
+  ────────────────────────────────────────
+  Check: k6 script syntax
+  Method: node --check on all 3 scripts
+  Result: PASS — main.js, seed.js, kafka-lag-check.js all clean
+  ────────────────────────────────────────
+  Check: Load generator files present
+  Method: directory listing
+  Result: PASS — all 3 scripts present
+  ────────────────────────────────────────
+  Check: Prometheus config present
+  Method: find
+  Result: PASS — infra/prometheus/prometheus.yml
+  ────────────────────────────────────────
+  Check: Grafana dashboard present
+  Method: find
+  Result: PASS — infra/grafana/dashboards/scaling.json + overview.json
+  ────────────────────────────────────────
+  Check: Dockerfiles for all 8 services
+  Method: find
+  Result: PASS — 8/8 present
+  ────────────────────────────────────────
+  Check: .env.example for all 8 services
+  Method: find
+  Result: PASS — 8/8 present
+  ────────────────────────────────────────
+  Check: SQL migrations for persisted services
+  Method: find
+  Result: PASS — auth, catalog, playlist, recommendation all have migration
+  files
+  ────────────────────────────────────────
+  Check: Catalog CSV seed data
+  Method: find
+  Result: PASS — catalog-service/src/main/resources/data/songs.csv
+  ────────────────────────────────────────
+  Check: E2E test suites (all 9)
+  Method: find
+  Result: PASS — all 9 *IT.java files present
+  ────────────────────────────────────────
+  Check: Backend unit tests — auth
+  Method: mvn test live run
+  Result: PASS — 10/10
+  ────────────────────────────────────────
+  Check: Backend unit tests — catalog
+  Method: mvn test live run
+  Result: PASS — 13/13
+  ────────────────────────────────────────
+  Check: Backend unit tests — streaming
+  Method: mvn test live run
+  Result: PASS — 8/8
+  ────────────────────────────────────────
+  Check: Backend unit tests — playlist
+  Method: mvn test live run
+  Result: PASS — 21/21
+  ────────────────────────────────────────
+  Check: Backend unit tests — search
+  Method: mvn test live run
+  Result: PASS — 10/10
+  ────────────────────────────────────────
+  Check: Backend unit tests — analytics
+  Method: mvn test live run
+  Result: PASS — 9/9
+  ────────────────────────────────────────
+  Check: Backend unit tests — recommendation
+  Method: mvn test live run
+  Result: PASS — 6/6
+  ────────────────────────────────────────
+  Check: Backend unit tests — notification
+  Method: mvn test live run
+  Result: PASS — 12/12
+  ────────────────────────────────────────
+  Check: Inter-service HTTP calls exist
+  Method: grep across all service source
+  Result: N/A — no inter-service HTTP calls; services communicate via Kafka only
+  ────────────────────────────────────────
+  Check: Docker daemon reachable
+  Method: docker info
+  Result: UNAVAILABLE — daemon not running
+
+  ---
+  Checklist boxes newly checked
+
+  PROGRESS.md — Final Delivery Checklist:
+  - [x] All backend unit tests pass — confirmed live 2026-07-10: all 8 services,
+   89 total unit executions, all BUILD SUCCESS. Docker was not required (unit
+  tests use Mockito only, no Testcontainers).
+
+  Checklist boxes that remain unchecked
+
+  Item: Phase 1: Test suite passes successfully
+  Why it stays unchecked: Integration/context tests for auth-service require
+    Testcontainers (Docker socket); Docker daemon is offline. Unit tests
+    re-confirmed but the full suite cannot be re-run.
+  ────────────────────────────────────────
+  Item: Phase 9: Inter-service HTTP calls implement retry (M-22)
+  Why it stays unchecked: No inter-service HTTP calls exist in the codebase —
+    services communicate via Kafka — so the trigger condition for this
+    requirement is never met. Requirement is not implemented and not satisfied
+  by
+     absence alone. Left unchecked per conservative policy.
+  ────────────────────────────────────────
+  Item: Phase 9: Inter-service HTTP calls implement circuit breaker (M-23)
+  Why it stays unchecked: Same reason as M-22.
+  ────────────────────────────────────────
+  Item: Phase S1 acceptance criteria (6 items)
+  Why it stays unchecked: All require a running Docker stack; Docker daemon is
+    offline.
+  ────────────────────────────────────────
+  Item: All backend integration tests pass
+  Why it stays unchecked: Testcontainers requires Docker daemon; offline.
+    Documented passing in PROGRESS.md phases 2–8, last run 2026-05-20.
+  ────────────────────────────────────────
+  Item: Frontend automated tests pass
+  Why it stays unchecked: Correctly marked N/A: frontend removed (commit
+    528440c). No frontend code or tests exist.
+  ────────────────────────────────────────
+  Item: All 8 services start successfully
+  Why it stays unchecked: Docker daemon offline; cannot run docker compose up.
+    Compose file is syntactically valid (confirmed).
+  ────────────────────────────────────────
+  Item: Metrics are exposed and collected through the monitoring stack
+  Why it stays unchecked: Prometheus config and Grafana dashboards are present
+  on
+    disk; Spring Boot Actuator is configured; live scrape cannot be verified
+    without a running stack.
+
+  Documentation corrections made
+
+  1. TEST.md — fixed notification-service unit test count: 7 → 12 (a
+  @ParameterizedTest with 6 @ValueSource strings produces 6 executions, not 1);
+  total unit test methods: 84 → 89; notification total: 14 → 19; backend total:
+  191 → 196. Added clarifying note to row 83.
+  2. PROGRESS.md — checked All backend unit tests pass, added live-run evidence;
+   updated total test count reference to 196.
+
+✻ Sautéed for 9m 37s

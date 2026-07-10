@@ -8,10 +8,10 @@
 | Services with Unit Tests | 8 / 8 |
 | Services with Integration Tests | 8 / 8 |
 | Total Backend Test Files | 18 (excl. support/config classes) |
-| Total Unit Test Methods | 84 |
+| Total Unit Test Methods | 89 |
 | Total Integration Test Methods | 99 |
 | Total Context Tests | 8 |
-| Total Backend Test Methods | 191 |
+| Total Backend Test Methods | 196 |
 | E2E Test Suites | 9 |
 | Total E2E Test Cases | 101 |
 | Overall E2E Pass Rate | 101 / 101 (100%) |
@@ -35,7 +35,7 @@
 | search-service | `SearchQueryBuilderTest` | 10 | `SearchControllerIT` | 12 | 1 | **23** (fixed F-009) |
 | analytics-service | `AnalyticsServiceTest` | 9 | `AnalyticsControllerIT` | 12 | 1 | **22** |
 | recommendation-service | `RecommendationServiceTest` | 6 | `RecommendationControllerIT` | 9 | 1 | **16** |
-| notification-service | `NotificationServiceTest` | 7 | `NotificationControllerIT` | 6 | 1 | **14** |
+| notification-service | `NotificationServiceTest` | 12 | `NotificationControllerIT` | 6 | 1 | **19** |
 
 ---
 
@@ -50,7 +50,7 @@
 | search-service | 5 | 23 | **66%** (169/258) | **43%** (29/68) | **89%** (66/74) | **Good** — query builder logic fully unit-tested across filter combinations; controller integration tests verify OpenSearch interaction; lower coverage reflects uncovered OpenSearch exception-handling paths and index-management code. Note: OpenSearch container startup fix applied (F-009); re-run `mvn test` to confirm pass. |
 | analytics-service | 5 | 22 | **94%** (117/124) | **80%** (8/10) | **93%** (40/43) | **Good** — Kafka consumer, history persistence, and aggregation logic tested; ClickHouse integration verified via dedicated test container |
 | recommendation-service | 6 | 16 | **72%** (195/271) | **52%** (30/58) | **87%** (62/71) | **Moderate** — daily mix and similar-song logic covered; Redis caching paths tested; lower coverage reflects uncovered Kafka deserialization error paths and fallback recommendation branches |
-| notification-service | 5 | 14 | **86%** (116/135) | **77%** (20/26) | **92%** (44/48) | **Moderate** — Kafka consumer and MongoDB persistence tested; benign shutdown exception documented (see FINDINGS.md) |
+| notification-service | 5 | 19 | **86%** (116/135) | **77%** (20/26) | **92%** (44/48) | **Moderate** — Kafka consumer and MongoDB persistence tested; benign shutdown exception documented (see FINDINGS.md) |
 
 ---
 
@@ -175,7 +175,7 @@ Tests were executed against the full Docker Compose stack (`mvn verify` in `e2e-
 | 80 | `createNotification_setsReadFalse` | Creating a notification sets the read flag to false | notification-service | JUnit 5 + Mockito | `NotificationServiceTest.java` |
 | 81 | `createNotification_setsReferenceId` | Creating a notification sets the reference ID | notification-service | JUnit 5 + Mockito | `NotificationServiceTest.java` |
 | 82 | `createNotification_nullTimestamp_usesNow` | Creating a notification with a null timestamp defaults to current time | notification-service | JUnit 5 + Mockito | `NotificationServiceTest.java` |
-| 83 | `createNotification_allEventTypes_producesNonBlankTitleAndMessage` | All event types produce a non-blank title and message | notification-service | JUnit 5 + Mockito | `NotificationServiceTest.java` |
+| 83 | `createNotification_allEventTypes_producesNonBlankTitleAndMessage` | All event types produce a non-blank title and message — `@ParameterizedTest` with 6 values (`PLAYLIST_CREATED`, `PLAYLIST_UPDATED`, `PLAYLIST_DELETED`, `TRACK_ADDED`, `TRACK_REMOVED`, `TRACKS_REORDERED`); counts as 6 test executions | notification-service | JUnit 5 + Mockito | `NotificationServiceTest.java` |
 | 84 | `getNotificationsForUser_delegatesToRepository` | Getting notifications delegates to the repository | notification-service | JUnit 5 + Mockito | `NotificationServiceTest.java` |
 
 ---
